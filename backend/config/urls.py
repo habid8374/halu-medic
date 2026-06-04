@@ -17,8 +17,11 @@ from apps.usuarios.auth import (
     LoginView,
     LogoutView,
     MiPerfilView,
+    RecuperarPasswordView,
+    ConfirmarPasswordView,
     UsuarioViewSet,
 )
+from apps.facturacion.webhook import FactusWebhookView
 
 router = DefaultRouter()
 router.register(r'pacientes',             PacienteViewSet,  basename='paciente')
@@ -31,10 +34,15 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     # ── Auth ──────────────────────────────────────────────────────────────────
-    path('api/auth/login/',   LoginView.as_view(),    name='login'),
-    path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/auth/logout/',  LogoutView.as_view(),   name='logout'),
-    path('api/auth/me/',      MiPerfilView.as_view(), name='me'),
+    path('api/auth/login/',                LoginView.as_view(),            name='login'),
+    path('api/auth/refresh/',              TokenRefreshView.as_view(),     name='token_refresh'),
+    path('api/auth/logout/',               LogoutView.as_view(),           name='logout'),
+    path('api/auth/me/',                   MiPerfilView.as_view(),         name='me'),
+    path('api/auth/recuperar-password/',   RecuperarPasswordView.as_view(), name='recuperar_password'),
+    path('api/auth/confirmar-password/',   ConfirmarPasswordView.as_view(), name='confirmar_password'),
+
+    # ── Webhook Factus (sin autenticación JWT) ────────────────────────────────
+    path('api/facturacion/webhook/factus/', FactusWebhookView.as_view(), name='webhook_factus'),
 
     # ── API REST ──────────────────────────────────────────────────────────────
     path('api/', include(router.urls)),

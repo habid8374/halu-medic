@@ -1,14 +1,17 @@
 """
 API de autenticación y gestión de usuarios
 Endpoints:
-  POST /api/auth/login/         → obtener tokens JWT
-  POST /api/auth/refresh/       → renovar access token
-  POST /api/auth/logout/        → invalidar refresh token
-  GET  /api/auth/me/            → perfil del usuario actual
-  GET  /api/usuarios/           → listar usuarios del consultorio (admin)
-  POST /api/usuarios/           → crear usuario en el consultorio (admin)
-  PUT  /api/usuarios/{id}/      → editar usuario
+  POST /api/auth/login/                    → JWT (usuario/contraseña o cédula/contraseña)
+  POST /api/auth/refresh/                  → renovar access token
+  POST /api/auth/logout/                   → invalidar refresh token
+  GET  /api/auth/me/                       → perfil del usuario actual
+  POST /api/auth/recuperar-password/       → solicitar reset por email
+  POST /api/auth/confirmar-password/       → confirmar reset con token
+  GET  /api/usuarios/                      → listar usuarios del consultorio (admin)
+  POST /api/usuarios/                      → crear usuario en el consultorio (admin)
+  PUT  /api/usuarios/{id}/                 → editar usuario
   POST /api/usuarios/{id}/cambiar_password/
+  POST /api/usuarios/{id}/desactivar/
 """
 from rest_framework import serializers, viewsets, status, generics
 from rest_framework.decorators import action
@@ -20,6 +23,11 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.core.mail import send_mail
+from django.conf import settings
 
 from apps.usuarios.models import Rol
 from apps.usuarios.permissions import EsAdminOSuperadmin
@@ -30,7 +38,10 @@ User = get_user_model()
 # ── JWT personalizado — incluye rol y nombre en el token ─────────────────────
 
 class HaluTokenSerializer(TokenObtainPairSerializer):
-    """Agrega datos del usuario al payload JWT."""
+    """
+    Login por username O cédula.
+    Body: { "username": "<usuario o cédula>", "password": "..." }
+    """
 
     @classmethod
     def get_token(cls, user):
@@ -42,27 +53,34 @@ class HaluTokenSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
+        # Intentar resolver por cédula si el username no existe
+        username_or_cedula = attrs.get('username', '')
+        if username_or_cedula and not User.objects.filter(username=username_or_cedula).exists():
+            user_by_cedula = User.objects.filter(cedula=username_or_cedula).first()
+            if user_by_cedula:
+                attrs['username'] = user_by_cedula.username
+
         data = super().validate(attrs)
         user = self.user
 
         if not user.activo_tenant:
             raise serializers.ValidationError('Tu cuenta está desactivada en este consultorio.')
 
-        # Agregar info del usuario a la respuesta (no solo al token)
         data['usuario'] = {
             'id':       str(user.id),
             'nombre':   user.get_full_name(),
             'email':    user.email,
             'username': user.username,
+            'cedula':   user.cedula,
             'rol':      user.rol,
             'rol_label': user.get_rol_display(),
             'permisos': {
-                'puede_facturar':       user.puede_facturar,
-                'puede_ver_clinica':    user.puede_ver_clinica,
-                'puede_editar_clinica': user.puede_editar_clinica,
+                'puede_facturar':        user.puede_facturar,
+                'puede_ver_clinica':     user.puede_ver_clinica,
+                'puede_editar_clinica':  user.puede_editar_clinica,
                 'puede_gestionar_citas': user.puede_gestionar_citas,
-                'es_admin':             user.es_admin,
-                'es_superadmin':        user.es_superadmin,
+                'es_admin':              user.es_admin,
+                'es_superadmin':         user.es_superadmin,
             }
         }
         return data
@@ -71,7 +89,7 @@ class HaluTokenSerializer(TokenObtainPairSerializer):
 class LoginView(TokenObtainPairView):
     """
     POST /api/auth/login/
-    Body: { "username": "...", "password": "..." }
+    Body: { "username": "<usuario o cédula>", "password": "..." }
     Respuesta: { "access": "...", "refresh": "...", "usuario": {...} }
     """
     serializer_class = HaluTokenSerializer
@@ -110,6 +128,7 @@ class MiPerfilView(APIView):
         return Response({
             'id':        str(user.id),
             'username':  user.username,
+            'cedula':    user.cedula,
             'nombre':    user.get_full_name(),
             'email':     user.email,
             'telefono':  user.telefono,
@@ -126,16 +145,102 @@ class MiPerfilView(APIView):
         })
 
 
+# ── Recuperación de contraseña ────────────────────────────────────────────────
+
+class RecuperarPasswordView(APIView):
+    """
+    POST /api/auth/recuperar-password/
+    Body: { "email": "doctor@ejemplo.com" }
+    Envía un correo con enlace de recuperación.
+    Siempre responde 200 para no revelar si el email existe.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+        if email:
+            user = User.objects.filter(email__iexact=email).first()
+            if user and user.email:
+                token = default_token_generator.make_token(user)
+                uid   = urlsafe_base64_encode(force_bytes(user.pk))
+                frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+                reset_link = f'{frontend_url}/reset-password/{uid}/{token}/'
+                send_mail(
+                    subject='Recuperación de contraseña — Halu Medic',
+                    message=(
+                        f'Hola {user.get_full_name()},\n\n'
+                        f'Recibimos una solicitud para restablecer tu contraseña.\n\n'
+                        f'Haz clic en el siguiente enlace (válido por 24 horas):\n{reset_link}\n\n'
+                        f'Si no solicitaste esto, ignora este correo.\n\n'
+                        f'— Equipo Halu Medic'
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[user.email],
+                    fail_silently=True,
+                )
+        return Response({'mensaje': 'Si el correo está registrado, recibirás las instrucciones.'})
+
+
+class ConfirmarPasswordView(APIView):
+    """
+    POST /api/auth/confirmar-password/
+    Body: { "uid": "...", "token": "...", "password": "...", "password2": "..." }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        uid      = request.data.get('uid', '')
+        token    = request.data.get('token', '')
+        password = request.data.get('password', '')
+        password2 = request.data.get('password2', '')
+
+        if not all([uid, token, password, password2]):
+            return Response(
+                {'error': 'Todos los campos son requeridos.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if password != password2:
+            return Response(
+                {'error': 'Las contraseñas no coinciden.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            pk   = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=pk)
+        except (User.DoesNotExist, ValueError, TypeError):
+            return Response(
+                {'error': 'El enlace es inválido.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not default_token_generator.check_token(user, token):
+            return Response(
+                {'error': 'El enlace ha expirado. Solicita uno nuevo.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            validate_password(password, user)
+        except Exception as e:
+            return Response({'error': list(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(password)
+        user.save(update_fields=['password'])
+        return Response({'mensaje': 'Contraseña actualizada. Ya puedes iniciar sesión.'})
+
+
 # ── Gestión de usuarios del consultorio ──────────────────────────────────────
 
 class UsuarioSerializer(serializers.ModelSerializer):
-    rol_label     = serializers.CharField(source='get_rol_display', read_only=True)
+    rol_label       = serializers.CharField(source='get_rol_display', read_only=True)
     nombre_completo = serializers.CharField(source='get_full_name', read_only=True)
 
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'first_name', 'last_name', 'nombre_completo',
+            'id', 'username', 'cedula', 'first_name', 'last_name', 'nombre_completo',
             'email', 'telefono', 'rol', 'rol_label',
             'activo_tenant', 'date_joined',
         ]
@@ -149,20 +254,23 @@ class CrearUsuarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'username', 'first_name', 'last_name', 'email',
+            'username', 'cedula', 'first_name', 'last_name', 'email',
             'telefono', 'rol', 'password', 'password2',
         ]
 
     def validate(self, data):
         if data['password'] != data['password2']:
             raise serializers.ValidationError({'password2': 'Las contraseñas no coinciden.'})
-        # Superadmin solo lo puede crear otro superadmin
         request = self.context.get('request')
         if data.get('rol') == Rol.SUPERADMIN:
             if not (request and request.user.es_superadmin):
                 raise serializers.ValidationError(
                     {'rol': 'Solo un superadmin puede crear otro superadmin.'}
                 )
+        # Validar cédula única dentro del tenant
+        cedula = data.get('cedula', '')
+        if cedula and User.objects.filter(cedula=cedula).exists():
+            raise serializers.ValidationError({'cedula': 'Ya existe un usuario con esa cédula.'})
         return data
 
     def create(self, validated_data):
@@ -186,17 +294,13 @@ class CambiarPasswordSerializer(serializers.Serializer):
 
 
 class UsuarioViewSet(viewsets.ModelViewSet):
-    """
-    CRUD de usuarios del consultorio.
-    Solo admins y superadmins pueden gestionar usuarios.
-    """
+    """CRUD de usuarios del consultorio. Solo admins y superadmins."""
     permission_classes = [IsAuthenticated, EsAdminOSuperadmin]
-    search_fields = ['username', 'first_name', 'last_name', 'email']
+    search_fields = ['username', 'cedula', 'first_name', 'last_name', 'email']
     ordering = ['first_name', 'last_name']
 
     def get_queryset(self):
         qs = User.objects.all()
-        # Superadmin ve todos; admin solo los de su tenant
         if not self.request.user.es_superadmin:
             qs = qs.exclude(rol=Rol.SUPERADMIN)
         return qs
@@ -210,12 +314,10 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     def cambiar_password(self, request, pk=None):
         """
         POST /api/usuarios/{id}/cambiar_password/
-        Admin puede cambiar cualquier contraseña.
-        Usuario normal solo la suya propia.
+        Admin puede cambiar cualquier contraseña. El usuario solo la suya.
         """
         usuario = self.get_object()
 
-        # Solo el propio usuario o un admin puede cambiar la contraseña
         if not request.user.es_admin and request.user.id != usuario.id:
             return Response(
                 {'error': 'No tienes permiso para cambiar esta contraseña.'},
@@ -225,7 +327,6 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         serializer = CambiarPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Verificar contraseña actual (si no es admin cambiando la de otro)
         if request.user.id == usuario.id:
             if not usuario.check_password(serializer.validated_data['password_actual']):
                 return Response(

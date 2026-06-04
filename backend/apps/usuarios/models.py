@@ -30,6 +30,10 @@ class Usuario(AbstractUser):
     """
     id     = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     rol    = models.CharField(max_length=20, choices=Rol.choices, default=Rol.RECEPCIONISTA)
+    cedula = models.CharField(
+        max_length=20, blank=True, db_index=True,
+        help_text='Cédula / número de identificación — usado para login',
+    )
     telefono = models.CharField(max_length=20, blank=True)
     avatar   = models.ImageField(upload_to='avatares/', null=True, blank=True)
     activo_tenant = models.BooleanField(default=True, help_text='Activo en este consultorio')

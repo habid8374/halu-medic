@@ -37,6 +37,11 @@ def emitir_factura(self, factura_id: str):
             'consulta__medicamentos',
         ).get(id=factura_id)
 
+        # Idempotencia: si ya tiene CUFE la factura fue enviada exitosamente
+        if factura.cufe and factura.estado == EstadoFactura.VALIDADA:
+            logger.info(f'Factura {factura_id} ya validada (CUFE={factura.cufe[:20]}...). Ignorando reintento.')
+            return {'status': 'ya_validada', 'cufe': factura.cufe, 'numero': factura.numero_factus}
+
         # 1. Generar RIPS
         gen   = GeneradorRIPS(factura)
         rips  = gen.generar()
@@ -57,12 +62,13 @@ def emitir_factura(self, factura_id: str):
         with FactusSaludClient() as client:
             resultado = client.crear_factura_salud(payload)
 
-        # 3. Guardar resultado
+        # 3. Guardar resultado completo de Factus
         factura.numero_factus    = resultado.get('number', '')
         factura.cufe             = resultado.get('cufe', '')
         factura.qr_url           = resultado.get('qr', '')
-        factura.pdf_base64       = resultado.get('qr_image', '')
-        factura.estado           = EstadoFactura.VALIDADA
+        factura.pdf_base64       = resultado.get('pdf_base_64', '') or resultado.get('qr_image', '')
+        factura.xml_base64       = resultado.get('xml_base_64', '')
+        factura.estado           = EstadoFactura.VALIDADA if not resultado.get('errors') else EstadoFactura.ERROR
         factura.fecha_validacion = timezone.now()
         factura.errores_dian     = resultado.get('errors', [])
         factura.save()

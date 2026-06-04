@@ -297,3 +297,122 @@ class FacturaViewSet(viewsets.ModelViewSet):
             'pdf_base64': factura.pdf_base64,
             'cufe': factura.cufe,
         })
+
+    @action(detail=True, methods=['post'])
+    def anular(self, request, pk=None):
+        """
+        POST /api/facturacion/facturas/{id}/anular/
+        Emite una nota crédito en Factus para anular la factura ante la DIAN.
+        Body: { "motivo": "Texto del motivo de anulación" }
+        """
+        factura = self.get_object()
+
+        if factura.estado != EstadoFactura.VALIDADA:
+            return Response(
+                {'error': 'Solo se pueden anular facturas validadas por la DIAN.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        motivo = request.data.get('motivo', '').strip()
+        if not motivo:
+            return Response(
+                {'error': 'El motivo de anulación es requerido.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from apps.facturacion.factus_client import FactusClient, FactusAPIError
+        payload = {
+            'bill_id': factura.numero_factus,
+            'correction_concept_id': 2,  # 2 = Anulación de factura
+            'observation': motivo,
+        }
+
+        try:
+            with FactusClient() as client:
+                resultado = client.crear_nota_credito(payload)
+
+            factura.estado = EstadoFactura.ANULADA
+            factura.observaciones = f'Anulada: {motivo}'
+            factura.save(update_fields=['estado', 'observaciones'])
+
+            factura.consulta.estado = 'anulada'
+            factura.consulta.save(update_fields=['estado'])
+
+            return Response({
+                'mensaje': 'Factura anulada correctamente ante la DIAN.',
+                'nota_credito': resultado.get('number', ''),
+                'cufe_nc': resultado.get('cufe', ''),
+            })
+
+        except FactusAPIError as e:
+            return Response(
+                {'error': f'Error al anular en Factus: {str(e)}', 'detalle': e.errors},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+    @action(detail=True, methods=['get'])
+    def xml(self, request, pk=None):
+        """
+        GET /api/facturacion/facturas/{id}/xml/
+        Devuelve el XML DIAN en base64.
+        """
+        factura = self.get_object()
+        if not factura.xml_base64:
+            return Response(
+                {'error': 'XML no disponible. La factura aún no ha sido validada.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        return Response({
+            'numero': factura.numero_factus,
+            'xml_base64': factura.xml_base64,
+            'cufe': factura.cufe,
+        })
+
+    @action(detail=True, methods=['post'])
+    def sincronizar(self, request, pk=None):
+        """
+        POST /api/facturacion/facturas/{id}/sincronizar/
+        Consulta el estado actual en Factus y actualiza la BD.
+        Útil cuando la factura quedó en estado ENVIADA sin respuesta.
+        """
+        factura = self.get_object()
+
+        if not factura.numero_factus:
+            return Response(
+                {'error': 'La factura aún no tiene número asignado por Factus.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from apps.facturacion.factus_client import FactusClient, FactusAPIError
+        from django.utils import timezone as tz
+
+        try:
+            with FactusClient() as client:
+                resultado = client.consultar_factura(factura.numero_factus)
+
+            factus_status = resultado.get('status', '')
+            if factus_status == 'validated':
+                factura.cufe             = resultado.get('cufe', factura.cufe)
+                factura.qr_url           = resultado.get('qr', factura.qr_url)
+                factura.pdf_base64       = resultado.get('pdf_base_64', factura.pdf_base64)
+                factura.xml_base64       = resultado.get('xml_base_64', factura.xml_base64)
+                factura.estado           = EstadoFactura.VALIDADA
+                factura.fecha_validacion = tz.now()
+                factura.errores_dian     = []
+                factura.save()
+            elif factus_status == 'rejected':
+                factura.estado       = EstadoFactura.ERROR
+                factura.errores_dian = resultado.get('errors', [])
+                factura.save(update_fields=['estado', 'errores_dian'])
+
+            return Response({
+                'mensaje': 'Estado sincronizado con Factus.',
+                'estado': factura.estado,
+                'factus_status': factus_status,
+            })
+
+        except FactusAPIError as e:
+            return Response(
+                {'error': f'Error consultando Factus: {str(e)}'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )

@@ -62,6 +62,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'apps.suscripciones.middleware.SuscripcionActivaMiddleware',  # Bloqueo por vencimiento
 ]
 
 ROOT_URLCONF = 'backend.config.urls'
@@ -178,6 +179,10 @@ USE_TZ        = True
 # ── RIPS / Facturación (datos del prestador) ──────────────────────────────────
 NIT_PRESTADOR          = config('NIT_PRESTADOR', default='')
 CODIGO_PRESTADOR_RIPS  = config('CODIGO_PRESTADOR_RIPS', default='')
+
+# ── Suscripciones / SaaS ──────────────────────────────────────────────────────
+FRONTEND_URL           = config('FRONTEND_URL', default='http://localhost:3000')
+FACTUS_WEBHOOK_SECRET  = config('FACTUS_WEBHOOK_SECRET', default='')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

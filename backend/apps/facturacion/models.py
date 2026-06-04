@@ -31,7 +31,10 @@ class Factura(models.Model):
     # RIPS
     rips_json            = models.JSONField(null=True, blank=True, help_text='RIPS generado Res. 948/2026')
     cuv                  = models.CharField(max_length=100, blank=True, help_text='Código Único de Validación MUV')
-    rips_enviado_mув     = models.BooleanField(default=False)
+    rips_enviado_muv     = models.BooleanField(default=False)
+
+    # XML DIAN
+    xml_base64           = models.TextField(blank=True, help_text='XML enviado a la DIAN en base64')
 
     # Financiero
     subtotal             = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -109,7 +112,7 @@ class FacturaHelper:
         factura.cufe             = resultado.get('cufe', '')
         factura.qr_url           = resultado.get('qr', '')
         factura.pdf_base64       = resultado.get('pdf_base_64', '') or resultado.get('qr_image', '')
-        factura.xml_base64       = resultado.get('xml_base_64', '')  # campo a agregar si se necesita
+        factura.xml_base64       = resultado.get('xml_base_64', '')
         factura.errores_dian     = resultado.get('errors', [])
         factura.fecha_validacion = timezone.now()
         from apps.facturacion.models import EstadoFactura
