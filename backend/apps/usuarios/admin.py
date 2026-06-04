@@ -1,7 +1,7 @@
 """Admin de Django para el módulo de usuarios"""
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from backend.apps.usuarios.models import Usuario, Rol
+from apps.usuarios.models import Usuario, Rol
 
 
 @admin.register(Usuario)

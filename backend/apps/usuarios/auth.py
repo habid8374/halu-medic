@@ -21,8 +21,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 
-from backend.apps.usuarios.models import Rol
-from backend.apps.usuarios.permissions import EsAdminOSuperadmin
+from apps.usuarios.models import Rol
+from apps.usuarios.permissions import EsAdminOSuperadmin
 
 User = get_user_model()
 

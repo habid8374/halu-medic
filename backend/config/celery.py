@@ -14,7 +14,7 @@ from celery.schedules import crontab
 
 app.conf.beat_schedule = {
     'reenviar-facturas-pendientes': {
-        'task': 'backend.apps.facturacion.tasks.reenviar_facturas_pendientes',
+        'task': 'apps.facturacion.tasks.reenviar_facturas_pendientes',
         'schedule': crontab(minute='*/10'),  # cada 10 minutos
     },
 }

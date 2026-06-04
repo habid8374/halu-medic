@@ -16,9 +16,9 @@ def emitir_factura(self, factura_id: str):
     Emite una factura electrónica ante la DIAN vía Factus API.
     Se reintenta hasta 3 veces con 60s de espera entre intentos.
     """
-    from backend.apps.facturacion.models import Factura, EstadoFactura
-    from backend.apps.facturacion.factus_client import FactusClient, FactusAPIError, construir_payload_consulta
-    from backend.apps.rips.generador import GeneradorRIPS
+    from apps.facturacion.models import Factura, EstadoFactura
+    from apps.facturacion.factus_client import FactusClient, FactusAPIError, construir_payload_consulta
+    from apps.rips.generador import GeneradorRIPS
 
     try:
         factura = Factura.objects.select_related(
@@ -93,7 +93,7 @@ def reenviar_facturas_pendientes():
     Tarea periódica (cada 10 min vía Celery Beat) para reintentar
     facturas que fallaron por timeout DIAN u otros errores transitorios.
     """
-    from backend.apps.facturacion.models import Factura, EstadoFactura
+    from apps.facturacion.models import Factura, EstadoFactura
     from django.utils import timezone
     from datetime import timedelta
 

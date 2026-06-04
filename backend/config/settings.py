@@ -27,9 +27,9 @@ SHARED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
 
-    'backend.apps.tenants',       # Modelo Consultorio y Dominio
-    'backend.apps.usuarios',      # Usuarios y roles
-    'backend.apps.suscripciones', # Planes SaaS
+    'apps.tenants',       # Modelo Consultorio y Dominio
+    'apps.usuarios',      # Usuarios y roles
+    'apps.suscripciones', # Planes SaaS
 ]
 
 # Apps por tenant (cada consultorio tiene su propio schema)
@@ -37,13 +37,13 @@ TENANT_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.auth',
 
-    'backend.apps.pacientes',
-    'backend.apps.citas',
-    'backend.apps.consultas',
-    'backend.apps.facturacion',
-    'backend.apps.rips',
-    'backend.apps.tarifas',
-    'backend.apps.reportes',
+    'apps.pacientes',
+    'apps.citas',
+    'apps.consultas',
+    'apps.facturacion',
+    'apps.rips',
+    'apps.tarifas',
+    'apps.reportes',
 ]
 
 INSTALLED_APPS = list(set(SHARED_APPS + TENANT_APPS))

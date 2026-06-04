@@ -47,7 +47,7 @@ class Command(BaseCommand):
                 last_name  = options['apellido'],
             )
             # Asignar rol superadmin
-            from backend.apps.usuarios.models import Rol
+            from apps.usuarios.models import Rol
             user.rol = Rol.SUPERADMIN
             user.save(update_fields=['rol'])
 

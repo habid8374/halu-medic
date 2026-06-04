@@ -14,7 +14,7 @@ from django.utils import timezone
 
 # ── PACIENTES ─────────────────────────────────────────────────────────────────
 
-from backend.apps.pacientes.models import Paciente, Aseguradora
+from apps.pacientes.models import Paciente, Aseguradora
 
 
 class AseguradoraSerializer(serializers.ModelSerializer):
@@ -52,7 +52,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
 # ── CITAS ─────────────────────────────────────────────────────────────────────
 
-from backend.apps.citas.models import Cita, Medico, Especialidad, Sala
+from apps.citas.models import Cita, Medico, Especialidad, Sala
 
 
 class CitaSerializer(serializers.ModelSerializer):
@@ -115,7 +115,7 @@ class CitaViewSet(viewsets.ModelViewSet):
 
 # ── CONSULTAS ─────────────────────────────────────────────────────────────────
 
-from backend.apps.consultas.models import Consulta, Procedimiento
+from apps.consultas.models import Consulta, Procedimiento
 
 
 class ProcedimientoSerializer(serializers.ModelSerializer):
@@ -182,7 +182,7 @@ class ConsultaViewSet(viewsets.ModelViewSet):
 
 # ── FACTURACIÓN ───────────────────────────────────────────────────────────────
 
-from backend.apps.facturacion.models import Factura, EstadoFactura
+from apps.facturacion.models import Factura, EstadoFactura
 
 
 class FacturaSerializer(serializers.ModelSerializer):
@@ -254,7 +254,7 @@ class FacturaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        from backend.apps.facturacion.tasks import emitir_factura
+        from apps.facturacion.tasks import emitir_factura
         factura.estado = EstadoFactura.ENVIADA
         factura.save(update_fields=['estado'])
 

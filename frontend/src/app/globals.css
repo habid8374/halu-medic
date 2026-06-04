@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --halu-primary: #1a7de9;
+  --halu-primary-dark: #0d62c7;
+  --halu-accent: #14b8a6;
+  --sidebar-width: 260px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { @apply bg-slate-100; }
+::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-slate-400; }
+
+/* Animaciones base */
+@layer utilities {
+  .animate-fade-in { animation: fadeIn 0.35s ease-out; }
+  .animate-slide-up { animation: slideUp 0.35s ease-out; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

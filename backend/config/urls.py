@@ -13,7 +13,7 @@ from backend.config.api import (
     ConsultaViewSet,
     FacturaViewSet,
 )
-from backend.apps.usuarios.auth import (
+from apps.usuarios.auth import (
     LoginView,
     LogoutView,
     MiPerfilView,
