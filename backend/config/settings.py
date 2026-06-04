@@ -24,9 +24,11 @@ SHARED_APPS = [
     'django.contrib.admin',
 
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
 
     'backend.apps.tenants',       # Modelo Consultorio y Dominio
+    'backend.apps.usuarios',      # Usuarios y roles
     'backend.apps.suscripciones', # Planes SaaS
 ]
 
@@ -178,3 +180,6 @@ NIT_PRESTADOR          = config('NIT_PRESTADOR', default='')
 CODIGO_PRESTADOR_RIPS  = config('CODIGO_PRESTADOR_RIPS', default='')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ── Usuario personalizado ─────────────────────────────────────────────────────
+AUTH_USER_MODEL = 'usuarios.Usuario'

@@ -49,21 +49,32 @@ def main():
     print('\n[3/4] Migrando schema del tenant demo...')
     call_command('migrate_schemas', '--schema=demo', verbosity=1)
 
-    # 4. Crear superusuario en public si no existe
-    print('\n[4/4] Verificando superusuario...')
+    # 4. Crear superadmin Axentia en public si no existe
+    print('\n[4/4] Verificando superadmin...')
     from django.contrib.auth import get_user_model
+    from django_tenants.utils import schema_context
     User = get_user_model()
-    if not User.objects.filter(username='admin').exists():
-        User.objects.create_superuser('admin', 'admin@halumedic.co', 'admin123')
-        print('  ✓ Superusuario creado: admin / admin123')
-    else:
-        print('  · Superusuario "admin" ya existe')
+    with schema_context('public'):
+        if not User.objects.filter(username='habid').exists():
+            from backend.apps.usuarios.models import Rol
+            user = User.objects.create_superuser(
+                username='habid', email='habid@axentia.co', password='Axentia2026*',
+                first_name='Habid', last_name='Acuña',
+            )
+            user.rol = Rol.SUPERADMIN
+            user.save(update_fields=['rol'])
+            print('  ✓ Superadmin creado:')
+            print('    Usuario:   habid')
+            print('    Password:  Axentia2026*  ← CAMBIAR en producción')
+        else:
+            print('  · Superadmin "habid" ya existe')
 
     print('\n' + '─' * 50)
     print('  Setup completado')
     print('  Backend: python manage.py runserver')
     print('  Admin:   http://localhost:8000/admin/')
-    print('  API:     http://demo.localhost:8000/api/')
+    print('  Login:   POST http://demo.localhost:8000/api/auth/login/')
+    print('           { "username": "habid", "password": "Axentia2026*" }')
     print('─' * 50)
 
 
