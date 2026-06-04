@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import toast from 'react-hot-toast'
-import { Eye, EyeOff, Stethoscope, Lock, User } from 'lucide-react'
+import { Eye, EyeOff, Lock, User } from 'lucide-react'
+import Image from 'next/image'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -43,11 +44,8 @@ export default function LoginPage() {
         <div className="absolute bottom-12 left-1/4 w-48 h-48 rounded-full bg-halu-600/30" />
 
         {/* Logo */}
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center backdrop-blur-sm">
-            <Stethoscope className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-white font-semibold text-xl tracking-tight">Halu Medic</span>
+        <div className="relative z-10">
+          <Image src="/logo.png" alt="Halu Medic" width={160} height={45} className="object-contain brightness-0 invert opacity-90" priority />
         </div>
 
         {/* Contenido central */}
@@ -94,11 +92,8 @@ export default function LoginPage() {
       {/* Panel derecho — formulario */}
       <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-20 bg-white">
         {/* Logo mobile */}
-        <div className="lg:hidden flex items-center gap-2 mb-10">
-          <div className="w-8 h-8 bg-halu-600 rounded-lg flex items-center justify-center">
-            <Stethoscope className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-semibold text-halu-900 text-lg">Halu Medic</span>
+        <div className="lg:hidden flex items-center mb-10">
+          <Image src="/logo.png" alt="Halu Medic" width={130} height={38} className="object-contain" priority />
         </div>
 
         <div className="w-full max-w-sm mx-auto animate-slide-up">

@@ -1,10 +1,11 @@
 'use client'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import toast from 'react-hot-toast'
 import {
-  Stethoscope, LayoutDashboard, Users, CalendarDays,
+  LayoutDashboard, Users, CalendarDays,
   ClipboardList, Receipt, BarChart3, Settings,
   LogOut, ChevronRight, Building2, ShieldCheck,
 } from 'lucide-react'
@@ -14,19 +15,19 @@ interface NavItem {
   href: string
   label: string
   icon: React.ElementType
-  requiere?: keyof import('@/types').Permisos
+  requiere?: string
   soloSuperadmin?: boolean
 }
 
 const navItems: NavItem[] = [
-  { href: '/dashboard',      label: 'Inicio',       icon: LayoutDashboard },
-  { href: '/pacientes',      label: 'Pacientes',    icon: Users },
-  { href: '/citas',          label: 'Agenda',       icon: CalendarDays,  requiere: 'puede_gestionar_citas' },
-  { href: '/consultas',      label: 'Consultas',    icon: ClipboardList, requiere: 'puede_ver_clinica' },
-  { href: '/facturacion',    label: 'Facturación',  icon: Receipt,       requiere: 'puede_facturar' },
-  { href: '/reportes',       label: 'Reportes',     icon: BarChart3,     requiere: 'es_admin' },
-  { href: '/configuracion',  label: 'Configuración',icon: Settings,      requiere: 'es_admin' },
-  { href: '/superadmin',     label: 'Superadmin',   icon: ShieldCheck,   soloSuperadmin: true },
+  { href: '/dashboard',     label: 'Inicio',        icon: LayoutDashboard },
+  { href: '/pacientes',     label: 'Pacientes',     icon: Users },
+  { href: '/citas',         label: 'Agenda',        icon: CalendarDays,  requiere: 'puede_gestionar_citas' },
+  { href: '/consultas',     label: 'Consultas',     icon: ClipboardList, requiere: 'puede_ver_clinica' },
+  { href: '/facturacion',   label: 'Facturación',   icon: Receipt,       requiere: 'puede_facturar' },
+  { href: '/reportes',      label: 'Reportes',      icon: BarChart3,     requiere: 'es_admin' },
+  { href: '/configuracion', label: 'Configuración', icon: Settings,      requiere: 'es_admin' },
+  { href: '/superadmin',    label: 'Superadmin',    icon: ShieldCheck,   soloSuperadmin: true },
 ]
 
 const rolColor: Record<string, string> = {
@@ -53,24 +54,27 @@ export default function Sidebar() {
 
   const filteredNav = navItems.filter((item) => {
     if (item.soloSuperadmin) return usuario.permisos.es_superadmin
-    if (item.requiere) return usuario.permisos[item.requiere]
+    if (item.requiere) return usuario.permisos[item.requiere as keyof typeof usuario.permisos]
     return true
   })
 
   return (
     <aside className="fixed inset-y-0 left-0 w-[var(--sidebar-width)] bg-white border-r border-slate-100 flex flex-col z-40">
-      {/* Logo */}
-      <div className="h-16 flex items-center gap-3 px-5 border-b border-slate-100">
-        <div className="w-8 h-8 bg-halu-600 rounded-lg flex items-center justify-center flex-shrink-0">
-          <Stethoscope className="w-4 h-4 text-white" />
-        </div>
-        <div>
-          <p className="font-semibold text-slate-900 text-sm leading-none">Halu Medic</p>
-          <p className="text-xs text-slate-400 mt-0.5">Sistema Clínico</p>
-        </div>
+      {/* Logo real */}
+      <div className="h-16 flex items-center px-4 border-b border-slate-100">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <Image
+            src="/logo.png"
+            alt="Halu Medic"
+            width={140}
+            height={40}
+            className="object-contain h-9 w-auto"
+            priority
+          />
+        </Link>
       </div>
 
-      {/* Consultorio (tenant) */}
+      {/* Consultorio activo */}
       <div className="mx-3 mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
         <div className="w-7 h-7 bg-halu-100 rounded-lg flex items-center justify-center flex-shrink-0">
           <Building2 className="w-3.5 h-3.5 text-halu-600" />
@@ -109,7 +113,7 @@ export default function Sidebar() {
       {/* Usuario */}
       <div className="p-3 border-t border-slate-100">
         <div className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors">
-          <div className="w-8 h-8 bg-halu-600 rounded-full flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 bg-gradient-to-br from-halu-500 to-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
             <span className="text-white text-xs font-bold">
               {usuario.nombre.charAt(0).toUpperCase()}
             </span>

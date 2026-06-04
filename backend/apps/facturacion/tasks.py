@@ -1,7 +1,7 @@
 """
-Tareas Celery del módulo Facturación
-- emitir_factura: llama a Factus API y actualiza la Factura
-- reenviar_factura_pendiente: reintento automático ante fallo DIAN
+Tareas Celery — Facturación Sector Salud
+  emitir_factura: genera RIPS → llama Factus SS-CUFE/SS-SinAporte → guarda CUFE
+  reenviar_facturas_pendientes: reintento automático cada 10 min
 """
 from celery import shared_task
 from django.utils import timezone
@@ -13,42 +13,51 @@ logger = logging.getLogger(__name__)
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def emitir_factura(self, factura_id: str):
     """
-    Emite una factura electrónica ante la DIAN vía Factus API.
-    Se reintenta hasta 3 veces con 60s de espera entre intentos.
+    Emite una factura SS-CUFE o SS-SinAporte según el convenio del paciente.
+    Flujo:
+      1. Generar RIPS JSON (Res. 948/2026)
+      2. Validar RIPS
+      3. Construir payload Factus (auto-detecta SS-CUFE vs SS-SinAporte)
+      4. POST /v1/bills/validate → Factus → DIAN
+      5. Guardar CUFE, número FEV, PDF base64
+      6. Cerrar consulta
     """
     from apps.facturacion.models import Factura, EstadoFactura
-    from apps.facturacion.factus_client import FactusClient, FactusAPIError, construir_payload_consulta
+    from apps.facturacion.factus_client import FactusAPIError
+    from apps.facturacion.factus_salud import FactusSaludClient, construir_payload_auto
     from apps.rips.generador import GeneradorRIPS
 
     try:
         factura = Factura.objects.select_related(
             'consulta__paciente',
             'consulta__medico',
+            'convenio__aseguradora',
+        ).prefetch_related(
             'consulta__procedimientos',
-            'convenio',
+            'consulta__medicamentos',
         ).get(id=factura_id)
 
-        # 1. Generar y validar RIPS
-        gen = GeneradorRIPS(factura)
-        rips = gen.generar()
-        errores_rips = gen.validar(rips)
-        if errores_rips:
-            logger.error(f'[Factura {factura_id}] RIPS inválido: {errores_rips}')
+        # 1. Generar RIPS
+        gen   = GeneradorRIPS(factura)
+        rips  = gen.generar()
+        errs  = gen.validar(rips)
+        if errs:
+            logger.error(f'[Factura {factura_id}] RIPS inválido: {errs}')
             factura.estado = EstadoFactura.ERROR
-            factura.errores_dian = errores_rips
-            factura.save()
-            return {'status': 'error', 'errores': errores_rips}
+            factura.errores_dian = errs
+            factura.save(update_fields=['estado', 'errores_dian'])
+            return {'status': 'error_rips', 'errores': errs}
 
         factura.rips_json = rips
         factura.save(update_fields=['rips_json'])
 
-        # 2. Construir payload Factus y emitir
-        payload = construir_payload_consulta(factura)
+        # 2. Construir payload y emitir
+        payload = construir_payload_auto(factura)
 
-        with FactusClient() as client:
-            resultado = client.crear_factura(payload)
+        with FactusSaludClient() as client:
+            resultado = client.crear_factura_salud(payload)
 
-        # 3. Guardar resultado DIAN
+        # 3. Guardar resultado
         factura.numero_factus    = resultado.get('number', '')
         factura.cufe             = resultado.get('cufe', '')
         factura.qr_url           = resultado.get('qr', '')
@@ -58,15 +67,18 @@ def emitir_factura(self, factura_id: str):
         factura.errores_dian     = resultado.get('errors', [])
         factura.save()
 
-        # 4. Cerrar la consulta
+        # 4. Cerrar consulta
         factura.consulta.estado = 'facturada'
         factura.consulta.save(update_fields=['estado'])
 
-        logger.info(f'Factura emitida OK: {factura.numero_factus} — CUFE: {factura.cufe[:20]}...')
+        tipo_op = 'SS-CUFE' if factura.convenio else 'SS-SinAporte'
+        logger.info(f'Factura {tipo_op} emitida: {factura.numero_factus} CUFE:{factura.cufe[:20]}...')
+
         return {
             'status': 'ok',
+            'tipo':   tipo_op,
             'numero': factura.numero_factus,
-            'cufe': factura.cufe,
+            'cufe':   factura.cufe,
         }
 
     except Factura.DoesNotExist:
@@ -74,38 +86,35 @@ def emitir_factura(self, factura_id: str):
         return {'status': 'error', 'mensaje': 'Factura no encontrada'}
 
     except Exception as exc:
-        logger.warning(f'[Factura {factura_id}] Error intento {self.request.retries + 1}: {exc}')
-        # Actualizar estado a error temporalmente
+        logger.warning(f'[Factura {factura_id}] Intento {self.request.retries + 1}: {exc}')
         try:
+            from apps.facturacion.models import Factura, EstadoFactura
             Factura.objects.filter(id=factura_id).update(
                 estado=EstadoFactura.ERROR,
                 errores_dian=[str(exc)]
             )
         except Exception:
             pass
-        # Reintentar
         raise self.retry(exc=exc)
 
 
 @shared_task
 def reenviar_facturas_pendientes():
-    """
-    Tarea periódica (cada 10 min vía Celery Beat) para reintentar
-    facturas que fallaron por timeout DIAN u otros errores transitorios.
-    """
+    """Celery Beat — cada 10 min reintenta facturas con error."""
     from apps.facturacion.models import Factura, EstadoFactura
-    from django.utils import timezone
     from datetime import timedelta
 
-    hace_10_min = timezone.now() - timedelta(minutes=10)
+    hace_10  = timezone.now() - timedelta(minutes=10)
+    hace_24h = timezone.now() - timedelta(hours=24)
+
     pendientes = Factura.objects.filter(
         estado=EstadoFactura.ERROR,
-        creado_en__gte=timezone.now() - timedelta(hours=24),
-        actualizado_en__lte=hace_10_min,
+        creado_en__gte=hace_24h,
+        actualizado_en__lte=hace_10,
     ).values_list('id', flat=True)[:50]
 
-    for factura_id in pendientes:
-        emitir_factura.delay(str(factura_id))
-        logger.info(f'Reintentando factura: {factura_id}')
+    for fid in pendientes:
+        emitir_factura.delay(str(fid))
+        logger.info(f'Reintentando: {fid}')
 
     return f'{len(pendientes)} facturas reenviadas'
