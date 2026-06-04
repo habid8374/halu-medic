@@ -60,3 +60,57 @@ class Factura(models.Model):
 
     def __str__(self):
         return f'Factura {self.numero_factus or self.id} — {self.estado}'
+
+
+class FacturaHelper:
+    """
+    Métodos de utilidad para procesar la respuesta JSON de Factus.
+
+    Factus devuelve en /v1/bills/validate:
+    {
+      "data": {
+        "number":       "SETP990000127",      → número FEV
+        "cufe":         "44e260a76e...",       → CUFE DIAN (96 chars)
+        "qr":           "https://catalogo-vpfe-hab.dian.gov.co/...", → URL QR DIAN
+        "qr_image":     "<base64 PNG del QR>", → imagen QR
+        "pdf_base_64":  "<base64 PDF>",        → PDF representación gráfica
+        "xml_base_64":  "<base64 XML>",        → XML enviado a DIAN
+        "url_logo":     "https://...",         → logo del emisor en Factus
+        "company": {
+          "nit":        "900123456",
+          "name":       "Consultorio Médico...",
+          "trade_name": "...",
+          "address":    "...",
+          "phone":      "...",
+          "email":      "..."
+        },
+        "customer": { ... },                   → datos del adquirente (EPS o paciente)
+        "items": [ ... ],                      → servicios facturados
+        "total": "175000.00",
+        "subtotal": "175000.00",
+        "taxes": "0.00",
+        "discounts": "0.00",
+        "errors": [],                          → vacío si validó OK
+        "created_at": "2026-06-04T10:35:00Z"
+      }
+    }
+
+    Campos SS-CUFE adicionales en la respuesta:
+      health_coverage_code, health_modality_code,
+      health_document_number, health_billing_period_start_date, ...
+      (los mismos que enviamos, devueltos como confirmación)
+    """
+
+    @staticmethod
+    def guardar_desde_factus(factura: 'Factura', resultado: dict) -> None:
+        """Mapea la respuesta de Factus a los campos del modelo Factura."""
+        from django.utils import timezone
+        factura.numero_factus    = resultado.get('number', '')
+        factura.cufe             = resultado.get('cufe', '')
+        factura.qr_url           = resultado.get('qr', '')
+        factura.pdf_base64       = resultado.get('pdf_base_64', '') or resultado.get('qr_image', '')
+        factura.xml_base64       = resultado.get('xml_base_64', '')  # campo a agregar si se necesita
+        factura.errores_dian     = resultado.get('errors', [])
+        factura.fecha_validacion = timezone.now()
+        from apps.facturacion.models import EstadoFactura
+        factura.estado = EstadoFactura.VALIDADA if not resultado.get('errors') else EstadoFactura.ERROR
