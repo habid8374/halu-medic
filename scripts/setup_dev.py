@@ -45,7 +45,24 @@ def main():
         )
         print('  ✓ Consultorio "demo" creado — dominio: demo.localhost')
     else:
+        consultorio = Consultorio.objects.get(schema_name='demo')
         print('  · Consultorio "demo" ya existe')
+
+    # Suscripción activa de prueba para el consultorio demo
+    from apps.suscripciones.models import Suscripcion, EstadoSuscripcion
+    from datetime import timedelta
+    from django.utils import timezone as tz
+    if not Suscripcion.objects.filter(consultorio=consultorio).exists():
+        sus = Suscripcion.objects.create(
+            consultorio=consultorio,
+            plan='pro',
+            estado=EstadoSuscripcion.ACTIVA,
+            fecha_inicio=tz.now().date(),
+            fecha_fin=(tz.now() + timedelta(days=365)).date(),
+        )
+        sus.aplicar_limites_plan()
+        sus.save()
+        print('  ✓ Suscripción "pro" activa creada (365 días)')
 
     # 3. Migrar schema del tenant
     print('\n[3/4] Migrando schema del tenant demo...')
@@ -71,12 +88,35 @@ def main():
         else:
             print('  · Superadmin "habid" ya existe')
 
+    # 5. Crear usuario admin DENTRO del tenant demo (app clínica)
+    print('\n[5/5] Creando usuario admin del consultorio demo...')
+    from apps.usuarios.models import Rol
+    with schema_context('demo'):
+        if not User.objects.filter(username='demo').exists():
+            medico = User.objects.create_user(
+                username='demo', email='demo@consultorio.co', password='Demo2026*',
+                first_name='Doctor', last_name='Demo',
+            )
+            medico.rol = Rol.ADMIN
+            medico.cedula = '1000000001'
+            medico.save(update_fields=['rol', 'cedula'])
+            print('  ✓ Usuario del consultorio demo creado:')
+            print('    Usuario:   demo   (o cédula 1000000001)')
+            print('    Password:  Demo2026*')
+        else:
+            print('  · Usuario "demo" ya existe en el tenant')
+
     print('\n' + '─' * 50)
     print('  Setup completado')
     print('  Backend: python manage.py runserver')
-    print('  Admin:   http://localhost:8000/admin/')
-    print('  Login:   POST http://demo.localhost:8000/api/auth/login/')
-    print('           { "username": "habid", "password": "Axentia2026*" }')
+    print('')
+    print('  ── App clínica (médico/secretaria) ──')
+    print('  Frontend: http://localhost:3000')
+    print('  Usuario:  demo  /  Password: Demo2026*')
+    print('')
+    print('  ── Panel SaaS (superadmin Axentia) ──')
+    print('  Django admin: http://localhost:8000/admin/')
+    print('  Usuario:      habid  /  Password: Axentia2026*')
     print('─' * 50)
 
 

@@ -10,7 +10,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('SECRET_KEY', default='dev-secret-key-cambiar-en-produccion')
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+# '.localhost' permite todos los subdominios de tenant (demo.localhost, etc.)
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,.localhost,127.0.0.1', cast=Csv())
 
 # ── Multi-tenancy ─────────────────────────────────────────────────────────────
 # Apps compartidas (schema "public") — datos del SaaS
