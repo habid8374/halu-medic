@@ -66,6 +66,16 @@ class Consulta(models.Model):
     causa_atencion   = models.CharField(max_length=3, default='26',
                                          help_text='Causa motivo atención')
 
+    VIA_INGRESO_CHOICES = [
+        ('1', 'Urgencias'),
+        ('2', 'Consulta externa'),
+        ('3', 'Remitido'),
+        ('4', 'Nacimiento'),
+        ('5', 'Electiva/Programada'),
+    ]
+    via_ingreso = models.CharField(max_length=1, choices=VIA_INGRESO_CHOICES, default='2',
+                                    help_text='Vía de ingreso al servicio de salud')
+
     # Valores financieros
     valor_consulta   = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     valor_copago     = models.DecimalField(max_digits=14, decimal_places=2, default=0,
@@ -153,3 +163,60 @@ class Medicamento(models.Model):
 
     def __str__(self):
         return f'{self.nombre} x{self.unidades}'
+
+
+class OrdenMedica(models.Model):
+    """
+    Órdenes médicas emitidas durante la consulta.
+    Cubre: laboratorios, imágenes diagnósticas, interconsultas,
+    medicamentos y procedimientos ordenados (no ejecutados).
+    """
+    TIPO_CHOICES = [
+        ('lab',           'Laboratorio clínico'),
+        ('imagen',        'Imagen diagnóstica'),
+        ('interconsulta', 'Interconsulta / Remisión'),
+        ('medicamento',   'Medicamento'),
+        ('procedimiento', 'Procedimiento'),
+        ('otro',          'Otro'),
+    ]
+    ESTADO_CHOICES = [
+        ('pendiente',  'Pendiente'),
+        ('ejecutada',  'Ejecutada'),
+        ('cancelada',  'Cancelada'),
+    ]
+
+    id       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    consulta = models.ForeignKey(Consulta, on_delete=models.CASCADE, related_name='ordenes')
+    tipo     = models.CharField(max_length=15, choices=TIPO_CHOICES)
+    estado   = models.CharField(max_length=12, choices=ESTADO_CHOICES, default='pendiente')
+
+    # Identificación del servicio ordenado
+    cups        = models.CharField(max_length=10, blank=True, help_text='CUPS si aplica')
+    cum         = models.CharField(max_length=20, blank=True, help_text='CUM si es medicamento')
+    descripcion = models.CharField(max_length=300)
+
+    # Medicamentos (si tipo=medicamento)
+    dosis     = models.CharField(max_length=100, blank=True)
+    frecuencia = models.CharField(max_length=100, blank=True)
+    duracion  = models.CharField(max_length=100, blank=True)
+    via_admin = models.CharField(max_length=50, blank=True, help_text='Vía de administración')
+
+    # Diagnóstico relacionado
+    cie10      = models.CharField(max_length=10, blank=True)
+    indicacion = models.TextField(blank=True, help_text='Indicación clínica / justificación')
+
+    # Datos para RIPS (si la orden genera un servicio facturable)
+    genera_rips    = models.BooleanField(default=False)
+    cantidad       = models.PositiveIntegerField(default=1)
+    valor_unitario = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    creado_en     = models.DateTimeField(auto_now_add=True)
+    vigencia_dias = models.PositiveSmallIntegerField(default=30,
+                    help_text='Vigencia de la orden en días')
+    observaciones = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.descripcion} ({self.get_estado_display()})'

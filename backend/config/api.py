@@ -130,7 +130,7 @@ class CitaViewSet(viewsets.ModelViewSet):
 
 # ── CONSULTAS ─────────────────────────────────────────────────────────────────
 
-from apps.consultas.models import Consulta, Procedimiento
+from apps.consultas.models import Consulta, Procedimiento, OrdenMedica
 from apps.citas.models import Medico as MedicoModel
 
 
@@ -435,6 +435,31 @@ class FacturaViewSet(viewsets.ModelViewSet):
                 {'error': f'Error consultando Factus: {str(e)}'},
                 status=status.HTTP_502_BAD_GATEWAY
             )
+
+
+# ── ÓRDENES MÉDICAS ───────────────────────────────────────────────────────────
+
+from rest_framework.permissions import IsAuthenticated
+
+
+class OrdenMedicaSerializer(serializers.ModelSerializer):
+    tipo_label   = serializers.CharField(source='get_tipo_display', read_only=True)
+    estado_label = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model = OrdenMedica
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en']
+
+
+class OrdenMedicaViewSet(viewsets.ModelViewSet):
+    serializer_class = OrdenMedicaSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['consulta', 'tipo', 'estado']
+    search_fields = ['descripcion', 'cups', 'cum', 'cie10']
+
+    def get_queryset(self):
+        return OrdenMedica.objects.select_related('consulta__paciente').all()
 
 
 # ── CATÁLOGO CUPS (homologador nacional, schema público compartido) ───────────

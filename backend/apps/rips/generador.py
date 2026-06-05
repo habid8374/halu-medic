@@ -92,17 +92,61 @@ class GeneradorRIPS:
             'consecutivoPagadorRecuperacion': '',
         }
 
+    def _get_cups_rips_data(self) -> dict:
+        """Obtiene datos RIPS del catálogo CUPS. Fallback a valores de la consulta."""
+        try:
+            from apps.catalogos.models import CodigoCUPS
+            cups = CodigoCUPS.objects.get(codigo=self.consulta.cups_principal)
+            return {
+                'modalidad':        cups.modalidad_rips or self.consulta.modalidad,
+                'grupo_servicios':  cups.grupo_servicios_rips or self.consulta.grupo_servicio,
+                'cod_servicio':     cups.cod_servicio_rips or self.consulta.codigo_servicio,
+                'finalidad':        cups.finalidad_rips or self.consulta.finalidad,
+                'via_ingreso':      cups.via_ingreso_rips or getattr(self.consulta, 'via_ingreso', '2'),
+                'personal_atiende': cups.personal_atiende or '01',
+                'ambito':           cups.ambito_rips or '1',
+            }
+        except Exception:
+            return {
+                'modalidad':        self.consulta.modalidad,
+                'grupo_servicios':  self.consulta.grupo_servicio,
+                'cod_servicio':     self.consulta.codigo_servicio,
+                'finalidad':        self.consulta.finalidad,
+                'via_ingreso':      getattr(self.consulta, 'via_ingreso', '2'),
+                'personal_atiende': '01',
+                'ambito':           '1',
+            }
+
+    def _get_proc_cups_rips_data(self, proc) -> dict:
+        """Obtiene datos RIPS del catálogo CUPS para un procedimiento."""
+        try:
+            from apps.catalogos.models import CodigoCUPS
+            cups = CodigoCUPS.objects.get(codigo=proc.cups)
+            return {
+                'ambito':           cups.ambito_rips or proc.ambito or '1',
+                'finalidad':        cups.finalidad_rips or proc.finalidad or '01',
+                'personal_atiende': cups.personal_atiende or proc.personal_atiende or '01',
+            }
+        except Exception:
+            return {
+                'ambito':           proc.ambito or '1',
+                'finalidad':        proc.finalidad or '01',
+                'personal_atiende': proc.personal_atiende or '01',
+            }
+
     def _consultas(self) -> list:
         """Genera el bloque de consultas médicas (código AC en RIPS)."""
+        rips_data = self._get_cups_rips_data()
         return [{
             'codPrestador': self._codigo_prestador(),
             'fechaInicioAtencion': self.consulta.fecha_atencion.strftime('%Y-%m-%dT%H:%M:%S'),
             'numAutorizacion': self.consulta.numero_autorizacion or '',
             'codConsulta': self.consulta.cups_principal,
-            'modalidadGrupoServicioTecSal': self.consulta.modalidad or '01',
-            'grupoServicios': self.consulta.grupo_servicio or '01',
-            'codServicio': self.consulta.codigo_servicio or '1',
-            'finalidadTecnologiaSalud': self.consulta.finalidad or '13',
+            'modalidadGrupoServicioTecSal': rips_data['modalidad'],
+            'grupoServicios': rips_data['grupo_servicios'],
+            'codServicio': rips_data['cod_servicio'],
+            'finalidadTecnologiaSalud': rips_data['finalidad'],
+            'viaIngresoServicioSalud': rips_data['via_ingreso'],
             'causaMotivoAtencion': self.consulta.causa_atencion or '26',
             'codDiagnosticoPrincipal': self.consulta.diagnostico_principal,
             'codDiagnosticoRelacionado1': self.consulta.diagnostico_relacionado_1 or '',
@@ -122,14 +166,15 @@ class GeneradorRIPS:
         """Genera el bloque de procedimientos (código AP en RIPS)."""
         procs = []
         for proc in self.consulta.procedimientos.all():
+            proc_data = self._get_proc_cups_rips_data(proc)
             procs.append({
                 'codPrestador': self._codigo_prestador(),
                 'fechaInicioAtencion': self.consulta.fecha_atencion.strftime('%Y-%m-%dT%H:%M:%S'),
                 'idMIPRES': '',
                 'numAutorizacion': self.consulta.numero_autorizacion or '',
-                'ambito': proc.ambito or '1',
-                'finalidadProcedimiento': proc.finalidad or '01',
-                'personalAtiende': proc.personal_atiende or '01',
+                'ambito': proc_data['ambito'],
+                'finalidadProcedimiento': proc_data['finalidad'],
+                'personalAtiende': proc_data['personal_atiende'],
                 'codProcedimiento': proc.cups,
                 'viaDiagnosticaTerapeutica': proc.via_diagnostica or '1',
                 'grupoProcedimiento': proc.grupo or '1',

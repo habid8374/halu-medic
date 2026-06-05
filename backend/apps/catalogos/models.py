@@ -26,6 +26,60 @@ class CodigoCUPS(models.Model):
     grupo_rips        = models.CharField(max_length=10, blank=True,
                                          help_text='GrupoServicios_RIPS')
 
+    # RIPS mandatory fields per Res. 948/2026
+    MODALIDAD_CHOICES = [
+        ('01', '01 - Intramural'),
+        ('02', '02 - Extramural'),
+        ('03', '03 - Unidad Móvil'),
+        ('04', '04 - Domiciliaria'),
+        ('05', '05 - Telemedicina interactiva'),
+        ('06', '06 - Telemedicina no interactiva'),
+        ('07', '07 - Telexperticia'),
+    ]
+    GRUPO_SERVICIOS_RIPS_CHOICES = [
+        ('01', '01 - Consulta externa'),
+        ('02', '02 - Urgencias'),
+        ('03', '03 - Hospitalización'),
+        ('04', '04 - Cirugía'),
+        ('05', '05 - Procedimientos'),
+        ('06', '06 - Apoyo diagnóstico y terapéutico'),
+        ('07', '07 - Otros servicios de salud'),
+    ]
+    FINALIDAD_CHOICES = [
+        ('10', '10 - Diagnóstico'),
+        ('11', '11 - Terapéutico'),
+        ('12', '12 - Rehabilitación'),
+        ('13', '13 - Diagnóstico y terapéutico'),
+        ('14', '14 - Detección de enfermedad'),
+        ('15', '15 - Protección específica'),
+        ('16', '16 - Información en salud'),
+        ('17', '17 - Educación en salud'),
+        ('18', '18 - Paliativo'),
+        ('19', '19 - Complementario'),
+    ]
+    VIA_INGRESO_CHOICES = [
+        ('1', '1 - Urgencias'),
+        ('2', '2 - Consulta externa'),
+        ('3', '3 - Remitido'),
+        ('4', '4 - Nacimiento'),
+        ('5', '5 - Electiva/Programada'),
+    ]
+
+    modalidad_rips       = models.CharField(max_length=2, blank=True, choices=MODALIDAD_CHOICES,
+                                             help_text='Modalidad grupo servicio RIPS')
+    grupo_servicios_rips = models.CharField(max_length=2, blank=True, choices=GRUPO_SERVICIOS_RIPS_CHOICES,
+                                             help_text='Grupo servicios RIPS')
+    finalidad_rips       = models.CharField(max_length=2, blank=True, choices=FINALIDAD_CHOICES,
+                                             help_text='Finalidad tecnología salud')
+    via_ingreso_rips     = models.CharField(max_length=1, blank=True, choices=VIA_INGRESO_CHOICES,
+                                             help_text='Vía ingreso por defecto')
+    cod_servicio_rips    = models.CharField(max_length=5, blank=True,
+                                             help_text='Código servicio REPS habilitado')
+    personal_atiende     = models.CharField(max_length=2, blank=True,
+                                             help_text='01=Med esp, 02=Med gral, 03=Enf, 04=Otro')
+    ambito_rips          = models.CharField(max_length=1, blank=True,
+                                             help_text='1=Ambulatorio, 2=Hospitalario, 3=Urgencias')
+
     class Meta:
         ordering = ['codigo']
         verbose_name = 'Código CUPS'
