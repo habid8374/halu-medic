@@ -5,6 +5,7 @@ Todas las rutas /api/* viven en el schema del tenant
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
+from apps.catalogos import views as views_catalogos
 
 
 def health(request):
@@ -19,6 +20,7 @@ from config.api import (
     FacturaViewSet,
     CodigoCUPSViewSet,
     CodigoCIE10ViewSet,
+    OrdenMedicaViewSet,
 )
 from apps.tarifas.api import ManualTarifarioViewSet
 from apps.usuarios.auth import (
@@ -31,6 +33,7 @@ from apps.usuarios.auth import (
 )
 from apps.facturacion.webhook import FactusWebhookView
 from apps.tenants.api import ConfiguracionConsultorioView
+from apps.suscripciones.api import SuscripcionViewSet
 
 router = DefaultRouter()
 router.register(r'pacientes',             PacienteViewSet,  basename='paciente')
@@ -41,6 +44,8 @@ router.register(r'usuarios',              UsuarioViewSet,   basename='usuario')
 router.register(r'cups',                  CodigoCUPSViewSet,  basename='cups')
 router.register(r'cie10',                 CodigoCIE10ViewSet, basename='cie10')
 router.register(r'tarifas',              ManualTarifarioViewSet, basename='tarifa')
+router.register(r'ordenes-medicas',      OrdenMedicaViewSet,     basename='orden-medica')
+router.register(r'admin/suscripciones', SuscripcionViewSet,     basename='suscripcion')
 
 urlpatterns = [
     path('api/health/', health, name='health'),
@@ -62,4 +67,11 @@ urlpatterns = [
 
     # ── API REST ──────────────────────────────────────────────────────────────
     path('api/', include(router.urls)),
+
+    # ── FHIR R4 ──────────────────────────────────────────────────────────────
+    path('api/fhir/r4/', include('apps.fhir.urls')),
+
+    # ── CUPS RIPS plantilla / importación ────────────────────────────────────
+    path('api/cups/plantilla/',     views_catalogos.plantilla_cups_rips, name='cups-plantilla'),
+    path('api/cups/importar-rips/', views_catalogos.importar_cups_rips,  name='cups-importar-rips'),
 ]

@@ -428,6 +428,110 @@ class FacturaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_502_BAD_GATEWAY
             )
 
+    @action(detail=True, methods=['post'])
+    def reintentar(self, request, pk=None):
+        """
+        POST /api/facturacion/facturas/{id}/reintentar/
+        Resetea el estado a BORRADOR y reenvía a Factus.
+        Útil cuando la factura quedó en ERROR o ENVIADA sin respuesta.
+        """
+        factura = self.get_object()
+
+        if factura.estado == EstadoFactura.VALIDADA:
+            return Response(
+                {'error': 'La factura ya fue validada por la DIAN. No se puede reintentar.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if factura.estado == EstadoFactura.ANULADA:
+            return Response(
+                {'error': 'No se puede reintentar una factura anulada.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Resetear estado para permitir el reenvío
+        factura.estado = EstadoFactura.BORRADOR
+        factura.errores_dian = []
+        factura.save(update_fields=['estado', 'errores_dian'])
+
+        from apps.facturacion.factus_salud import FactusSaludClient, construir_payload_auto
+        from apps.facturacion.factus_client import FactusAPIError
+        from apps.rips.generador import GeneradorRIPS
+        from django.utils import timezone as tz
+
+        try:
+            gen  = GeneradorRIPS(factura)
+            rips = gen.generar()
+            errs = gen.validar(rips)
+            if errs:
+                factura.estado      = EstadoFactura.ERROR
+                factura.errores_dian = errs
+                factura.save(update_fields=['estado', 'errores_dian'])
+                return Response({'error': 'RIPS inválido', 'detalles': errs}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+            factura.rips_json = rips
+            factura.estado    = EstadoFactura.ENVIADA
+            factura.save(update_fields=['rips_json', 'estado'])
+
+            payload = construir_payload_auto(factura)
+            with FactusSaludClient() as client:
+                resultado = client.crear_factura_salud(payload)
+
+            factura.numero_factus    = resultado.get('number', '')
+            factura.cufe             = resultado.get('cufe', '')
+            factura.qr_url           = resultado.get('qr', '')
+            factura.pdf_base64       = resultado.get('pdf_base_64', '') or resultado.get('qr_image', '')
+            factura.xml_base64       = resultado.get('xml_base_64', '')
+            factura.estado           = EstadoFactura.VALIDADA if not resultado.get('errors') else EstadoFactura.ERROR
+            factura.fecha_validacion = tz.now()
+            factura.errores_dian     = resultado.get('errors', [])
+            factura.save()
+
+            if factura.estado == EstadoFactura.VALIDADA:
+                factura.consulta.estado = 'facturada'
+                factura.consulta.save(update_fields=['estado'])
+
+            return Response({
+                'mensaje': 'Factura reenviada a Factus.',
+                'estado': factura.estado,
+                'numero': factura.numero_factus,
+                'cufe': factura.cufe,
+            }, status=status.HTTP_200_OK)
+
+        except FactusAPIError as e:
+            factura.estado = EstadoFactura.ERROR
+            factura.errores_dian = [str(e)]
+            factura.save(update_fields=['estado', 'errores_dian'])
+            return Response({'error': f'Error Factus: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as e:
+            factura.estado = EstadoFactura.ERROR
+            factura.errores_dian = [str(e)]
+            factura.save(update_fields=['estado', 'errores_dian'])
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ── ÓRDENES MÉDICAS ───────────────────────────────────────────────────────────
+
+from rest_framework.permissions import IsAuthenticated
+
+
+class OrdenMedicaSerializer(serializers.ModelSerializer):
+    tipo_label   = serializers.CharField(source='get_tipo_display', read_only=True)
+    estado_label = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model = OrdenMedica
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en']
+
+
+class OrdenMedicaViewSet(viewsets.ModelViewSet):
+    serializer_class = OrdenMedicaSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['consulta', 'tipo', 'estado']
+    search_fields = ['descripcion', 'cups', 'cum', 'cie10']
+
+    def get_queryset(self):
+        return OrdenMedica.objects.select_related('consulta__paciente').all()
+
 
 # ── CATÁLOGO CUPS (homologador nacional, schema público compartido) ───────────
 
