@@ -57,6 +57,7 @@ TENANT_DOMAIN_MODEL = 'tenants.Dominio'
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',  # PRIMERO siempre
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -162,6 +163,7 @@ else:
 
 STATIC_URL  = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 EMAIL_BACKEND   = 'django.core.mail.backends.smtp.EmailBackend'

@@ -4,6 +4,11 @@ Todas las rutas /api/* viven en el schema del tenant
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.http import JsonResponse
+
+
+def health(request):
+    return JsonResponse({'status': 'ok'})
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -38,6 +43,7 @@ router.register(r'cie10',                 CodigoCIE10ViewSet, basename='cie10')
 router.register(r'tarifas',              ManualTarifarioViewSet, basename='tarifa')
 
 urlpatterns = [
+    path('api/health/', health, name='health'),
     path('admin/', admin.site.urls),
 
     # ── Auth ──────────────────────────────────────────────────────────────────
