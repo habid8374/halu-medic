@@ -281,15 +281,30 @@ class FacturaViewSet(viewsets.ModelViewSet):
     def rips(self, request, pk=None):
         """
         GET /api/facturacion/facturas/{id}/rips/
-        Devuelve el JSON RIPS generado para esta factura.
+        Regenera el RIPS en tiempo real para incluir NIT y código prestador del tenant.
         """
         factura = self.get_object()
-        if not factura.rips_json:
+        if not factura.numero_factus:
             return Response(
-                {'error': 'RIPS aún no generado para esta factura.'},
+                {'error': 'RIPS no disponible: la factura aún no ha sido validada por la DIAN.'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        return Response(factura.rips_json)
+        try:
+            from apps.rips.generador import GeneradorRIPS
+            gen = GeneradorRIPS(factura)
+            rips = gen.generar()
+            # Guardar la versión actualizada
+            factura.rips_json = rips
+            factura.save(update_fields=['rips_json'])
+            return Response(rips)
+        except Exception as e:
+            # Si falla regeneración, devolver el guardado si existe
+            if factura.rips_json:
+                return Response(factura.rips_json)
+            return Response(
+                {'error': f'Error generando RIPS: {e}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=True, methods=['get'])
     def pdf(self, request, pk=None):
