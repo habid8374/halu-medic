@@ -30,10 +30,23 @@ class Especialidad(models.Model):
         return self.nombre
 
 
+TIPO_DOC_MEDICO = [
+    ('CC',  'Cédula de ciudadanía'),
+    ('CE',  'Cédula de extranjería'),
+    ('PA',  'Pasaporte'),
+    ('NIT', 'NIT'),
+]
+
+
 class Medico(models.Model):
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     usuario          = models.OneToOneField(User, on_delete=models.PROTECT, related_name='medico')
-    registro_medico  = models.CharField(max_length=20, help_text='Número de registro médico')
+    registro_medico  = models.CharField(max_length=20, help_text='Número de registro médico (RETHUS)')
+    # Documento de identidad — requerido en cada línea de RIPS (Res. 948/2026)
+    tipo_identificacion   = models.CharField(max_length=5, choices=TIPO_DOC_MEDICO, default='CC',
+                                              help_text='Tipo documento para RIPS')
+    numero_identificacion = models.CharField(max_length=30, blank=True,
+                                              help_text='Número documento para RIPS')
     especialidades   = models.ManyToManyField(Especialidad, blank=True)
     duracion_cita_min = models.PositiveIntegerField(default=20, help_text='Minutos por cita por defecto')
     activo           = models.BooleanField(default=True)

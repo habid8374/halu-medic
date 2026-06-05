@@ -154,7 +154,10 @@ class Medicamento(models.Model):
     unidad_medida      = models.CharField(max_length=20, blank=True)
     forma_farmaceutica = models.CharField(max_length=50, blank=True)
     unidades           = models.PositiveIntegerField(default=1)
+    dias_tratamiento   = models.PositiveIntegerField(default=1, help_text='Días de tratamiento (RIPS)')
     valor_unitario     = models.DecimalField(max_digits=14, decimal_places=2)
+    valor_dispensacion = models.DecimalField(max_digits=14, decimal_places=2, default=0,
+                                              help_text='Costo dispensación separado del medicamento (Res.948 Jul-2026)')
     fecha              = models.DateTimeField()
 
     @property
