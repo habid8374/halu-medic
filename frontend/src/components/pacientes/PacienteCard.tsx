@@ -59,14 +59,14 @@ export function PacienteCard({ paciente }: { paciente: Paciente }) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 mt-1">
+        <div className="flex items-center gap-3 mt-1 flex-wrap">
           {paciente.telefono && (
             <span className="flex items-center gap-1 text-xs text-slate-400">
               <Phone className="w-3 h-3" />{paciente.telefono}
             </span>
           )}
           {paciente.email && (
-            <span className="flex items-center gap-1 text-xs text-slate-400 truncate max-w-[180px]">
+            <span className="hidden sm:flex items-center gap-1 text-xs text-slate-400 truncate max-w-[180px]">
               <Mail className="w-3 h-3" />{paciente.email}
             </span>
           )}

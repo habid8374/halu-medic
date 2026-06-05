@@ -37,16 +37,16 @@ export default function PacientesPage() {
         }
       />
 
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
         <SearchBar
           value={search}
           onChange={setSearch}
           placeholder="Buscar por nombre, cédula o correo..."
-          className="flex-1 max-w-md"
+          className="w-full sm:flex-1 sm:max-w-md"
         />
         {debouncedSearch && (
-          <Badge variant="info">
-            Búsqueda: &ldquo;{debouncedSearch}&rdquo;
+          <Badge variant="info" className="flex-shrink-0">
+            &ldquo;{debouncedSearch}&rdquo;
           </Badge>
         )}
       </div>
