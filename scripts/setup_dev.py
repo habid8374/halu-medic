@@ -127,6 +127,13 @@ def main():
         else:
             print('  · Usuario "demo" ya existe en el tenant')
 
+    # 6. Cargar homologador CUPS al schema público (catálogo nacional)
+    print('\n[6/6] Cargando homologador CUPS...')
+    try:
+        call_command('importar_cups', verbosity=1)
+    except Exception as e:
+        print(f'  ! No se pudo cargar el catálogo CUPS: {e}')
+
     print('\n' + '─' * 50)
     print('  Setup completado')
     print('  Backend: python manage.py runserver')

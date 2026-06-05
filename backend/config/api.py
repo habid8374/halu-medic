@@ -416,3 +416,37 @@ class FacturaViewSet(viewsets.ModelViewSet):
                 {'error': f'Error consultando Factus: {str(e)}'},
                 status=status.HTTP_502_BAD_GATEWAY
             )
+
+
+# ── CATÁLOGO CUPS (homologador nacional, schema público compartido) ───────────
+
+from apps.catalogos.models import CodigoCUPS
+
+
+class CodigoCUPSSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CodigoCUPS
+        fields = [
+            'codigo', 'descripcion', 'nombre_servicio', 'grupo_servicio',
+            'cobertura', 'codigo_reps', 'grupo_rips',
+        ]
+
+
+class CodigoCUPSViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Consulta del homologador CUPS (solo lectura).
+
+    Autocompletado:  /api/cups/?search=consulta
+    Por código:      /api/cups/012403/
+    """
+    serializer_class = CodigoCUPSSerializer
+    ordering = ['codigo']
+
+    def get_queryset(self):
+        qs = CodigoCUPS.objects.all()
+        q = self.request.query_params.get('search')
+        if q:
+            from django.db.models import Q
+            qs = qs.filter(Q(codigo__icontains=q) | Q(descripcion__icontains=q) |
+                           Q(nombre_servicio__icontains=q))
+        return qs

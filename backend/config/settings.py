@@ -31,6 +31,7 @@ SHARED_APPS = [
     'apps.tenants',       # Modelo Consultorio y Dominio
     'apps.usuarios',      # Usuarios y roles
     'apps.suscripciones', # Planes SaaS
+    'apps.catalogos',     # Catálogos nacionales (CUPS / homologador REPS)
 ]
 
 # Apps por tenant (cada consultorio tiene su propio schema)

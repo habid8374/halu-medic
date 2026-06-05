@@ -148,6 +148,14 @@ export const facturasAPI = {
   rips:        (id: string) => api.get(`/api/facturacion/facturas/${id}/rips/`),
 }
 
+// ── CUPS (homologador nacional, solo lectura) ──────────────────────────────────
+
+export const cupsAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/cups/', { params }),
+  get:    (codigo: string) => api.get(`/api/cups/${codigo}/`),
+  buscar: (q: string) => api.get('/api/cups/', { params: { search: q } }),
+}
+
 // ── Usuarios ──────────────────────────────────────────────────────────────────
 
 export const usuariosAPI = {

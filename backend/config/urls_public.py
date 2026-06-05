@@ -15,10 +15,12 @@ from apps.usuarios.auth import (
     UsuarioViewSet,
 )
 from apps.suscripciones.api import SuscripcionViewSet
+from config.api import CodigoCUPSViewSet
 
 router = DefaultRouter()
 router.register(r'admin/suscripciones', SuscripcionViewSet, basename='suscripcion')
 router.register(r'usuarios',            UsuarioViewSet,     basename='usuario-public')
+router.register(r'cups',                CodigoCUPSViewSet,  basename='cups-public')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
