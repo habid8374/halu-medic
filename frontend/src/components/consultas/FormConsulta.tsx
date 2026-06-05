@@ -325,34 +325,40 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
         ) : (
           <div className="space-y-3">
             {procs.map((proc, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-start p-3 bg-slate-50 rounded-xl">
-                <div className="col-span-4">
-                  <CupsAutocomplete
-                    label="CUPS"
-                    value={proc.cups ?? ''}
-                    descripcion={proc.descripcion ?? ''}
-                    onChange={(cod, desc) => onCupsProcChange(i, cod, desc)}
-                    placeholder="Código..."
-                  />
+              <div key={i} className="p-3 bg-slate-50 rounded-xl space-y-2">
+                {/* Fila 1: CUPS + Descripción */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="col-span-1">
+                    <CupsAutocomplete
+                      label="CUPS"
+                      value={proc.cups ?? ''}
+                      descripcion={proc.descripcion ?? ''}
+                      onChange={(cod, desc) => onCupsProcChange(i, cod, desc)}
+                      placeholder="Código..."
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <Input label="Descripción" value={proc.descripcion ?? ''}
+                      onChange={e => setProc(i, 'descripcion', e.target.value)}
+                      placeholder="Se autocompleta..." />
+                  </div>
                 </div>
-                <div className="col-span-4">
-                  <Input label="Descripción" value={proc.descripcion ?? ''}
-                    onChange={e => setProc(i, 'descripcion', e.target.value)}
-                    placeholder="Se autocompleta..." />
-                </div>
-                <div className="col-span-1">
-                  <Input label="Cant." type="number" value={String(proc.cantidad ?? 1)}
-                    onChange={e => setProc(i, 'cantidad', parseInt(e.target.value))} />
-                </div>
-                <div className="col-span-2">
-                  <Input label="Valor $" type="number" value={String(proc.valor_facturar ?? 0)}
-                    onChange={e => setProc(i, 'valor_facturar', parseFloat(e.target.value))} />
-                </div>
-                <div className="col-span-1 flex items-end pb-2.5">
-                  <button type="button" onClick={() => removeProc(i)}
-                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                {/* Fila 2: Cantidad + Valor + Eliminar */}
+                <div className="flex gap-2 items-end">
+                  <div className="w-24 shrink-0">
+                    <Input label="Cantidad" type="number" value={String(proc.cantidad ?? 1)}
+                      onChange={e => setProc(i, 'cantidad', parseInt(e.target.value))} />
+                  </div>
+                  <div className="flex-1">
+                    <Input label="Valor ($)" type="number" value={String(proc.valor_facturar ?? 0)}
+                      onChange={e => setProc(i, 'valor_facturar', parseFloat(e.target.value))} />
+                  </div>
+                  <div className="pb-2.5 shrink-0">
+                    <button type="button" onClick={() => removeProc(i)}
+                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
