@@ -1,13 +1,13 @@
 'use client'
-import { use } from 'react'
+
 import Link from 'next/link'
 import { usePaciente } from '@/hooks/usePacientes'
 import { FormPaciente } from '@/components/pacientes/FormPaciente'
 import { PageHeader, Button, Spinner } from '@/components/ui'
 import { ArrowLeft } from 'lucide-react'
 
-export default function EditarPacientePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function EditarPacientePage({ params }: { params: { id: string } }) {
+  const { id } = params
   const { paciente, loading } = usePaciente(id)
 
   if (loading) {

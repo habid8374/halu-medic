@@ -1,5 +1,5 @@
 'use client'
-import { use } from 'react'
+
 import Link from 'next/link'
 import { useCita } from '@/hooks/useCitas'
 import { useAuth } from '@/lib/auth-context'
@@ -8,8 +8,8 @@ import { Badge, Button, Card, Spinner, PageHeader } from '@/components/ui'
 import { ArrowLeft, User, Clock, CalendarDays, ClipboardPlus } from 'lucide-react'
 import clsx from 'clsx'
 
-export default function CitaDetallePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function CitaDetallePage({ params }: { params: { id: string } }) {
+  const { id } = params
   const { usuario } = useAuth()
   const { cita, loading } = useCita(id)
 

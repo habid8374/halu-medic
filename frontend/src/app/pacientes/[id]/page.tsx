@@ -1,5 +1,5 @@
 'use client'
-import { use } from 'react'
+
 import Link from 'next/link'
 import { usePaciente } from '@/hooks/usePacientes'
 import { useAuth } from '@/lib/auth-context'
@@ -16,8 +16,8 @@ import clsx from 'clsx'
 const avatarColors = ['bg-halu-600','bg-teal-600','bg-purple-600','bg-amber-600','bg-emerald-600','bg-rose-600']
 function avatarColor(s: string) { return avatarColors[s.charCodeAt(0) % avatarColors.length] }
 
-export default function PacienteDetallePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function PacienteDetallePage({ params }: { params: { id: string } }) {
+  const { id } = params
   const { usuario } = useAuth()
   const { paciente, loading } = usePaciente(id)
 

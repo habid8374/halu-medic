@@ -1,5 +1,5 @@
 'use client'
-import { use, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useConsulta } from '@/hooks/useConsultas'
 import { useAuth } from '@/lib/auth-context'
@@ -13,8 +13,8 @@ const ESTADO_BADGE: Record<string, 'default' | 'success' | 'warning' | 'info' | 
   abierta: 'warning', cerrada: 'info', facturada: 'success', anulada: 'danger'
 }
 
-export default function ConsultaDetallePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id }   = use(params)
+export default function ConsultaDetallePage({ params }: { params: { id: string } }) {
+  const { id }   = params
   const { usuario } = useAuth()
   const router   = useRouter()
   const { consulta, loading } = useConsulta(id)

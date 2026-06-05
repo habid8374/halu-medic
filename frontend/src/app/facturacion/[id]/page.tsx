@@ -1,5 +1,5 @@
 'use client'
-import { use, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useFactura } from '@/hooks/useFacturas'
 import { useAuth } from '@/lib/auth-context'
@@ -13,8 +13,8 @@ import {
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 
-export default function FacturaDetallePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id }   = use(params)
+export default function FacturaDetallePage({ params }: { params: { id: string } }) {
+  const { id }   = params
   const { usuario } = useAuth()
   const { factura, loading, setFactura } = useFactura(id)
   const [emitiendo, setEmitiendo] = useState(false)
