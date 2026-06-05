@@ -148,6 +148,7 @@ tbody tr:nth-child(even) td{background:#f8fafc}
 </div>
 <div class="dian-box"><h3>Datos de Validación DIAN</h3>
   <div class="dfield"><label>CUFE</label><span>${factura.cufe || ''}</span></div>
+  ${info.convenio_cucon ? `<div class="dfield"><label>CUCON (Res. 948/2026)</label><span>${info.convenio_cucon}</span></div>` : ''}
   ${factura.cuv ? `<div class="dfield"><label>CUV MinSalud (MUV)</label><span class="cuv">${factura.cuv}</span></div>` : ''}
 </div>
 <div class="brow">
@@ -288,10 +289,16 @@ tbody tr:nth-child(even) td{background:#f8fafc}
           </div>
 
           {/* DIAN */}
-          {(factura.cufe || factura.cuv) && (
+          {(factura.cufe || factura.cuv || info.convenio_cucon) && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
               <p className="text-xs text-emerald-700 uppercase font-bold mb-2">Datos de Validación DIAN</p>
               {factura.cufe && <div className="mb-2"><p className="text-xs text-slate-400">CUFE</p><p className="text-xs font-mono text-slate-700 break-all">{factura.cufe}</p></div>}
+              {info.convenio_cucon && (
+                <div className="mb-2">
+                  <p className="text-xs text-slate-400">CUCON (Res. 948/2026)</p>
+                  <p className="text-xs font-mono text-slate-700 break-all">{info.convenio_cucon}</p>
+                </div>
+              )}
               {factura.cuv && <div><p className="text-xs text-slate-400">CUV MinSalud (MUV)</p><p className="text-xs font-mono text-emerald-700 font-bold">{factura.cuv}</p></div>}
             </div>
           )}
