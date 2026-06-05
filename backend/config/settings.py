@@ -56,11 +56,11 @@ TENANT_DOMAIN_MODEL = 'tenants.Dominio'
 # ── Middleware ────────────────────────────────────────────────────────────────
 MIDDLEWARE = [
     'config.health.HealthCheckMiddleware',               # ANTES del tenant middleware
-    'django_tenants.middleware.main.TenantMainMiddleware',  # PRIMERO siempre
+    'corsheaders.middleware.CorsMiddleware',             # ANTES del tenant middleware para OPTIONS
+    'django_tenants.middleware.main.TenantMainMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -144,15 +144,8 @@ SIMPLE_JWT = {
 }
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = list(config(
-    'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://127.0.0.1:3000',
-    cast=Csv()
-))
-# Siempre permitir el frontend de producción en Vercel
-_VERCEL = 'https://halu-medic.vercel.app'
-if _VERCEL not in CORS_ALLOWED_ORIGINS:
-    CORS_ALLOWED_ORIGINS.append(_VERCEL)
+CORS_ALLOW_ALL_ORIGINS = True  # temporal mientras se confirma CORS en producción
+CORS_ALLOW_CREDENTIALS = True
 
 # ── Almacenamiento ────────────────────────────────────────────────────────────
 if config('AWS_ACCESS_KEY_ID', default=''):
