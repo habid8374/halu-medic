@@ -432,50 +432,70 @@ class FacturaViewSet(viewsets.ModelViewSet):
     def reintentar(self, request, pk=None):
         """
         POST /api/facturacion/facturas/{id}/reintentar/
-        Resetea el estado a BORRADOR y reenvía a Factus.
-        Útil cuando la factura quedó en ERROR o ENVIADA sin respuesta.
+        Llama Factus directamente (sin Celery). Todo dentro de try/except
+        para garantizar respuesta JSON incluso ante errores inesperados.
         """
-        factura = self.get_object()
+        import traceback
+        import logging
+        from django.utils import timezone as tz
+        logger = logging.getLogger(__name__)
+
+        try:
+            # Cargar con relaciones necesarias para GeneradorRIPS
+            factura = Factura.objects.select_related(
+                'consulta__paciente',
+                'consulta__medico',
+                'convenio__aseguradora',
+            ).prefetch_related(
+                'consulta__procedimientos',
+            ).get(pk=pk)
+        except Factura.DoesNotExist:
+            return Response({'error': 'Factura no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 
         if factura.estado == EstadoFactura.VALIDADA:
             return Response(
-                {'error': 'La factura ya fue validada por la DIAN. No se puede reintentar.'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'La factura ya fue validada por la DIAN.'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         if factura.estado == EstadoFactura.ANULADA:
             return Response(
                 {'error': 'No se puede reintentar una factura anulada.'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Resetear estado para permitir el reenvío
-        factura.estado = EstadoFactura.BORRADOR
-        factura.errores_dian = []
-        factura.save(update_fields=['estado', 'errores_dian'])
-
-        from apps.facturacion.factus_salud import FactusSaludClient, construir_payload_auto
-        from apps.facturacion.factus_client import FactusAPIError
-        from apps.rips.generador import GeneradorRIPS
-        from django.utils import timezone as tz
-
         try:
+            from apps.facturacion.factus_salud import FactusSaludClient, construir_payload_auto
+            from apps.facturacion.factus_client import FactusAPIError
+            from apps.rips.generador import GeneradorRIPS
+
+            # Resetear estado
+            factura.estado = EstadoFactura.BORRADOR
+            factura.errores_dian = []
+            factura.save(update_fields=['estado', 'errores_dian'])
+
+            # 1. Generar y validar RIPS
             gen  = GeneradorRIPS(factura)
             rips = gen.generar()
             errs = gen.validar(rips)
             if errs:
-                factura.estado      = EstadoFactura.ERROR
+                factura.estado       = EstadoFactura.ERROR
                 factura.errores_dian = errs
                 factura.save(update_fields=['estado', 'errores_dian'])
-                return Response({'error': 'RIPS inválido', 'detalles': errs}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+                return Response(
+                    {'error': 'RIPS inválido', 'detalles': errs},
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
 
             factura.rips_json = rips
             factura.estado    = EstadoFactura.ENVIADA
             factura.save(update_fields=['rips_json', 'estado'])
 
+            # 2. Enviar a Factus
             payload = construir_payload_auto(factura)
             with FactusSaludClient() as client:
                 resultado = client.crear_factura_salud(payload)
 
+            # 3. Guardar resultado
             factura.numero_factus    = resultado.get('number', '')
             factura.cufe             = resultado.get('cufe', '')
             factura.qr_url           = resultado.get('qr', '')
@@ -487,26 +507,34 @@ class FacturaViewSet(viewsets.ModelViewSet):
             factura.save()
 
             if factura.estado == EstadoFactura.VALIDADA:
-                factura.consulta.estado = 'facturada'
-                factura.consulta.save(update_fields=['estado'])
+                try:
+                    factura.consulta.estado = 'facturada'
+                    factura.consulta.save(update_fields=['estado'])
+                except Exception:
+                    pass
 
             return Response({
-                'mensaje': 'Factura reenviada a Factus.',
-                'estado': factura.estado,
-                'numero': factura.numero_factus,
-                'cufe': factura.cufe,
+                'mensaje': 'Factura procesada.',
+                'estado':  factura.estado,
+                'numero':  factura.numero_factus,
+                'cufe':    factura.cufe,
+                'errores': factura.errores_dian,
             }, status=status.HTTP_200_OK)
 
-        except FactusAPIError as e:
-            factura.estado = EstadoFactura.ERROR
-            factura.errores_dian = [str(e)]
-            factura.save(update_fields=['estado', 'errores_dian'])
-            return Response({'error': f'Error Factus: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
         except Exception as e:
-            factura.estado = EstadoFactura.ERROR
-            factura.errores_dian = [str(e)]
-            factura.save(update_fields=['estado', 'errores_dian'])
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            tb = traceback.format_exc()
+            logger.error(f'[reintentar] factura={pk} error={e}\n{tb}')
+            # Intentar marcar la factura como error
+            try:
+                factura.estado = EstadoFactura.ERROR
+                factura.errores_dian = [str(e)]
+                factura.save(update_fields=['estado', 'errores_dian'])
+            except Exception:
+                pass
+            return Response(
+                {'error': str(e), 'tipo': type(e).__name__},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 # ── ÓRDENES MÉDICAS ───────────────────────────────────────────────────────────
 
