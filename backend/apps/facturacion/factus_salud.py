@@ -88,12 +88,25 @@ class FactusSaludClient(FactusClient):
             json=payload,
             headers=self._headers(),
         )
-        data = response.json()
+        try:
+            data = response.json()
+        except Exception:
+            raise FactusAPIError(f'Factus respuesta no JSON ({response.status_code}): {response.text[:500]}')
+
+        logger.info(f'[Factus] POST /v2/bills/validate status={response.status_code} body={str(data)[:800]}')
+
         if response.status_code not in (200, 201):
+            # Extraer todos los errores posibles del response
+            errores = data.get('errors') or data.get('error') or data.get('message') or response.text
+            if isinstance(errores, dict):
+                # errors puede ser {"campo": ["mensaje"]} — aplanar
+                errores = '; '.join(
+                    f'{k}: {v[0] if isinstance(v, list) else v}'
+                    for k, v in errores.items()
+                )
             raise FactusAPIError(
-                f'Error SS-CUFE: {data.get("message", response.text)}',
+                f'Error SS-CUFE: {errores}',
                 status_code=response.status_code,
-                errors=data.get('errors', [])
             )
         logger.info(f'Factura salud OK: {data.get("data", {}).get("number")}')
         return data.get('data', data)
@@ -328,10 +341,11 @@ def seleccionar_operacion(factura_obj) -> int:
 
 def construir_payload_auto(factura_obj) -> dict:
     """Selecciona y construye el payload correcto automáticamente."""
+    import json
     op = seleccionar_operacion(factura_obj)
-    if op == OpSalud.SS_CUFE:
-        return construir_payload_ss_cufe(factura_obj)
-    return construir_payload_ss_sin_aporte(factura_obj)
+    payload = construir_payload_ss_cufe(factura_obj) if op == OpSalud.SS_CUFE else construir_payload_ss_sin_aporte(factura_obj)
+    logger.info(f'[Factus payload] op={op} factura={factura_obj.id}\n{json.dumps(payload, ensure_ascii=False, default=str)[:2000]}')
+    return payload
 
 
 def _codigo_prestador() -> str:
