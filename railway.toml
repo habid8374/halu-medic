@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "cd backend && bash scripts/railway_start.sh"
+startCommand = "bash scripts/railway_start.sh"
 healthcheckPath = "/api/health/"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
