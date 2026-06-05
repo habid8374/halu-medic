@@ -1,13 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import toast from 'react-hot-toast'
 import { Eye, EyeOff, Lock, User } from 'lucide-react'
 
 export default function LoginPage() {
   const { login } = useAuth()
-  const router    = useRouter()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
@@ -23,7 +21,9 @@ export default function LoginPage() {
     try {
       await login(username, password)
       toast.success('Bienvenido a Halu Medic')
-      router.replace('/dashboard')
+      // Recarga limpia: garantiza que AuthProvider cargue el usuario desde
+      // el token antes de montar el dashboard (evita rebote al login).
+      window.location.href = '/dashboard'
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail
