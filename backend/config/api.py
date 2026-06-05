@@ -296,11 +296,26 @@ class FacturaViewSet(viewsets.ModelViewSet):
         """
         GET /api/facturacion/facturas/{id}/pdf/
         Devuelve el PDF en base64 para descarga en el frontend.
+        Si no está almacenado, lo obtiene de Factus por numero_factus.
         """
         factura = self.get_object()
+
+        # Si no hay PDF almacenado pero hay numero_factus, intentar obtenerlo de Factus
+        if not factura.pdf_base64 and factura.numero_factus:
+            try:
+                from apps.facturacion.factus_client import FactusClient, FactusAPIError
+                with FactusClient() as client:
+                    data_factus = client.consultar_factura(factura.numero_factus)
+                pdf_b64 = data_factus.get('pdf_base_64') or data_factus.get('pdf_base64') or ''
+                if pdf_b64:
+                    factura.pdf_base64 = pdf_b64
+                    factura.save(update_fields=['pdf_base64'])
+            except Exception as e:
+                logger.warning(f'No se pudo obtener PDF de Factus para {factura.numero_factus}: {e}')
+
         if not factura.pdf_base64:
             return Response(
-                {'error': 'PDF no disponible. La factura aún no ha sido validada.'},
+                {'error': 'PDF no disponible. La factura aún no ha sido validada o Factus no lo retornó.'},
                 status=status.HTTP_404_NOT_FOUND
             )
         return Response({
