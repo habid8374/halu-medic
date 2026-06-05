@@ -23,9 +23,30 @@ def main():
     print('  Halu Medic — Setup de desarrollo')
     print('─' * 50)
 
+    from django_tenants.utils import get_public_schema_name
+
     # 1. Migrar schema public
     print('\n[1/4] Migrando schema público...')
     call_command('migrate_schemas', '--shared', verbosity=1)
+
+    # 1b. Tenant PÚBLICO (obligatorio para django-tenants) + dominio localhost
+    public_schema = get_public_schema_name()  # normalmente 'public'
+    if not Consultorio.objects.filter(schema_name=public_schema).exists():
+        publico = Consultorio(
+            schema_name=public_schema,
+            nombre='Halu Medic (público)',
+            nit='000000000',
+            plan='clinica',
+        )
+        publico.save()
+        print(f'  ✓ Tenant público creado (schema "{public_schema}")')
+    else:
+        publico = Consultorio.objects.get(schema_name=public_schema)
+        print(f'  · Tenant público ya existe (schema "{public_schema}")')
+    for dom in ('localhost', '127.0.0.1'):
+        if not Dominio.objects.filter(domain=dom).exists():
+            Dominio.objects.create(domain=dom, tenant=publico, is_primary=(dom == 'localhost'))
+            print(f'  ✓ Dominio "{dom}" → tenant público')
 
     # 2. Crear tenant de prueba si no existe
     print('\n[2/4] Creando consultorio de prueba...')
@@ -38,15 +59,15 @@ def main():
             plan='pro',
         )
         consultorio.save()
-        Dominio.objects.create(
-            domain='demo.localhost',
-            tenant=consultorio,
-            is_primary=True,
-        )
-        print('  ✓ Consultorio "demo" creado — dominio: demo.localhost')
+        print('  ✓ Consultorio "demo" creado')
     else:
         consultorio = Consultorio.objects.get(schema_name='demo')
         print('  · Consultorio "demo" ya existe')
+
+    # Dominio del tenant demo (idempotente)
+    if not Dominio.objects.filter(domain='demo.localhost').exists():
+        Dominio.objects.create(domain='demo.localhost', tenant=consultorio, is_primary=True)
+        print('  ✓ Dominio "demo.localhost" → consultorio demo')
 
     # Suscripción activa de prueba para el consultorio demo
     from apps.suscripciones.models import Suscripcion, EstadoSuscripcion
