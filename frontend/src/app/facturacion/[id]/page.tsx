@@ -3,35 +3,65 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useFactura } from '@/hooks/useFacturas'
 import { useAuth } from '@/lib/auth-context'
-import { facturasAPI } from '@/lib/api'
+import { facturasAPI, mensajeError } from '@/lib/api'
 import { ESTADO_FACTURA, formatCOP, formatFechaFactura, tipoOperacionLabel } from '@/components/facturacion/helpers'
 import { Badge, Button, Card, Spinner, PageHeader } from '@/components/ui'
 import {
   ArrowLeft, CheckCircle, AlertCircle, Send, FileText,
-  Download, QrCode, RefreshCw, User, Receipt
+  Download, RefreshCw, User,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import clsx from 'clsx'
 
 export default function FacturaDetallePage({ params }: { params: { id: string } }) {
-  const { id }   = params
+  const { id } = params
   const { usuario } = useAuth()
   const { factura, loading, setFactura } = useFactura(id)
   const [emitiendo, setEmitiendo] = useState(false)
+  const [reintentando, setReintentando] = useState(false)
+  const [errorDetalle, setErrorDetalle] = useState<string | null>(null)
+
+  const refrescar = async () => {
+    const { data } = await facturasAPI.get(id)
+    setFactura(data)
+  }
 
   const emitir = async () => {
     if (!factura) return
     setEmitiendo(true)
+    setErrorDetalle(null)
     try {
       await facturasAPI.emitir(factura.id)
-      toast.success('Factura enviada a DIAN. Recibirás el CUFE en breve.')
-      // Refrescar estado
-      const { data } = await facturasAPI.get(factura.id)
-      setFactura(data)
-    } catch {
-      toast.error('Error al emitir la factura')
+      toast.success('Factura enviada a DIAN.')
+      await refrescar()
+    } catch (err) {
+      const msg = mensajeError(err)
+      setErrorDetalle(msg)
+      toast.error(msg, { duration: 6000 })
     } finally {
-      setEmitiendo(false) }
+      setEmitiendo(false)
+    }
+  }
+
+  const reintentar = async () => {
+    if (!factura) return
+    setReintentando(true)
+    setErrorDetalle(null)
+    try {
+      const { data } = await facturasAPI.reintentar(factura.id)
+      if (data.estado === 'validada') {
+        toast.success(`✓ Factura validada — ${data.numero}`)
+      } else {
+        toast.success('Reenvío procesado.')
+      }
+      await refrescar()
+    } catch (err) {
+      const msg = mensajeError(err)
+      setErrorDetalle(msg)
+      toast.error(msg, { duration: 8000 })
+      await refrescar()
+    } finally {
+      setReintentando(false)
+    }
   }
 
   const descargarPDF = async () => {
@@ -42,18 +72,18 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
       link.href = `data:application/pdf;base64,${data.pdf_base64}`
       link.download = `factura-${data.numero}.pdf`
       link.click()
-    } catch {
-      toast.error('PDF no disponible aún')
+    } catch (err) {
+      toast.error(mensajeError(err))
     }
   }
 
-  if (loading) return <div className="p-8 flex justify-center py-20"><Spinner size="lg" /></div>
+  if (loading) return <div className="page-padding flex justify-center py-20"><Spinner size="lg" /></div>
   if (!factura) return <div className="p-8"><p className="text-slate-500">Factura no encontrada.</p></div>
 
   const est = ESTADO_FACTURA[factura.estado]
 
   return (
-    <div className="p-8 max-w-3xl animate-fade-in">
+    <div className="page-padding max-w-3xl animate-fade-in">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/facturacion"><Button variant="ghost" className="px-2"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <PageHeader title="Factura electrónica" description={factura.numero_factus || 'En proceso'} />
@@ -104,6 +134,19 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
           </div>
         </Card>
 
+        {/* Error de operación (HTTP / red / Factus) */}
+        {errorDetalle && (
+          <Card>
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-600 mb-1">Error al procesar</p>
+                <p className="text-xs text-red-700 font-mono break-all">{errorDetalle}</p>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* DIAN info */}
         {(factura.cufe || factura.cuv || factura.numero_factus) && (
           <Card>
@@ -140,7 +183,7 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
           </Card>
         )}
 
-        {/* Errores DIAN */}
+        {/* Errores DIAN guardados en la factura */}
         {factura.errores_dian?.length > 0 && (
           <Card>
             <div className="flex items-center gap-2 mb-3">
@@ -148,8 +191,8 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
               <h3 className="font-semibold text-red-600 text-sm">Errores de validación DIAN</h3>
             </div>
             <div className="space-y-1.5">
-              {factura.errores_dian.map((e, i) => (
-                <p key={i} className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{e}</p>
+              {factura.errores_dian.map((e: string, i: number) => (
+                <p key={i} className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg font-mono break-all">{e}</p>
               ))}
             </div>
           </Card>
@@ -158,10 +201,16 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
         {/* Acciones */}
         {usuario?.permisos.puede_facturar && (
           <div className="flex flex-col gap-2">
-            {(factura.estado === 'borrador' || factura.estado === 'error') && (
+            {(factura.estado === 'borrador') && (
               <Button onClick={emitir} loading={emitiendo} className="w-full">
                 <Send className="w-4 h-4" />
-                {factura.estado === 'error' ? 'Reintentar emisión DIAN' : 'Emitir ante DIAN (SS-CUFE)'}
+                Emitir ante DIAN (SS-CUFE)
+              </Button>
+            )}
+            {(factura.estado === 'error' || factura.estado === 'enviada') && (
+              <Button onClick={reintentar} loading={reintentando} className="w-full">
+                <RefreshCw className="w-4 h-4" />
+                Reenviar a Factus
               </Button>
             )}
             {factura.estado === 'validada' && (
