@@ -123,6 +123,7 @@ class CitaViewSet(viewsets.ModelViewSet):
 # ── CONSULTAS ─────────────────────────────────────────────────────────────────
 
 from apps.consultas.models import Consulta, Procedimiento
+from apps.citas.models import Medico as MedicoModel
 
 
 class ProcedimientoSerializer(serializers.ModelSerializer):
@@ -136,6 +137,9 @@ class ConsultaSerializer(serializers.ModelSerializer):
     procedimientos  = ProcedimientoSerializer(many=True, required=False)
     valor_total     = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
+    medico          = serializers.PrimaryKeyRelatedField(
+        queryset=MedicoModel.objects.all(), allow_null=True, required=False
+    )
 
     class Meta:
         model = Consulta

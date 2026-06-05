@@ -22,7 +22,7 @@ class Consulta(models.Model):
     paciente    = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT,
                                      related_name='consultas')
     medico      = models.ForeignKey('citas.Medico', on_delete=models.PROTECT,
-                                     related_name='consultas')
+                                     related_name='consultas', null=True, blank=True)
     convenio    = models.ForeignKey('tarifas.ConvenioEPS', on_delete=models.SET_NULL,
                                      null=True, blank=True)
 
