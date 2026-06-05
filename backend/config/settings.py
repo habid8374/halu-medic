@@ -55,6 +55,7 @@ TENANT_DOMAIN_MODEL = 'tenants.Dominio'
 
 # ── Middleware ────────────────────────────────────────────────────────────────
 MIDDLEWARE = [
+    'config.health.HealthCheckMiddleware',               # ANTES del tenant middleware
     'django_tenants.middleware.main.TenantMainMiddleware',  # PRIMERO siempre
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
