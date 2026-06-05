@@ -64,7 +64,15 @@ from apps.citas.models import Cita, Medico, Especialidad, Sala
 
 class CitaSerializer(serializers.ModelSerializer):
     paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
-    medico_nombre   = serializers.CharField(source='medico.usuario.get_full_name', read_only=True)
+    medico_nombre   = serializers.SerializerMethodField()
+
+    def get_medico_nombre(self, obj):
+        if obj.medico and obj.medico.usuario:
+            return obj.medico.usuario.get_full_name()
+        return None
+    medico           = serializers.PrimaryKeyRelatedField(
+        queryset=Medico.objects.all(), allow_null=True, required=False
+    )
     duracion_minutos = serializers.IntegerField(read_only=True)
 
     class Meta:

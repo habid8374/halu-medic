@@ -57,7 +57,7 @@ class Sala(models.Model):
 class Cita(models.Model):
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     paciente   = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT, related_name='citas')
-    medico     = models.ForeignKey(Medico, on_delete=models.PROTECT, related_name='citas')
+    medico     = models.ForeignKey(Medico, on_delete=models.PROTECT, related_name='citas', null=True, blank=True)
     especialidad = models.ForeignKey(Especialidad, on_delete=models.SET_NULL, null=True, blank=True)
     sala       = models.ForeignKey(Sala, on_delete=models.SET_NULL, null=True, blank=True)
 
