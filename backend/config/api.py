@@ -19,16 +19,29 @@ from apps.tarifas.models import ManualTarifario
 
 
 class AseguradoraSerializer(serializers.ModelSerializer):
+    tarifario_nombre     = serializers.CharField(source='tarifario.nombre', read_only=True, default='')
+    tarifario_porcentaje = serializers.DecimalField(
+        source='tarifario.porcentaje_ajuste', read_only=True,
+        max_digits=6, decimal_places=2, default=None,
+    )
+
     class Meta:
         model = Aseguradora
-        fields = ['id', 'nombre', 'nit', 'codigo', 'tipo', 'activa']
+        fields = [
+            'id', 'nombre', 'nit', 'codigo', 'tipo', 'activa',
+            'tarifario', 'tarifario_nombre', 'tarifario_porcentaje',
+        ]
 
 
 class AseguradoraViewSet(viewsets.ModelViewSet):
     serializer_class = AseguradoraSerializer
 
     def get_queryset(self):
-        return Aseguradora.objects.filter(activa=True)
+        qs = Aseguradora.objects.select_related('tarifario')
+        todas = self.request.query_params.get('todas')
+        if todas:
+            return qs
+        return qs.filter(activa=True)
 
 
 from apps.tarifas.models import ConvenioEPS

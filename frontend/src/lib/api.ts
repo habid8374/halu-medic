@@ -183,7 +183,11 @@ export const cie10API = {
 // ── Aseguradoras ──────────────────────────────────────────────────────────────
 
 export const aseguradorasAPI = {
-  list: () => api.get('/api/aseguradoras/'),
+  list:   (params?: Record<string, unknown>) => api.get('/api/aseguradoras/', { params }),
+  get:    (id: string) => api.get(`/api/aseguradoras/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/aseguradoras/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/aseguradoras/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/aseguradoras/${id}/`),
 }
 
 // ── Convenios EPS ─────────────────────────────────────────────────────────────

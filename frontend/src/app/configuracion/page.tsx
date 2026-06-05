@@ -8,7 +8,7 @@ import Link from 'next/link'
 import {
   Building2, Shield, FileText,
   Save, Eye, EyeOff, CheckCircle, AlertCircle,
-  Hash, Calendar, Tag, AlignLeft, Zap, DollarSign, ArrowRight,
+  Hash, Calendar, Tag, AlignLeft, Zap, DollarSign, ArrowRight, ShieldCheck,
 } from 'lucide-react'
 import { TarifariosTab } from '@/components/configuracion/TarifariosTab'
 
@@ -345,8 +345,23 @@ Vigente del 1 al 5000. Este documento no genera obligaciones tributarias adicion
         <TarifariosTab />
       )}
 
-      {/* ── Card de navegación a Convenios EPS ─────────────────────────── */}
-      <Link href="/configuracion/convenios" className="block mt-8">
+      {/* ── Cards de navegación ────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
+      <Link href="/configuracion/aseguradoras" className="block">
+        <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl p-5 hover:border-halu-300 hover:shadow-sm transition-all group h-full">
+          <div className="w-10 h-10 bg-halu-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-halu-100 transition-colors">
+            <ShieldCheck className="w-5 h-5 text-halu-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-slate-900 text-sm">Aseguradoras</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              EPS, prepagadas, ARL y SOAT. Asigna tarifario y porcentaje de facturación.
+            </p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-halu-500 transition-colors flex-shrink-0" />
+        </div>
+      </Link>
+      <Link href="/configuracion/convenios" className="block">
         <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl p-5 hover:border-halu-300 hover:shadow-sm transition-all group">
           <div className="w-10 h-10 bg-halu-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-halu-100 transition-colors">
             <FileText className="w-5 h-5 text-halu-600" />
@@ -360,6 +375,7 @@ Vigente del 1 al 5000. Este documento no genera obligaciones tributarias adicion
           <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-halu-500 transition-colors flex-shrink-0" />
         </div>
       </Link>
+      </div>
 
       {/* Botón guardar fijo en mobile */}
       {esAdmin && tab !== 'tarifarios' && (

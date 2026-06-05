@@ -38,6 +38,13 @@ class Aseguradora(models.Model):
         ('EPS', 'EPS'), ('PREPAGADA', 'Medicina prepagada'),
         ('ARL', 'ARL'), ('SOAT', 'SOAT'), ('OTRO', 'Otro'),
     ])
+    tarifario = models.ForeignKey(
+        'tarifas.ManualTarifario',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='aseguradoras',
+        help_text='Tarifario base para facturar a esta aseguradora',
+    )
     activa    = models.BooleanField(default=True)
     creado_en = models.DateTimeField(auto_now_add=True)
 
