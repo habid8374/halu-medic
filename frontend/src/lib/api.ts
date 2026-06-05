@@ -239,6 +239,23 @@ export const suscripcionesAPI = {
   pagos:     (id: string) => api.get(`/api/admin/suscripciones/${id}/pagos/`),
 }
 
+// ── Historia Clínica ──────────────────────────────────────────────────────────
+
+export const ingresosAPI = {
+  list:    (params?: Record<string, unknown>) => api.get('/api/historia/ingresos/', { params }),
+  get:     (id: string) => api.get(`/api/historia/ingresos/${id}/`),
+  create:  (data: Record<string, unknown>) => api.post('/api/historia/ingresos/', data),
+  update:  (id: string, data: Record<string, unknown>) => api.patch(`/api/historia/ingresos/${id}/`, data),
+  egresar: (id: string, data: Record<string, unknown>) => api.post(`/api/historia/ingresos/${id}/egresar/`, data),
+}
+
+export const historiaAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/historia/registros/', { params }),
+  get:    (id: string) => api.get(`/api/historia/registros/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/historia/registros/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/historia/registros/${id}/`, data),
+}
+
 // ── Facturación PGP / Capitado ────────────────────────────────────────────────
 
 export const facturasPGPAPI = {

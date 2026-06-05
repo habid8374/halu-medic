@@ -980,3 +980,133 @@ class FacturaPGPViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f'[pgp sincronizar] {e}')
             return Response({'error': str(e)}, status=500)
+
+
+# ── HISTORIA CLÍNICA ──────────────────────────────────────────────────────────
+
+from apps.historia.models import Ingreso, Egreso, HistoriaClinica
+
+
+class IngresoSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.SerializerMethodField()
+    medico_nombre   = serializers.SerializerMethodField()
+    tiene_egreso    = serializers.SerializerMethodField()
+    egreso_info     = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Ingreso
+        fields = [
+            'id', 'numero_ingreso', 'paciente', 'paciente_nombre',
+            'medico', 'medico_nombre', 'fecha_ingreso', 'motivo_ingreso',
+            'tipo_atencion', 'observaciones', 'activo',
+            'tiene_egreso', 'egreso_info', 'creado_en',
+        ]
+
+    def get_paciente_nombre(self, obj):
+        return getattr(obj.paciente, 'nombre_completo', '') if obj.paciente else ''
+
+    def get_medico_nombre(self, obj):
+        return getattr(obj.medico, 'nombre_completo', '') if obj.medico else ''
+
+    def get_tiene_egreso(self, obj):
+        return hasattr(obj, 'egreso')
+
+    def get_egreso_info(self, obj):
+        if not hasattr(obj, 'egreso'):
+            return None
+        e = obj.egreso
+        return {
+            'id': str(e.id),
+            'fecha_egreso': e.fecha_egreso,
+            'tipo_egreso': e.tipo_egreso,
+            'diagnostico_egreso': e.diagnostico_egreso,
+        }
+
+
+class EgresoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = Egreso
+        fields = [
+            'id', 'ingreso', 'fecha_egreso', 'tipo_egreso',
+            'diagnostico_egreso', 'descripcion_diagnostico',
+            'condicion_al_egreso', 'medico', 'observaciones', 'creado_en',
+        ]
+
+
+class HistoriaClinicaSerializer(serializers.ModelSerializer):
+    medico_nombre   = serializers.SerializerMethodField()
+    paciente_nombre = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = HistoriaClinica
+        fields = [
+            'id', 'paciente', 'paciente_nombre', 'ingreso', 'consulta',
+            'medico', 'medico_nombre', 'fecha_atencion', 'tipo_registro',
+            'motivo_consulta', 'anamnesis', 'enfermedad_actual',
+            'signos_vitales', 'examen_fisico', 'impresion_diagnostica',
+            'diagnostico_principal', 'diagnostico_relacionado_1', 'diagnostico_relacionado_2',
+            'plan_tratamiento', 'ordenes_medicas', 'observaciones',
+            'creado_en', 'actualizado_en',
+        ]
+
+    def get_medico_nombre(self, obj):
+        return getattr(obj.medico, 'nombre_completo', '') if obj.medico else ''
+
+    def get_paciente_nombre(self, obj):
+        return getattr(obj.paciente, 'nombre_completo', '') if obj.paciente else ''
+
+
+class IngresoViewSet(viewsets.ModelViewSet):
+    serializer_class = IngresoSerializer
+
+    def get_queryset(self):
+        qs = Ingreso.objects.select_related('paciente', 'medico').prefetch_related('egreso').all()
+        paciente = self.request.query_params.get('paciente')
+        activo   = self.request.query_params.get('activo')
+        search   = self.request.query_params.get('search')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if activo is not None:
+            qs = qs.filter(activo=activo.lower() == 'true')
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(paciente__primer_nombre__icontains=search) |
+                Q(paciente__primer_apellido__icontains=search) |
+                Q(paciente__numero_identificacion__icontains=search)
+            )
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def egresar(self, request, pk=None):
+        """POST /api/ingresos/{id}/egresar/ — registra el egreso del paciente."""
+        ingreso = self.get_object()
+        if not ingreso.activo:
+            return Response({'error': 'El paciente ya fue egresado.'}, status=400)
+        if hasattr(ingreso, 'egreso'):
+            return Response({'error': 'Ya existe un egreso para este ingreso.'}, status=400)
+        ser = EgresoSerializer(data={**request.data, 'ingreso': str(ingreso.id)})
+        ser.is_valid(raise_exception=True)
+        egreso = ser.save()
+        return Response(EgresoSerializer(egreso).data, status=201)
+
+
+class EgresoViewSet(viewsets.ModelViewSet):
+    serializer_class = EgresoSerializer
+
+    def get_queryset(self):
+        return Egreso.objects.select_related('ingreso__paciente', 'medico').all()
+
+
+class HistoriaClinicaViewSet(viewsets.ModelViewSet):
+    serializer_class = HistoriaClinicaSerializer
+
+    def get_queryset(self):
+        qs = HistoriaClinica.objects.select_related('paciente', 'medico', 'ingreso', 'consulta').all()
+        paciente = self.request.query_params.get('paciente')
+        ingreso  = self.request.query_params.get('ingreso')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        return qs

@@ -214,6 +214,83 @@ export interface FacturaPGP {
   creado_en: string
 }
 
+// ── Historia Clínica ──────────────────────────────────────────────────────────
+export type TipoAtencion = 'consulta_externa' | 'urgencias' | 'hospitalizacion' | 'procedimiento'
+export type TipoEgreso   = 'alta_medica' | 'traslado' | 'voluntario' | 'fallecimiento' | 'fuga'
+export type TipoRegistroHC = 'consulta' | 'urgencias' | 'hospitalizacion' | 'procedimiento' | 'evolucion' | 'interconsulta'
+
+export interface Ingreso {
+  id: string
+  numero_ingreso: number
+  paciente: string
+  paciente_nombre: string
+  medico?: string
+  medico_nombre?: string
+  fecha_ingreso: string
+  motivo_ingreso: string
+  tipo_atencion: TipoAtencion
+  observaciones: string
+  activo: boolean
+  tiene_egreso: boolean
+  egreso_info?: {
+    id: string
+    fecha_egreso: string
+    tipo_egreso: TipoEgreso
+    diagnostico_egreso: string
+  }
+  creado_en: string
+}
+
+export interface Egreso {
+  id: string
+  ingreso: string
+  fecha_egreso: string
+  tipo_egreso: TipoEgreso
+  diagnostico_egreso: string
+  descripcion_diagnostico: string
+  condicion_al_egreso: string
+  medico?: string
+  observaciones: string
+  creado_en: string
+}
+
+export interface SignosVitales {
+  pa_sistolica?: number
+  pa_diastolica?: number
+  fc?: number
+  fr?: number
+  temperatura?: number
+  peso?: number
+  talla?: number
+  spo2?: number
+}
+
+export interface HistoriaClinica {
+  id: string
+  paciente: string
+  paciente_nombre: string
+  ingreso?: string
+  consulta?: string
+  medico?: string
+  medico_nombre?: string
+  fecha_atencion: string
+  tipo_registro: TipoRegistroHC
+  motivo_consulta: string
+  anamnesis: string
+  enfermedad_actual: string
+  signos_vitales?: SignosVitales
+  examen_fisico: string
+  impresion_diagnostica: string
+  diagnostico_principal: string
+  diagnostico_relacionado_1: string
+  diagnostico_relacionado_2: string
+  plan_tratamiento: string
+  ordenes_medicas: string
+  observaciones: string
+  creado_en: string
+  actualizado_en: string
+}
+
 // ── Paginación ────────────────────────────────────────────────────────────────
 export interface Paginated<T> {
   count: number

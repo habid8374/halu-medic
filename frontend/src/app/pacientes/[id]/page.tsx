@@ -9,7 +9,7 @@ import {
 } from '@/components/pacientes/helpers'
 import {
   ArrowLeft, Phone, Mail, MapPin, Shield, Edit,
-  CalendarPlus, ClipboardPlus, User, Cake, CreditCard,
+  CalendarPlus, ClipboardPlus, User, Cake, CreditCard, BookOpen,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -92,6 +92,12 @@ export default function PacienteDetallePage({ params }: { params: { id: string }
                       </Button>
                     </Link>
                   )}
+                  <Link href={`/historia-clinica/ingresos/nuevo?paciente=${paciente.id}`} className="flex-1">
+                    <Button variant="secondary" className="w-full text-xs py-2">
+                      <BookOpen className="w-3.5 h-3.5" />
+                      Ingresar
+                    </Button>
+                  </Link>
                 </div>
               )}
             </div>
