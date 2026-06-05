@@ -21,7 +21,38 @@ from apps.tarifas.models import ManualTarifario
 class AseguradoraSerializer(serializers.ModelSerializer):
     class Meta:
         model = Aseguradora
-        fields = ['id', 'nombre', 'nit', 'codigo', 'tipo']
+        fields = ['id', 'nombre', 'nit', 'codigo', 'tipo', 'activa']
+
+
+class AseguradoraViewSet(viewsets.ModelViewSet):
+    serializer_class = AseguradoraSerializer
+
+    def get_queryset(self):
+        return Aseguradora.objects.filter(activa=True)
+
+
+from apps.tarifas.models import ConvenioEPS
+
+
+class ConvenioEPSSerializer(serializers.ModelSerializer):
+    aseguradora_nombre = serializers.CharField(source='aseguradora.nombre', read_only=True)
+    aseguradora_nit    = serializers.CharField(source='aseguradora.nit', read_only=True)
+
+    class Meta:
+        model = ConvenioEPS
+        fields = [
+            'id', 'aseguradora', 'aseguradora_nombre', 'aseguradora_nit',
+            'numero_contrato', 'vigencia_desde', 'vigencia_hasta',
+            'cucon', 'tipo_tarifa', 'porcentaje_copago',
+            'valor_cuota_moderadora', 'activo', 'observaciones',
+        ]
+
+
+class ConvenioEPSViewSet(viewsets.ModelViewSet):
+    serializer_class = ConvenioEPSSerializer
+
+    def get_queryset(self):
+        return ConvenioEPS.objects.select_related('aseguradora').all()
 
 
 class PacienteSerializer(serializers.ModelSerializer):
@@ -257,6 +288,7 @@ class FacturaSerializer(serializers.ModelSerializer):
             'regimen':           paciente.regimen,
             'num_contrato':      convenio.numero_contrato if convenio else '',
             'a_cobrar_eps':      float(obj.total) - float(obj.valor_copago or 0),
+            'convenio_cucon':    convenio.cucon if convenio else '',
             # Consultorio
             'consultorio_nombre':        getattr(tenant, 'nombre', '') if tenant else '',
             'consultorio_nit':           getattr(tenant, 'nit', '') if tenant else '',

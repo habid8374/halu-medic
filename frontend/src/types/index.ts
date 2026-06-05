@@ -38,6 +38,23 @@ export interface Aseguradora {
   nit: string
   codigo: string
   tipo: string
+  activa: boolean
+}
+
+export interface ConvenioEPS {
+  id: string
+  aseguradora: string
+  aseguradora_nombre: string
+  aseguradora_nit: string
+  numero_contrato: string
+  vigencia_desde: string
+  vigencia_hasta: string
+  cucon: string
+  tipo_tarifa: string
+  porcentaje_copago: number
+  valor_cuota_moderadora: number
+  activo: boolean
+  observaciones: string
 }
 
 export interface Paciente {
@@ -152,6 +169,7 @@ export interface Factura {
     consultorio_cod_prestador?: string
     consultorio_direccion?: string
     consultorio_tel?: string
+    convenio_cucon?: string
   }
   convenio?: string
   numero_factus?: string

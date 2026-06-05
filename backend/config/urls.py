@@ -21,6 +21,8 @@ from config.api import (
     CodigoCUPSViewSet,
     CodigoCIE10ViewSet,
     OrdenMedicaViewSet,
+    AseguradoraViewSet,
+    ConvenioEPSViewSet,
 )
 from apps.tarifas.api import ManualTarifarioViewSet
 from apps.usuarios.auth import (
@@ -46,6 +48,8 @@ router.register(r'cie10',                 CodigoCIE10ViewSet, basename='cie10')
 router.register(r'tarifas',              ManualTarifarioViewSet, basename='tarifa')
 router.register(r'ordenes-medicas',      OrdenMedicaViewSet,     basename='orden-medica')
 router.register(r'admin/suscripciones', SuscripcionViewSet,     basename='suscripcion')
+router.register(r'aseguradoras',        AseguradoraViewSet,     basename='aseguradora')
+router.register(r'convenios-eps',       ConvenioEPSViewSet,     basename='convenio-eps')
 
 urlpatterns = [
     path('api/health/', health, name='health'),

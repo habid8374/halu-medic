@@ -180,6 +180,21 @@ export const cie10API = {
   buscar: (q: string) => api.get('/api/cie10/', { params: { search: q, page_size: 50 } }),
 }
 
+// ── Aseguradoras ──────────────────────────────────────────────────────────────
+
+export const aseguradorasAPI = {
+  list: () => api.get('/api/aseguradoras/'),
+}
+
+// ── Convenios EPS ─────────────────────────────────────────────────────────────
+
+export const conveniosAPI = {
+  list:   () => api.get('/api/convenios-eps/'),
+  create: (data: Record<string, unknown>) => api.post('/api/convenios-eps/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/convenios-eps/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/convenios-eps/${id}/`),
+}
+
 // ── Tarifarios ────────────────────────────────────────────────────────────────
 
 export const tarifasAPI = {
