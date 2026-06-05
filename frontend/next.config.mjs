@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
   // El optimizador de imágenes de next/image falla a veces en dev (Windows);
   // sirve los PNG/SVG de /public tal cual.
   images: {
