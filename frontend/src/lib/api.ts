@@ -156,6 +156,23 @@ export const cupsAPI = {
   buscar: (q: string) => api.get('/api/cups/', { params: { search: q, page_size: 50 } }),
 }
 
+// CUPS RIPS management
+export const cupsRipsAPI = {
+  descargarPlantilla: () => api.get('/api/cups/plantilla/', { responseType: 'blob' }),
+  importar: (archivo: File) => {
+    const fd = new FormData()
+    fd.append('archivo', archivo)
+    return api.post('/api/cups/importar-rips/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+}
+
+export const ordenesMedicasAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/ordenes-medicas/', { params }),
+  create: (data: Record<string, unknown>) => api.post('/api/ordenes-medicas/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/ordenes-medicas/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/ordenes-medicas/${id}/`),
+}
+
 export const cie10API = {
   list:   (params?: Record<string, unknown>) => api.get('/api/cie10/', { params }),
   get:    (codigo: string) => api.get(`/api/cie10/${codigo}/`),

@@ -5,6 +5,7 @@ import { useConsulta } from '@/hooks/useConsultas'
 import { useAuth } from '@/lib/auth-context'
 import { facturasAPI } from '@/lib/api'
 import { Badge, Button, Card, Spinner, PageHeader } from '@/components/ui'
+import { OrdenesPanel } from '@/components/consultas/OrdenesPanel'
 import { ArrowLeft, Receipt, User, Stethoscope, ClipboardList, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
@@ -100,6 +101,9 @@ export default function ConsultaDetallePage({ params }: { params: { id: string }
             </div>
           </Card>
         )}
+
+        {/* Órdenes médicas */}
+        <OrdenesPanel consultaId={id} />
 
         {/* Acciones */}
         <div className="flex flex-col gap-2">

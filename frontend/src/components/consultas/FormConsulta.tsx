@@ -27,6 +27,7 @@ interface FormData {
   causa_atencion: string
   valor_consulta: string
   valor_copago: string
+  via_ingreso: string
 }
 
 const EMPTY: FormData = {
@@ -40,6 +41,7 @@ const EMPTY: FormData = {
   modalidad: '01', grupo_servicio: '01',
   finalidad: '13', causa_atencion: '26',
   valor_consulta: '', valor_copago: '0',
+  via_ingreso: '2',
 }
 
 const PROC_EMPTY = { cups: '', descripcion: '', valor_facturar: 0, cantidad: 1 }
@@ -385,6 +387,13 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
             <option value="15">Detección de alteraciones del desarrollo</option>
             <option value="18">Atención de accidente de trabajo</option>
             <option value="19">Atención de accidente de tránsito</option>
+          </Select>
+          <Select label="Vía de ingreso (RIPS)" value={form.via_ingreso} onChange={set('via_ingreso')}>
+            <option value="1">1 — Urgencias</option>
+            <option value="2">2 — Consulta externa</option>
+            <option value="3">3 — Remitido</option>
+            <option value="4">4 — Nacimiento</option>
+            <option value="5">5 — Electiva / Programada</option>
           </Select>
         </div>
 
