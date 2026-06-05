@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
@@ -7,6 +8,7 @@ import {
   LayoutDashboard, Users, CalendarDays,
   ClipboardList, Receipt, BarChart3, Settings,
   LogOut, ChevronRight, Building2, ShieldCheck, FileJson, ListTree, BookOpen,
+  Menu, X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -45,6 +47,7 @@ export default function Sidebar() {
   const { usuario, logout } = useAuth()
   const pathname = usePathname()
   const router   = useRouter()
+  const [open, setOpen] = useState(false)
 
   if (!usuario) return null
 
@@ -60,24 +63,18 @@ export default function Sidebar() {
     return true
   })
 
-  return (
-    <aside className="fixed inset-y-0 left-0 w-[var(--sidebar-width)] bg-white border-r border-slate-100 flex flex-col z-40">
-      {/* Logo real */}
-      <div className="h-16 flex items-center px-4 border-b border-slate-100">
-        <Link href="/dashboard" className="flex items-center gap-2">
+  const sidebarContent = (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div className="h-16 flex items-center px-4 border-b border-slate-100 flex-shrink-0">
+        <Link href="/dashboard" className="flex items-center gap-2" onClick={() => setOpen(false)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.png"
-            alt="Halu Medic"
-            width={140}
-            height={40}
-            className="object-contain h-9 w-auto"
-          />
+          <img src="/logo.png" alt="Halu Medic" width={140} height={40} className="object-contain h-9 w-auto" />
         </Link>
       </div>
 
       {/* Consultorio activo */}
-      <div className="mx-3 mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
+      <div className="mx-3 mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5 flex-shrink-0">
         <div className="w-7 h-7 bg-halu-100 rounded-lg flex items-center justify-center flex-shrink-0">
           <Building2 className="w-3.5 h-3.5 text-halu-600" />
         </div>
@@ -95,6 +92,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setOpen(false)}
               className={clsx(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group',
                 active
@@ -113,7 +111,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Usuario */}
-      <div className="p-3 border-t border-slate-100">
+      <div className="p-3 border-t border-slate-100 flex-shrink-0">
         <div className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors">
           <div className="w-8 h-8 bg-gradient-to-br from-halu-500 to-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
             <span className="text-white text-xs font-bold">
@@ -139,6 +137,46 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
-    </aside>
+    </div>
+  )
+
+  return (
+    <>
+      {/* Botón hamburguesa — solo móvil */}
+      <button
+        onClick={() => setOpen(true)}
+        className="fixed top-3 left-3 z-50 lg:hidden p-2 bg-white rounded-xl shadow-sm border border-slate-200"
+        aria-label="Abrir menú"
+      >
+        <Menu className="w-5 h-5 text-slate-700" />
+      </button>
+
+      {/* Overlay — solo móvil cuando open */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* Sidebar móvil — drawer */}
+      <aside className={clsx(
+        'fixed inset-y-0 left-0 z-50 w-[var(--sidebar-width)] bg-white border-r border-slate-100 transition-transform duration-300 lg:hidden',
+        open ? 'translate-x-0' : '-translate-x-full'
+      )}>
+        <button
+          onClick={() => setOpen(false)}
+          className="absolute top-3 right-3 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        {sidebarContent}
+      </aside>
+
+      {/* Sidebar desktop — siempre visible */}
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[var(--sidebar-width)] bg-white border-r border-slate-100 flex-col z-40">
+        {sidebarContent}
+      </aside>
+    </>
   )
 }
