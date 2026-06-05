@@ -133,9 +133,9 @@ def _items_desde_consulta(factura_obj) -> list:
             'quantity': 1,
             'discount_rate': '0.00',
             'price': float(consulta.valor_consulta),
-            'tax_rate': '0.00',       # Servicios salud exentos IVA Art. 476 ET
-            'unit_measure_id': 70,    # Unidad servicio médico
-            'standard_code_id': 1,
+            'tax_rate': '0.00',
+            'unit_measure_code': '94',   # Servicios (código estándar UNSPSC)
+            'standard_code': '1',        # Código estándar servicio salud
         })
 
     for proc in consulta.procedimientos.all():
@@ -146,8 +146,8 @@ def _items_desde_consulta(factura_obj) -> list:
             'discount_rate': '0.00',
             'price': float(proc.valor_facturar),
             'tax_rate': '0.00',
-            'unit_measure_id': 70,
-            'standard_code_id': 1,
+            'unit_measure_code': '94',
+            'standard_code': '1',
         })
 
     return items
@@ -169,7 +169,8 @@ def construir_payload_ss_cufe(factura_obj) -> dict:
         'numbering_range_id': _rango_numeracion(factura_obj),
         'reference_code': str(factura_obj.id),
         'observation': factura_obj.observaciones or _leyenda_grafica(),
-        'payment_method_code': '10',  # Efectivo (crédito con EPS → código '1')
+        'payment_method_code': '10',
+        'payment_details': [{'payment_method_code': '10', 'due_date': consulta.fecha_atencion.strftime('%Y-%m-%d'), 'value': float(factura_obj.total)}],
 
         # ── Adquirente = EPS ──────────────────────────────────────────────────
         'customer': {
@@ -181,9 +182,9 @@ def construir_payload_ss_cufe(factura_obj) -> dict:
             'address': 'Colombia',
             'email': '',
             'phone': '',
-            'legal_organization_id': '1',  # Persona jurídica
-            'tribute_id': '9',             # No responsable
-            'identification_document_id': '6',  # NIT
+            'legal_organization_id': '1',
+            'tribute_id': '9',
+            'identification_document_code': '31',  # NIT
             'municipality_id': '5001',
         },
 
@@ -245,6 +246,7 @@ def construir_payload_ss_sin_aporte(factura_obj) -> dict:
         'reference_code': str(factura_obj.id),
         'observation': factura_obj.observaciones or _leyenda_grafica(),
         'payment_method_code': '10',
+        'payment_details': [{'payment_method_code': '10', 'due_date': consulta.fecha_atencion.strftime('%Y-%m-%d'), 'value': float(factura_obj.total)}],
 
         'customer': {
             'identification': paciente.numero_identificacion,
@@ -257,7 +259,7 @@ def construir_payload_ss_sin_aporte(factura_obj) -> dict:
             'phone': paciente.telefono or '',
             'legal_organization_id': '2',
             'tribute_id': '21',
-            'identification_document_id': _DOC_ID.get(paciente.tipo_identificacion, '3'),
+            'identification_document_code': _DOC_ID.get(paciente.tipo_identificacion, '3'),
             'municipality_id': paciente.municipio_codigo or '5001',
         },
 
@@ -314,7 +316,7 @@ def construir_payload_ss_recaudo(consulta_obj, valor: float) -> dict:
             'phone': paciente.telefono or '',
             'legal_organization_id': '2',
             'tribute_id': '21',
-            'identification_document_id': _DOC_ID.get(paciente.tipo_identificacion, '3'),
+            'identification_document_code': _DOC_ID.get(paciente.tipo_identificacion, '3'),
             'municipality_id': paciente.municipio_codigo or '5001',
         },
         'items': [{
@@ -324,8 +326,8 @@ def construir_payload_ss_recaudo(consulta_obj, valor: float) -> dict:
             'discount_rate': '0.00',
             'price': valor,
             'tax_rate': '0.00',
-            'unit_measure_id': 70,
-            'standard_code_id': 1,
+            'unit_measure_code': '94',
+            'standard_code': '1',
         }],
         'health_coverage_code': CoberturaSalud.desde_regimen(paciente.regimen),
         'health_modality_code': ModalidadPago.POR_EVENTO,
