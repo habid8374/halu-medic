@@ -103,37 +103,74 @@ export default function ConfiguracionPage() {
   const esAdmin = usuario?.permisos.es_admin || usuario?.permisos.es_superadmin
 
   return (
-    <div className="p-8 animate-fade-in max-w-4xl">
-      <PageHeader
-        title="Configuración"
-        description="Administra los datos de tu consultorio y facturación electrónica"
-        action={
-          esAdmin ? (
-            <Button onClick={guardar} loading={saving}>
-              <Save className="w-4 h-4" />
-              Guardar cambios
-            </Button>
-          ) : undefined
-        }
-      />
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-8 w-fit">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              tab === t.id
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <t.icon className="w-4 h-4" />
-            {t.label}
-          </button>
-        ))}
+    <div className="animate-fade-in max-w-4xl">
+      {/* Header mobile-friendly */}
+      <div className="flex items-center justify-between px-4 pt-16 pb-4 lg:px-8 lg:pt-8">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-bold text-slate-900">Configuración</h1>
+          <p className="text-slate-500 text-xs lg:text-sm mt-0.5 hidden sm:block">
+            Administra los datos de tu consultorio y facturación electrónica
+          </p>
+        </div>
+        {esAdmin && tab !== 'tarifarios' && (
+          <Button onClick={guardar} loading={saving} className="text-sm px-4 py-2">
+            <Save className="w-4 h-4" />
+            <span className="hidden sm:inline">Guardar cambios</span>
+            <span className="sm:hidden">Guardar</span>
+          </Button>
+        )}
       </div>
+
+      {/* ── Accesos directos a secciones ── visible siempre arriba */}
+      <div className="px-4 lg:px-8 mb-4">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Secciones</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Link href="/configuracion/aseguradoras">
+            <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl p-3.5 hover:border-halu-300 hover:shadow-sm transition-all group active:scale-95">
+              <div className="w-9 h-9 bg-halu-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-halu-100 transition-colors">
+                <ShieldCheck className="w-4 h-4 text-halu-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900 text-sm leading-tight">Aseguradoras</p>
+                <p className="text-xs text-slate-400 leading-tight mt-0.5">EPS · ARL · SOAT</p>
+              </div>
+            </div>
+          </Link>
+          <Link href="/configuracion/convenios">
+            <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl p-3.5 hover:border-halu-300 hover:shadow-sm transition-all group active:scale-95">
+              <div className="w-9 h-9 bg-teal-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-teal-100 transition-colors">
+                <FileText className="w-4 h-4 text-teal-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900 text-sm leading-tight">Convenios EPS</p>
+                <p className="text-xs text-slate-400 leading-tight mt-0.5">Contratos · CUCON</p>
+              </div>
+            </div>
+          </Link>
+        </div>
+      </div>
+
+      {/* Tabs — scroll horizontal en móvil */}
+      <div className="px-4 lg:px-8 mb-4">
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto scrollbar-none">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs lg:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
+                tab === t.id
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <t.icon className="w-3.5 h-3.5" />
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="px-4 lg:px-8 pb-8">
 
       {/* ── Tab: Datos generales ─────────────────────────────────────────── */}
       {tab === 'general' && (
@@ -344,48 +381,7 @@ Vigente del 1 al 5000. Este documento no genera obligaciones tributarias adicion
       {tab === 'tarifarios' && (
         <TarifariosTab />
       )}
-
-      {/* ── Cards de navegación ────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
-      <Link href="/configuracion/aseguradoras" className="block">
-        <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl p-5 hover:border-halu-300 hover:shadow-sm transition-all group h-full">
-          <div className="w-10 h-10 bg-halu-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-halu-100 transition-colors">
-            <ShieldCheck className="w-5 h-5 text-halu-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-slate-900 text-sm">Aseguradoras</p>
-            <p className="text-xs text-slate-500 mt-0.5">
-              EPS, prepagadas, ARL y SOAT. Asigna tarifario y porcentaje de facturación.
-            </p>
-          </div>
-          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-halu-500 transition-colors flex-shrink-0" />
-        </div>
-      </Link>
-      <Link href="/configuracion/convenios" className="block">
-        <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl p-5 hover:border-halu-300 hover:shadow-sm transition-all group">
-          <div className="w-10 h-10 bg-halu-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-halu-100 transition-colors">
-            <FileText className="w-5 h-5 text-halu-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-slate-900 text-sm">Convenios EPS</p>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Gestiona contratos, vigencias, CUCON y tarifas por aseguradora
-            </p>
-          </div>
-          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-halu-500 transition-colors flex-shrink-0" />
-        </div>
-      </Link>
-      </div>
-
-      {/* Botón guardar fijo en mobile */}
-      {esAdmin && tab !== 'tarifarios' && (
-        <div className="mt-8 flex justify-end">
-          <Button onClick={guardar} loading={saving} className="w-full sm:w-auto">
-            <Save className="w-4 h-4" />
-            Guardar cambios
-          </Button>
-        </div>
-      )}
+      </div>{/* end px wrapper */}
     </div>
   )
 }

@@ -28,6 +28,9 @@ body {
   .animate-slide-up { animation: slideUp 0.35s ease-out; }
   /* pt-14 deja espacio para el botón hamburguesa en móvil (h=44px ~= 11*4) */
   .page-padding { @apply px-4 pt-14 pb-8 sm:px-6 lg:px-8 lg:pt-8; }
+  /* Oculta scrollbar pero permite scroll */
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
 }
 
 @keyframes fadeIn {

@@ -130,25 +130,26 @@ export default function AseguradorasPage() {
   const tarifarioSeleccionado = tarifarios.find(t => t.id === form.tarifario)
 
   return (
-    <div className="p-8 animate-fade-in max-w-4xl">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/configuracion" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-        </Link>
-        <PageHeader
-          title="Aseguradoras"
-          description="EPS, prepagadas, ARL y SOAT. Asigna el tarifario que aplica a cada una."
-          action={
-            <Button onClick={abrirNueva}>
-              <Plus className="w-4 h-4" />
-              Nueva aseguradora
-            </Button>
-          }
-        />
+    <div className="animate-fade-in max-w-4xl">
+      {/* Header */}
+      <div className="px-4 pt-16 pb-4 lg:px-8 lg:pt-8">
+        <div className="flex items-center gap-3 mb-1">
+          <Link href="/configuracion" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0">
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+          <h1 className="text-xl lg:text-2xl font-bold text-slate-900">Aseguradoras</h1>
+          <div className="flex-1" />
+          <Button onClick={abrirNueva} className="text-sm px-3 py-2">
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Nueva</span>
+          </Button>
+        </div>
+        <p className="text-xs text-slate-500 ml-11">EPS, prepagadas, ARL y SOAT · Asigna tarifario por aseguradora</p>
       </div>
 
+      <div className="px-4 lg:px-8 pb-8">
       {/* Buscador */}
-      <div className="relative mb-6">
+      <div className="relative mb-4">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <input
           value={busqueda}
@@ -229,9 +230,13 @@ export default function AseguradorasPage() {
 
       {/* Modal crear / editar */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[90vh] flex flex-col">
+            {/* Handle indicator for mobile bottom sheet */}
+            <div className="flex justify-center pt-3 pb-1 sm:hidden">
+              <div className="w-10 h-1 bg-slate-200 rounded-full" />
+            </div>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <h2 className="font-bold text-slate-900">
                 {editando ? 'Editar aseguradora' : 'Nueva aseguradora'}
               </h2>
@@ -240,7 +245,7 @@ export default function AseguradorasPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 gap-4">
                 <Input label="Nombre *" value={form.nombre}
                   onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
@@ -334,6 +339,7 @@ export default function AseguradorasPage() {
           </div>
         </div>
       )}
+      </div>{/* end px wrapper */}
     </div>
   )
 }
