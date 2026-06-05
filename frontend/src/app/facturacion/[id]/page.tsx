@@ -64,17 +64,77 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
     }
   }
 
-  const descargarPDF = async () => {
+  const descargarPDF = () => {
     if (!factura) return
-    try {
-      const { data } = await facturasAPI.pdf(factura.id)
-      const link = document.createElement('a')
-      link.href = `data:application/pdf;base64,${data.pdf_base64}`
-      link.download = `factura-${data.numero}.pdf`
-      link.click()
-    } catch (err) {
-      toast.error(mensajeError(err))
-    }
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<title>Factura ${factura.numero_factus}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 0; padding: 20px; }
+  .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0d6efd; padding-bottom: 12px; margin-bottom: 16px; }
+  .logo-area h1 { font-size: 18px; color: #0d6efd; margin: 0; }
+  .logo-area p { margin: 2px 0; font-size: 10px; color: #555; }
+  .badge { background: #198754; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  th { background: #f1f5f9; text-align: left; padding: 6px 8px; font-size: 10px; color: #444; }
+  td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+  .totales td { border: none; }
+  .total-final td { font-weight: bold; font-size: 13px; border-top: 2px solid #0d6efd; }
+  .cufe { font-size: 8px; color: #555; word-break: break-all; background: #f8fafc; padding: 8px; border-radius: 4px; margin-top: 8px; }
+  .footer { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 10px; font-size: 9px; color: #888; text-align: center; }
+  @media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo-area">
+    <h1>FACTURA ELECTRÓNICA DE SALUD</h1>
+    <p>Resolución 948/2026 · Factus API DIAN</p>
+    <p><strong>No. FEV:</strong> ${factura.numero_factus}</p>
+    <p><strong>Tipo:</strong> ${tipoOperacionLabel(factura)}</p>
+  </div>
+  <div>
+    <span class="badge">VALIDADA DIAN</span>
+    <p style="margin-top:8px;font-size:10px;">Fecha: ${formatFechaFactura(factura.fecha_validacion)}</p>
+  </div>
+</div>
+
+<table>
+  <tr><th colspan="2">PACIENTE</th></tr>
+  <tr><td><strong>${factura.consulta_info?.paciente || ''}</strong></td><td>CUPS: ${factura.consulta_info?.cups || ''}</td></tr>
+</table>
+
+<table>
+  <thead><tr><th>Descripción</th><th style="text-align:right">Valor</th></tr></thead>
+  <tbody class="totales">
+    <tr><td>Subtotal</td><td style="text-align:right">${formatCOP(factura.subtotal)}</td></tr>
+    <tr><td>Descuento</td><td style="text-align:right">${formatCOP(factura.descuento)}</td></tr>
+    <tr><td>IVA (exento servicios salud)</td><td style="text-align:right">${formatCOP(factura.iva)}</td></tr>
+    <tr><td>Copago / Cuota moderadora</td><td style="text-align:right">${formatCOP(factura.valor_copago)}</td></tr>
+  </tbody>
+  <tbody class="total-final">
+    <tr><td><strong>TOTAL</strong></td><td style="text-align:right"><strong>${formatCOP(factura.total)}</strong></td></tr>
+  </tbody>
+</table>
+
+<div class="cufe">
+  <strong>CUFE:</strong> ${factura.cufe}
+</div>
+
+<div class="footer">
+  Documento tributario válido ante la DIAN — Generado por Halu Medic
+</div>
+</body>
+</html>`
+
+    const win = window.open('', '_blank')
+    if (!win) { toast.error('Permite ventanas emergentes para descargar el PDF'); return }
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print() }, 500)
   }
 
   if (loading) return <div className="page-padding flex justify-center py-20"><Spinner size="lg" /></div>
