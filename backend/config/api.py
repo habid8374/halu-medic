@@ -122,7 +122,7 @@ class CitaViewSet(viewsets.ModelViewSet):
 
 # ── CONSULTAS ─────────────────────────────────────────────────────────────────
 
-from apps.consultas.models import Consulta, Procedimiento
+from apps.consultas.models import Consulta, Procedimiento, OrdenMedica
 from apps.citas.models import Medico as MedicoModel
 
 
