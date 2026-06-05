@@ -1,6 +1,5 @@
 'use client'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import toast from 'react-hot-toast'
@@ -63,13 +62,13 @@ export default function Sidebar() {
       {/* Logo real */}
       <div className="h-16 flex items-center px-4 border-b border-slate-100">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src="/logo.png"
             alt="Halu Medic"
             width={140}
             height={40}
             className="object-contain h-9 w-auto"
-            priority
           />
         </Link>
       </div>

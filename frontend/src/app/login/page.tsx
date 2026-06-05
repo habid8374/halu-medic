@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import toast from 'react-hot-toast'
 import { Eye, EyeOff, Lock, User } from 'lucide-react'
-import Image from 'next/image'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -45,7 +44,8 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="relative z-10">
-          <Image src="/logo.png" alt="Halu Medic" width={160} height={45} className="object-contain brightness-0 invert opacity-90" priority />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Halu Medic" width={160} height={45} className="object-contain brightness-0 invert opacity-90" />
         </div>
 
         {/* Contenido central */}
@@ -93,7 +93,8 @@ export default function LoginPage() {
       <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-20 bg-white">
         {/* Logo mobile */}
         <div className="lg:hidden flex items-center mb-10">
-          <Image src="/logo.png" alt="Halu Medic" width={130} height={38} className="object-contain" priority />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Halu Medic" width={130} height={38} className="object-contain" />
         </div>
 
         <div className="w-full max-w-sm mx-auto animate-slide-up">
