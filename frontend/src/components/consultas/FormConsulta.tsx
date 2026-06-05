@@ -1,10 +1,10 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { consultasAPI, facturasAPI, tarifasAPI } from '@/lib/api'
+import { consultasAPI, facturasAPI, tarifasAPI, pacientesAPI } from '@/lib/api'
 import { Procedimiento } from '@/types'
 import { Input, Select, Button, Card, CupsAutocomplete, Cie10Autocomplete } from '@/components/ui'
-import { Stethoscope, Plus, Trash2, Receipt, FileText, ClipboardList, DollarSign } from 'lucide-react'
+import { Stethoscope, Plus, Trash2, Receipt, FileText, ClipboardList, DollarSign, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface FormData {
@@ -44,6 +44,8 @@ const EMPTY: FormData = {
 
 const PROC_EMPTY = { cups: '', descripcion: '', valor_facturar: 0, cantidad: 1 }
 
+interface PacienteOption { id: string; nombre_completo: string; numero_identificacion: string }
+
 export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; citaId?: string }) {
   const router = useRouter()
   const [form, setForm]   = useState<FormData>({ ...EMPTY, paciente: pacienteId ?? '', cita: citaId ?? '' })
@@ -52,6 +54,21 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
   const [saving, setSaving] = useState(false)
   const [crearFactura, setCrearFactura] = useState(true)
   const [buscandoPrecio, setBuscandoPrecio] = useState(false)
+  const [pacientes, setPacientes] = useState<PacienteOption[]>([])
+  const [pacienteNombre, setPacienteNombre] = useState('')
+  const [busqPaciente, setBusqPaciente] = useState('')
+  const [showPacientes, setShowPacientes] = useState(false)
+
+  useEffect(() => {
+    if (!busqPaciente.trim() || busqPaciente.length < 2) { setPacientes([]); return }
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await pacientesAPI.list({ search: busqPaciente, page_size: 20 })
+        setPacientes(data.results ?? data)
+      } catch { /* ignore */ }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [busqPaciente])
 
   const set = (field: keyof FormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -88,9 +105,18 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
   const setProc = (i: number, field: string, val: string | number) =>
     setProcs(p => p.map((pr, idx) => idx === i ? { ...pr, [field]: val } : pr))
 
+  const seleccionarPaciente = (p: PacienteOption) => {
+    setForm(f => ({ ...f, paciente: p.id }))
+    setPacienteNombre(`${p.nombre_completo} · ${p.numero_identificacion}`)
+    setBusqPaciente('')
+    setPacientes([])
+    setShowPacientes(false)
+    setErrors(e => ({ ...e, paciente: '' }))
+  }
+
   const validate = () => {
     const e: Record<string, string> = {}
-    if (!form.paciente)              e.paciente              = 'Requerido'
+    if (!form.paciente)              e.paciente              = 'Debes seleccionar un paciente'
     if (!form.cups_principal)        e.cups_principal        = 'Requerido'
     if (!form.diagnostico_principal) e.diagnostico_principal = 'Requerido (CIE-10)'
     if (!form.valor_consulta)        e.valor_consulta        = 'Requerido'
@@ -100,7 +126,12 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const errs = validate()
-    if (Object.keys(errs).length) { setErrors(errs); return }
+    if (Object.keys(errs).length) {
+      setErrors(errs)
+      const primero = Object.values(errs)[0]
+      toast.error(primero === 'Debes seleccionar un paciente' ? 'Debes seleccionar un paciente' : 'Revisa los campos requeridos')
+      return
+    }
     setSaving(true)
 
     try {
@@ -149,6 +180,49 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 animate-slide-up">
+
+      {/* Paciente — solo se muestra si no viene preseleccionado por URL */}
+      {!pacienteId && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center">
+              <User className="w-3.5 h-3.5 text-blue-600" />
+            </div>
+            <h3 className="font-semibold text-slate-900 text-sm">Paciente *</h3>
+          </div>
+          {form.paciente && pacienteNombre ? (
+            <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+              <span className="text-sm font-medium text-emerald-800">{pacienteNombre}</span>
+              <button type="button" onClick={() => { setForm(f => ({ ...f, paciente: '' })); setPacienteNombre('') }}
+                className="text-xs text-slate-400 hover:text-slate-600 underline">Cambiar</button>
+            </div>
+          ) : (
+            <div className="relative">
+              <input
+                value={busqPaciente}
+                onChange={e => { setBusqPaciente(e.target.value); setShowPacientes(true) }}
+                onFocus={() => setShowPacientes(true)}
+                placeholder="Buscar por nombre o cédula..."
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 ${
+                  errors.paciente ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-slate-200 focus:ring-halu-500/20 focus:border-halu-400 bg-slate-50'
+                }`}
+              />
+              {showPacientes && pacientes.length > 0 && (
+                <div className="absolute z-50 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                  {pacientes.map(p => (
+                    <button key={p.id} type="button" onClick={() => seleccionarPaciente(p)}
+                      className="w-full text-left px-4 py-2.5 hover:bg-halu-50 flex flex-col border-b border-slate-50 last:border-0">
+                      <span className="text-sm font-medium text-slate-800">{p.nombre_completo}</span>
+                      <span className="text-xs text-slate-400">{p.numero_identificacion}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {errors.paciente && <p className="text-xs text-red-500 mt-1">{errors.paciente}</p>}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* CUPS y Diagnóstico */}
       <Card>
