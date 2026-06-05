@@ -63,6 +63,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="facturapgp",
-            index=models.Index(fields=["numero_factus"], name="facturacion_numero_936b69_idx"),
+            index=models.Index(fields=["numero_factus"], name="facturacion_numero__936b69_idx"),
         ),
     ]
