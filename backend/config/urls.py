@@ -18,6 +18,7 @@ from config.api import (
     CitaViewSet,
     ConsultaViewSet,
     FacturaViewSet,
+    FacturaPGPViewSet,
     CodigoCUPSViewSet,
     CodigoCIE10ViewSet,
     OrdenMedicaViewSet,
@@ -50,6 +51,7 @@ router.register(r'ordenes-medicas',      OrdenMedicaViewSet,     basename='orden
 router.register(r'admin/suscripciones', SuscripcionViewSet,     basename='suscripcion')
 router.register(r'aseguradoras',        AseguradoraViewSet,     basename='aseguradora')
 router.register(r'convenios-eps',       ConvenioEPSViewSet,     basename='convenio-eps')
+router.register(r'facturacion/pgp',     FacturaPGPViewSet,      basename='factura-pgp')
 
 urlpatterns = [
     path('api/health/', health, name='health'),

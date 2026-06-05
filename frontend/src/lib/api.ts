@@ -239,4 +239,16 @@ export const suscripcionesAPI = {
   pagos:     (id: string) => api.get(`/api/admin/suscripciones/${id}/pagos/`),
 }
 
+// ── Facturación PGP / Capitado ────────────────────────────────────────────────
+
+export const facturasPGPAPI = {
+  list:        (params?: Record<string, unknown>) => api.get('/api/facturacion/pgp/', { params }),
+  get:         (id: string) => api.get(`/api/facturacion/pgp/${id}/`),
+  create:      (data: Record<string, unknown>) => api.post('/api/facturacion/pgp/', data),
+  update:      (id: string, data: Record<string, unknown>) => api.patch(`/api/facturacion/pgp/${id}/`, data),
+  reintentar:  (id: string) => api.post(`/api/facturacion/pgp/${id}/reintentar/`),
+  sincronizar: (id: string) => api.post(`/api/facturacion/pgp/${id}/sincronizar/`),
+  rips:        (id: string) => api.get(`/api/facturacion/pgp/${id}/rips/`),
+}
+
 export default api

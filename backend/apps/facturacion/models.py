@@ -65,6 +65,57 @@ class Factura(models.Model):
         return f'Factura {self.numero_factus or self.id} — {self.estado}'
 
 
+class FacturaPGP(models.Model):
+    """Factura por Pago Global Prospectivo / Capitación."""
+
+    id                  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    convenio            = models.ForeignKey('tarifas.ConvenioEPS', on_delete=models.PROTECT,
+                                             related_name='facturas_pgp')
+
+    # Período del contrato
+    periodo_desde       = models.DateField()
+    periodo_hasta       = models.DateField()
+    descripcion_contrato = models.TextField(
+        help_text='Ej: Contrato PGP que comprende el mes de mayo del 1 al 31 de mayo de 2026'
+    )
+    numero_contrato_eps  = models.CharField(max_length=100, blank=True,
+        help_text='Número de contrato en el sistema de la EPS (diferente al CUCON)')
+
+    # Valor global
+    valor_total         = models.DecimalField(max_digits=14, decimal_places=2)
+
+    # Factus / DIAN
+    numero_factus       = models.CharField(max_length=50, blank=True)
+    cufe                = models.CharField(max_length=200, blank=True)
+    qr_url              = models.TextField(blank=True)
+    pdf_base64          = models.TextField(blank=True)
+    xml_base64          = models.TextField(blank=True)
+    rango_numeracion_id = models.IntegerField(null=True, blank=True)
+
+    # RIPS
+    rips_json           = models.JSONField(null=True, blank=True)
+    cuv                 = models.CharField(max_length=100, blank=True)
+
+    estado              = models.CharField(max_length=20, choices=EstadoFactura.choices,
+                                            default=EstadoFactura.BORRADOR)
+    errores_dian        = models.JSONField(default=list, blank=True)
+    observaciones       = models.TextField(blank=True)
+
+    creado_en           = models.DateTimeField(auto_now_add=True)
+    actualizado_en      = models.DateTimeField(auto_now=True)
+    fecha_validacion    = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+        indexes = [
+            models.Index(fields=['estado']),
+            models.Index(fields=['numero_factus']),
+        ]
+
+    def __str__(self):
+        return f'PGP {self.numero_factus or self.id} — {self.convenio}'
+
+
 class FacturaHelper:
     """
     Métodos de utilidad para procesar la respuesta JSON de Factus.

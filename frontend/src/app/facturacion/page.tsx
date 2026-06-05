@@ -40,6 +40,19 @@ export default function FacturacionPage() {
         }
       />
 
+      {/* Acceso rápido PGP */}
+      <div className="mb-4">
+        <Link href="/facturacion/pgp">
+          <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-4 flex items-center justify-between hover:bg-cyan-100 transition-colors cursor-pointer">
+            <div>
+              <p className="text-sm font-semibold text-cyan-800">Facturación PGP / Capitado</p>
+              <p className="text-xs text-cyan-600 mt-0.5">Pago Global Prospectivo · Modalidad capitada · RIPS en cero</p>
+            </div>
+            <span className="text-cyan-500 text-xs font-medium">Ver facturas PGP →</span>
+          </div>
+        </Link>
+      </div>
+
       {/* Resumen rápido */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {(['validada', 'enviada', 'error', 'borrador'] as EstadoFactura[]).map(e => {

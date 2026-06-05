@@ -732,3 +732,251 @@ class CodigoCIE10ViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(Q(codigo__icontains=q) | Q(nombre__icontains=q) |
                            Q(descripcion__icontains=q))
         return qs
+
+
+# ── FACTURACIÓN PGP / CAPITADO ────────────────────────────────────────────────
+
+from apps.facturacion.models import FacturaPGP, EstadoFactura as _EstadoPGP
+
+
+class FacturaPGPSerializer(serializers.ModelSerializer):
+    convenio_info = serializers.SerializerMethodField()
+    tiene_rips    = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = FacturaPGP
+        fields = [
+            'id', 'convenio', 'convenio_info',
+            'periodo_desde', 'periodo_hasta',
+            'descripcion_contrato', 'numero_contrato_eps',
+            'valor_total',
+            'numero_factus', 'cufe', 'qr_url', 'cuv',
+            'estado', 'errores_dian', 'tiene_rips',
+            'fecha_validacion', 'creado_en',
+        ]
+
+    def get_convenio_info(self, obj):
+        c = obj.convenio
+        if not c:
+            return {}
+        return {
+            'aseguradora_nombre': c.aseguradora.nombre if c.aseguradora else '',
+            'aseguradora_nit':    c.aseguradora.nit    if c.aseguradora else '',
+            'numero_contrato':    c.numero_contrato,
+            'cucon':              c.cucon,
+        }
+
+    def get_tiene_rips(self, obj):
+        return bool(obj.rips_json)
+
+
+class FacturaPGPViewSet(viewsets.ModelViewSet):
+    serializer_class = FacturaPGPSerializer
+
+    def get_queryset(self):
+        qs = FacturaPGP.objects.select_related('convenio__aseguradora').all()
+        estado = self.request.query_params.get('estado')
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def reintentar(self, request, pk=None):
+        import traceback, logging
+        from django.utils import timezone as tz
+        from apps.facturacion.factus_salud import FactusSaludClient, ModalidadPago, CoberturaSalud, OpSalud
+        from apps.rips.generador_pgp import GeneradorRIPSPGP
+        logger = logging.getLogger(__name__)
+
+        try:
+            factura = FacturaPGP.objects.select_related('convenio__aseguradora').get(pk=pk)
+        except FacturaPGP.DoesNotExist:
+            return Response({'error': 'Factura PGP no encontrada.'}, status=404)
+
+        if factura.estado == _EstadoPGP.VALIDADA:
+            return Response({'error': 'La factura ya fue validada por la DIAN.'}, status=400)
+        if factura.estado == _EstadoPGP.ANULADA:
+            return Response({'error': 'No se puede reintentar una factura anulada.'}, status=400)
+
+        try:
+            convenio  = factura.convenio
+            aseg      = convenio.aseguradora
+
+            # Resetear
+            factura.estado = _EstadoPGP.BORRADOR
+            factura.errores_dian = []
+            factura.save(update_fields=['estado', 'errores_dian'])
+
+            # Determinar op_type: PGP con convenio → SS-CUFE
+            op_type = OpSalud.SS_CUFE if convenio.activo else OpSalud.SS_SIN_APORTE
+
+            # Período de facturación
+            desde = factura.periodo_desde
+            hasta = factura.periodo_hasta
+
+            # Rango numeración
+            rango_id = factura.rango_numeracion_id
+            if not rango_id:
+                from django.db import connection as _conn
+                _tenant = getattr(_conn, 'tenant', None)
+                rango_id = getattr(_tenant, 'factus_rango_numeracion_id', None) if _tenant else None
+
+            # NIT / código prestador
+            from django.db import connection as _conn2
+            _tenant2 = getattr(_conn2, 'tenant', None)
+            _cod_prest = getattr(_tenant2, 'codigo_prestador', '') or ''
+
+            payload = {
+                'operation_type_id': op_type,
+                'numbering_range_id': rango_id,
+                'reference_code': str(factura.id),
+                'observation': factura.descripcion_contrato,
+                'payment_method_code': '10',
+                'payment_details': [{
+                    'payment_method_code': '10',
+                    'payment_form': '1',
+                    'due_date': hasta.strftime('%Y-%m-%d'),
+                    'amount': float(factura.valor_total),
+                }],
+                'customer': {
+                    'identification': aseg.nit,
+                    'dv': '',
+                    'company': aseg.nombre,
+                    'trade_name': aseg.nombre,
+                    'names': aseg.nombre,
+                    'address': 'Colombia',
+                    'email': '',
+                    'phone': '',
+                    'legal_organization_id': '1',
+                    'tribute_id': '1',
+                    'identification_document_code': '31',
+                    'municipality_id': '11001',
+                },
+                'items': [{
+                    'code_reference': 'PGP-001',
+                    'name': factura.descripcion_contrato,
+                    'quantity': 1,
+                    'discount_rate': '0.00',
+                    'price': float(factura.valor_total),
+                    'tax_rate': '0.00',
+                    'unit_measure_id': 70,
+                    'standard_code_id': 1,
+                    'is_excluded': 1,
+                }],
+                # Campos sector salud
+                'health_coverage_code': CoberturaSalud.CONTRIBUTIVO,
+                'health_modality_code': ModalidadPago.GLOBAL_PROSPECTIVO,
+                'health_provider_code': _cod_prest,
+                'health_document_type': '31',
+                'health_document_number': aseg.nit,
+                'health_first_name': aseg.nombre,
+                'health_other_names': '',
+                'health_last_name': '',
+                'health_other_last_name': '',
+                'health_billing_period_start_date': desde.strftime('%Y-%m-%d'),
+                'health_billing_period_start_time': '00:00:00',
+                'health_billing_period_end_date': hasta.strftime('%Y-%m-%d'),
+                'health_billing_period_end_time': '23:59:59',
+                'health_contract_number': factura.numero_contrato_eps or convenio.numero_contrato,
+                'health_policy_number': '',
+                'health_authorization_number': '',
+                'health_cucon': convenio.cucon or '',
+                'health_copay': 0,
+                'health_moderation_fee': 0,
+                'health_recovery_fee': 0,
+                'health_volunteer_payments': 0,
+            }
+
+            factura.estado = _EstadoPGP.ENVIADA
+            factura.save(update_fields=['estado'])
+
+            with FactusSaludClient() as client:
+                resultado = client.crear_factura_salud(payload)
+
+            factura.numero_factus    = resultado.get('number', '')
+            factura.cufe             = resultado.get('cufe', '')
+            factura.qr_url           = resultado.get('qr', '')
+            factura.pdf_base64       = resultado.get('pdf_base_64', '') or resultado.get('qr_image', '')
+            factura.xml_base64       = resultado.get('xml_base_64', '')
+            _errors = resultado.get('errors') or []
+            if isinstance(_errors, dict):
+                _errors = [f'{k}: {v}' for k, v in _errors.items()]
+            factura.errores_dian     = _errors
+            factura.estado           = _EstadoPGP.VALIDADA if factura.cufe else (
+                                        _EstadoPGP.ERROR if _errors else _EstadoPGP.VALIDADA)
+            factura.fecha_validacion = tz.now()
+            factura.save()
+
+            # Generar RIPS con valores en 0
+            if factura.numero_factus:
+                try:
+                    rips = GeneradorRIPSPGP(factura).generar()
+                    factura.rips_json = rips
+                    factura.save(update_fields=['rips_json'])
+                except Exception as e_rips:
+                    logger.warning(f'RIPS PGP generación fallida: {e_rips}')
+
+            return Response({
+                'mensaje': 'Factura PGP procesada.',
+                'estado':  factura.estado,
+                'numero':  factura.numero_factus,
+                'cufe':    factura.cufe,
+                'errores': factura.errores_dian,
+            })
+
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.error(f'[pgp reintentar] factura={pk} error={e}\n{tb}')
+            try:
+                factura.estado = _EstadoPGP.ERROR
+                factura.errores_dian = [str(e)]
+                factura.save(update_fields=['estado', 'errores_dian'])
+            except Exception:
+                pass
+            return Response({'error': str(e), 'tipo': type(e).__name__}, status=500)
+
+    @action(detail=True, methods=['get'])
+    def rips(self, request, pk=None):
+        from apps.rips.generador_pgp import GeneradorRIPSPGP
+        try:
+            factura = FacturaPGP.objects.select_related('convenio__aseguradora').get(pk=pk)
+        except FacturaPGP.DoesNotExist:
+            return Response({'error': 'No encontrada.'}, status=404)
+        if not factura.numero_factus:
+            return Response({'error': 'La factura aún no tiene número asignado por Factus.'}, status=400)
+        rips = GeneradorRIPSPGP(factura).generar()
+        factura.rips_json = rips
+        factura.save(update_fields=['rips_json'])
+        return Response(rips)
+
+    @action(detail=True, methods=['post'])
+    def sincronizar(self, request, pk=None):
+        import logging
+        from django.utils import timezone as tz
+        from apps.facturacion.factus_client import FactusClient
+        logger = logging.getLogger(__name__)
+        try:
+            factura = FacturaPGP.objects.get(pk=pk)
+        except FacturaPGP.DoesNotExist:
+            return Response({'error': 'No encontrada.'}, status=404)
+        if not factura.numero_factus:
+            return Response({'error': 'Sin número Factus — usa reintentar.'}, status=400)
+        try:
+            with FactusClient() as client:
+                data = client.get(f'/v2/bills/{factura.numero_factus}')
+            resultado = data.get('data', data)
+            factura.cufe             = resultado.get('cufe', factura.cufe)
+            factura.qr_url           = resultado.get('qr', factura.qr_url)
+            factura.pdf_base64       = resultado.get('pdf_base_64', factura.pdf_base64) or factura.pdf_base64
+            _errors = resultado.get('errors') or []
+            if isinstance(_errors, dict):
+                _errors = [f'{k}: {v}' for k, v in _errors.items()]
+            factura.errores_dian     = _errors
+            factura.estado           = _EstadoPGP.VALIDADA if factura.cufe else (
+                                        _EstadoPGP.ERROR if _errors else factura.estado)
+            factura.fecha_validacion = tz.now() if factura.cufe else factura.fecha_validacion
+            factura.save()
+            return Response({'estado': factura.estado, 'cufe': factura.cufe, 'errores': factura.errores_dian})
+        except Exception as e:
+            logger.error(f'[pgp sincronizar] {e}')
+            return Response({'error': str(e)}, status=500)

@@ -188,6 +188,32 @@ export interface Factura {
   creado_en: string
 }
 
+// ── Facturación PGP / Capitado ────────────────────────────────────────────────
+export interface FacturaPGP {
+  id: string
+  convenio: string
+  convenio_info: {
+    aseguradora_nombre: string
+    aseguradora_nit: string
+    numero_contrato: string
+    cucon: string
+  }
+  periodo_desde: string
+  periodo_hasta: string
+  descripcion_contrato: string
+  numero_contrato_eps: string
+  valor_total: number
+  numero_factus: string
+  cufe: string
+  qr_url: string
+  cuv: string
+  estado: EstadoFactura
+  errores_dian: string[]
+  tiene_rips: boolean
+  fecha_validacion?: string
+  creado_en: string
+}
+
 // ── Paginación ────────────────────────────────────────────────────────────────
 export interface Paginated<T> {
   count: number
