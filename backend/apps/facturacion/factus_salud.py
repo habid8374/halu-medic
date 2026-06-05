@@ -96,16 +96,25 @@ class FactusSaludClient(FactusClient):
         logger.info(f'[Factus] POST /v2/bills/validate status={response.status_code} body={str(data)[:800]}')
 
         if response.status_code not in (200, 201):
-            # Extraer todos los errores posibles del response
-            errores = data.get('errors') or data.get('error') or data.get('message') or response.text
-            if isinstance(errores, dict):
-                # errors puede ser {"campo": ["mensaje"]} — aplanar
-                errores = '; '.join(
-                    f'{k}: {v[0] if isinstance(v, list) else v}'
-                    for k, v in errores.items()
-                )
+            import json as _json
+            # Construir mensaje detallado con TODOS los errores del response
+            errores_raw = data.get('errors') or {}
+            mensaje_errores = []
+            if isinstance(errores_raw, dict):
+                for campo, msgs in errores_raw.items():
+                    if isinstance(msgs, list):
+                        for m in msgs:
+                            mensaje_errores.append(f'{campo}: {m}')
+                    else:
+                        mensaje_errores.append(f'{campo}: {msgs}')
+            elif isinstance(errores_raw, list):
+                mensaje_errores = [str(x) for x in errores_raw]
+
+            mensaje_principal = data.get('message', '') or str(response.status_code)
+            detalle = ' | '.join(mensaje_errores) if mensaje_errores else _json.dumps(data, ensure_ascii=False)[:600]
+
             raise FactusAPIError(
-                f'Error SS-CUFE: {errores}',
+                f'{mensaje_principal}: {detalle}' if detalle else mensaje_principal,
                 status_code=response.status_code,
             )
         logger.info(f'Factura salud OK: {data.get("data", {}).get("number")}')
