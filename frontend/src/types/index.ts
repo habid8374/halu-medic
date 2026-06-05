@@ -135,9 +135,23 @@ export interface Factura {
   consulta: string
   consulta_info: {
     paciente: string
+    paciente_doc?: string
     fecha: string
     cups: string
     diagnostico: string
+    medico?: string
+    num_autorizacion?: string
+    items?: Array<{ cups: string; descripcion: string; cantidad: number; valor_unit: number; total: number }>
+    eps_nombre?: string
+    eps_nit?: string
+    regimen?: string
+    num_contrato?: string
+    a_cobrar_eps?: number
+    consultorio_nombre?: string
+    consultorio_nit?: string
+    consultorio_cod_prestador?: string
+    consultorio_direccion?: string
+    consultorio_tel?: string
   }
   convenio?: string
   numero_factus?: string

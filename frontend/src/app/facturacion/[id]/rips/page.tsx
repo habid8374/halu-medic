@@ -26,7 +26,7 @@ export default function FacturaRipsPage({ params }: { params: { id: string } }) 
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `RIPS_${numFactura}.json`
+    a.download = `${numFactura}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
