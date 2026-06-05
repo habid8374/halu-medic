@@ -142,8 +142,9 @@ def _items_desde_consulta(factura_obj) -> list:
             'discount_rate': '0.00',
             'price': float(consulta.valor_consulta),
             'tax_rate': '0.00',
-            'unit_measure_code': '94',   # Servicios (código estándar UNSPSC)
-            'standard_code': '1',        # Código estándar servicio salud
+            'unit_measure_code': '94',
+            'standard_code': '1',
+            'taxes': [{'code': '01', 'rate': '0.00'}],
         })
 
     for proc in consulta.procedimientos.all():
@@ -156,7 +157,7 @@ def _items_desde_consulta(factura_obj) -> list:
             'tax_rate': '0.00',
             'unit_measure_code': '94',
             'standard_code': '1',
-            'taxes': [{'tax_rate': '0.00', 'tax_code': '01'}],
+            'taxes': [{'code': '01', 'rate': '0.00'}],
         })
 
     return items
@@ -337,6 +338,7 @@ def construir_payload_ss_recaudo(consulta_obj, valor: float) -> dict:
             'tax_rate': '0.00',
             'unit_measure_code': '94',
             'standard_code': '1',
+            'taxes': [{'code': '01', 'rate': '0.00'}],
         }],
         'health_coverage_code': CoberturaSalud.desde_regimen(paciente.regimen),
         'health_modality_code': ModalidadPago.POR_EVENTO,
