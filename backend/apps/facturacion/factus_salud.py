@@ -180,7 +180,7 @@ def construir_payload_ss_cufe(factura_obj) -> dict:
         'reference_code': str(factura_obj.id),
         'observation': factura_obj.observaciones or _leyenda_grafica(),
         'payment_method_code': '10',
-        'payment_details': [{'payment_method_code': '10', 'payment_form': '1', 'due_date': consulta.fecha_atencion.strftime('%Y-%m-%d'), 'amount': float(factura_obj.total)}],
+        'payment_details': [{'payment_method_code': '10', 'payment_form': '1', 'due_date': consulta.fecha_atencion.strftime('%Y-%m-%d'), 'amount': round(sum(i['price'] * i['quantity'] for i in _items_desde_consulta(factura_obj)), 2)}],
 
         # ── Adquirente = EPS ──────────────────────────────────────────────────
         'customer': {
@@ -256,7 +256,7 @@ def construir_payload_ss_sin_aporte(factura_obj) -> dict:
         'reference_code': str(factura_obj.id),
         'observation': factura_obj.observaciones or _leyenda_grafica(),
         'payment_method_code': '10',
-        'payment_details': [{'payment_method_code': '10', 'payment_form': '1', 'due_date': consulta.fecha_atencion.strftime('%Y-%m-%d'), 'amount': float(factura_obj.total)}],
+        'payment_details': [{'payment_method_code': '10', 'payment_form': '1', 'due_date': consulta.fecha_atencion.strftime('%Y-%m-%d'), 'amount': round(sum(i['price'] * i['quantity'] for i in _items_desde_consulta(factura_obj)), 2)}],
 
         'customer': {
             'identification': paciente.numero_identificacion,
