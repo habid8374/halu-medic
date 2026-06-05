@@ -4,7 +4,7 @@ Documentación: https://developers.factus.com.co
 
 Flujo:
   1. Autenticación OAuth2 → access_token
-  2. POST /v1/bills/validate → envía JSON → Factus genera XML → valida DIAN
+  2. POST /v2/bills/validate → envía JSON → Factus genera XML → valida DIAN
   3. Respuesta incluye CUFE, QR, PDF base64
   4. Celery reintenta en caso de timeout DIAN
 """
@@ -115,11 +115,11 @@ class FactusClient:
     def crear_factura(self, payload: dict) -> dict:
         """
         Crea y valida una factura electrónica ante la DIAN.
-        payload: estructura JSON según documentación Factus /v1/bills/validate
+        payload: estructura JSON según documentación Factus /v2/bills/validate
         Retorna: dict con cufe, qr, pdf_base64, numero, estado
         """
         response = self._client.post(
-            f'{self.base_url}/v1/bills/validate',
+            f'{self.base_url}/v2/bills/validate',
             json=payload,
             headers=self._headers(),
         )
@@ -138,7 +138,7 @@ class FactusClient:
     def consultar_factura(self, numero: str) -> dict:
         """Consulta el estado de una factura por su número."""
         response = self._client.get(
-            f'{self.base_url}/v1/bills/{numero}',
+            f'{self.base_url}/v2/bills/{numero}',
             headers=self._headers(),
         )
         if response.status_code != 200:
@@ -148,7 +148,7 @@ class FactusClient:
     def crear_nota_credito(self, payload: dict) -> dict:
         """Emite una nota crédito para anular o ajustar una factura."""
         response = self._client.post(
-            f'{self.base_url}/v1/credit-notes/validate',
+            f'{self.base_url}/v2/credit-notes/validate',
             json=payload,
             headers=self._headers(),
         )
@@ -164,7 +164,7 @@ class FactusClient:
     def listar_facturas(self, page: int = 1, per_page: int = 25) -> dict:
         """Lista facturas con paginación."""
         response = self._client.get(
-            f'{self.base_url}/v1/bills',
+            f'{self.base_url}/v2/bills',
             params={'page': page, 'per_page': per_page},
             headers=self._headers(),
         )
