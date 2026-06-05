@@ -2,20 +2,22 @@
 """
 Script de setup inicial para desarrollo local
 Crea la base de datos, schemas y un tenant de prueba
-Ejecutar: python scripts/setup_dev.py
+Ejecutar desde la carpeta backend/:  python ..\\scripts\\setup_dev.py
 """
 import os
 import sys
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.config.settings')
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# La raíz de imports es la carpeta backend/ (igual que manage.py)
+BACKEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
+sys.path.insert(0, BACKEND_DIR)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 
 def main():
     from django.core.management import call_command
-    from backend.apps.tenants.models import Consultorio, Dominio
+    from apps.tenants.models import Consultorio, Dominio
 
     print('─' * 50)
     print('  Halu Medic — Setup de desarrollo')
@@ -56,7 +58,7 @@ def main():
     User = get_user_model()
     with schema_context('public'):
         if not User.objects.filter(username='habid').exists():
-            from backend.apps.usuarios.models import Rol
+            from apps.usuarios.models import Rol
             user = User.objects.create_superuser(
                 username='habid', email='habid@axentia.co', password='Axentia2026*',
                 first_name='Habid', last_name='Acuña',
