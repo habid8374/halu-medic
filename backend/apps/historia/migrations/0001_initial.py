@@ -50,11 +50,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='ingreso',
-            index=models.Index(fields=['paciente', 'activo'], name='ingreso_pac_activo_idx'),
+            index=models.Index(fields=['paciente', 'activo'], name='historia_in_pacient_5cc488_idx'),
         ),
         migrations.AddIndex(
             model_name='ingreso',
-            index=models.Index(fields=['numero_ingreso'], name='ingreso_numero_idx'),
+            index=models.Index(fields=['numero_ingreso'], name='historia_in_numero__675cba_idx'),
         ),
         migrations.CreateModel(
             name='Egreso',
@@ -148,6 +148,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='historiaclinica',
-            index=models.Index(fields=['paciente', 'fecha_atencion'], name='hc_pac_fecha_idx'),
+            index=models.Index(fields=['paciente', 'fecha_atencion'], name='historia_hi_pacient_732845_idx'),
         ),
     ]
