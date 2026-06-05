@@ -144,7 +144,14 @@ SIMPLE_JWT = {
 }
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-CORS_ALLOW_ALL_ORIGINS = True  # temporal mientras se confirma CORS en producción
+CORS_ALLOWED_ORIGINS = list(config(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:3000,http://127.0.0.1:3000',
+    cast=Csv()
+))
+_VERCEL = 'https://halu-medic.vercel.app'
+if _VERCEL not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(_VERCEL)
 CORS_ALLOW_CREDENTIALS = True
 
 # ── Almacenamiento ────────────────────────────────────────────────────────────
