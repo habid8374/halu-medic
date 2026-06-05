@@ -74,7 +74,7 @@ export function FormCita({ pacienteId }: { pacienteId?: string }) {
     if (Object.keys(errs).length) { setErrors(errs); return }
     setSaving(true)
     try {
-      const { data } = await citasAPI.create(form)
+      const { data } = await citasAPI.create(form as unknown as Record<string, unknown>)
       toast.success('Cita agendada correctamente')
       router.push(`/citas/${data.id}`)
     } catch (err: unknown) {
