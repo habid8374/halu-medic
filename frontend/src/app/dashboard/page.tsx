@@ -7,7 +7,7 @@ import {
   Users, CalendarDays, Receipt, ClipboardList,
   CheckCircle, AlertCircle, Clock, Stethoscope,
   FileText, Activity, TrendingUp, ArrowRight,
-  UserPlus, Plus,
+  UserPlus, Plus, BookOpen, FileSpreadsheet,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -75,9 +75,11 @@ export default function DashboardPage() {
     { label: 'Nuevo paciente',   href: '/pacientes/nuevo',   icon: UserPlus,     color: 'bg-halu-600',    visible: p.puede_gestionar_citas },
     { label: 'Nueva cita',       href: '/citas/nueva',       icon: CalendarDays, color: 'bg-teal-600',    visible: p.puede_gestionar_citas },
     { label: 'Nueva consulta',   href: '/consultas/nueva',   icon: Stethoscope,  color: 'bg-violet-600',  visible: p.puede_editar_clinica },
-    { label: 'Nueva factura',    href: '/facturacion/nueva', icon: Receipt,      color: 'bg-emerald-600', visible: p.puede_facturar },
-    { label: 'Ver reportes',     href: '/reportes',          icon: TrendingUp,   color: 'bg-slate-600',   visible: p.puede_facturar },
-    { label: 'Configuración',    href: '/configuracion',     icon: FileText,     color: 'bg-orange-500',  visible: p.es_admin },
+    { label: 'Nueva factura',    href: '/facturacion/nueva',          icon: Receipt,          color: 'bg-emerald-600', visible: p.puede_facturar },
+    { label: 'Factura PGP',      href: '/facturacion/pgp/nueva',      icon: FileSpreadsheet,  color: 'bg-cyan-600',    visible: p.puede_facturar },
+    { label: 'Nuevo ingreso',    href: '/historia-clinica/ingresos/nuevo', icon: BookOpen,    color: 'bg-purple-600',  visible: p.puede_ver_clinica },
+    { label: 'Ver reportes',     href: '/reportes',                   icon: TrendingUp,       color: 'bg-slate-600',   visible: p.puede_facturar },
+    { label: 'Configuración',    href: '/configuracion',              icon: FileText,         color: 'bg-orange-500',  visible: p.es_admin },
   ].filter(a => a.visible)
 
   return (
