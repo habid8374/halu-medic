@@ -295,7 +295,7 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
           ].map(({ field, label }) => (
             <div key={field} className="space-y-1.5">
               <label className="text-sm font-medium text-slate-700">{label}</label>
-              <textarea rows={2} value={(form as Record<string, string>)[field]}
+              <textarea rows={2} value={(form as unknown as Record<string, string>)[field]}
                 onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50
                   focus:outline-none focus:ring-2 focus:ring-halu-500/20 focus:border-halu-400 resize-none"
