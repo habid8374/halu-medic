@@ -143,6 +143,7 @@ export const facturasAPI = {
   emitir:      (id: string) => api.post(`/api/facturacion/facturas/${id}/emitir/`),
   anular:      (id: string, motivo: string) => api.post(`/api/facturacion/facturas/${id}/anular/`, { motivo }),
   sincronizar: (id: string) => api.post(`/api/facturacion/facturas/${id}/sincronizar/`),
+  reintentar:  (id: string) => api.post(`/api/facturacion/facturas/${id}/reintentar/`),
   pdf:         (id: string) => api.get(`/api/facturacion/facturas/${id}/pdf/`),
   xml:         (id: string) => api.get(`/api/facturacion/facturas/${id}/xml/`),
   rips:        (id: string) => api.get(`/api/facturacion/facturas/${id}/rips/`),

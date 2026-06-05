@@ -436,6 +436,40 @@ class FacturaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_502_BAD_GATEWAY
             )
 
+    @action(detail=True, methods=['post'])
+    def reintentar(self, request, pk=None):
+        """
+        POST /api/facturacion/facturas/{id}/reintentar/
+        Resetea el estado a BORRADOR y reenvía a Factus.
+        Útil cuando la factura quedó en ERROR o ENVIADA sin respuesta.
+        """
+        factura = self.get_object()
+
+        if factura.estado == EstadoFactura.VALIDADA:
+            return Response(
+                {'error': 'La factura ya fue validada por la DIAN. No se puede reintentar.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if factura.estado == EstadoFactura.ANULADA:
+            return Response(
+                {'error': 'No se puede reintentar una factura anulada.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Resetear estado para permitir el reenvío
+        factura.estado = EstadoFactura.BORRADOR
+        factura.errores_dian = []
+        factura.save(update_fields=['estado', 'errores_dian'])
+
+        from apps.facturacion.tasks import emitir_factura
+        factura.estado = EstadoFactura.ENVIADA
+        factura.save(update_fields=['estado'])
+        task = emitir_factura.delay(str(factura.id))
+
+        return Response({
+            'mensaje': 'Factura reenviada a Factus. Espera el CUFE.',
+            'task_id': task.id,
+        }, status=status.HTTP_202_ACCEPTED)
 
 # ── ÓRDENES MÉDICAS ───────────────────────────────────────────────────────────
 

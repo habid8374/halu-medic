@@ -18,6 +18,7 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
   const { usuario } = useAuth()
   const { factura, loading, setFactura } = useFactura(id)
   const [emitiendo, setEmitiendo] = useState(false)
+  const [reintentando, setReintentando] = useState(false)
 
   const emitir = async () => {
     if (!factura) return
@@ -25,13 +26,28 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
     try {
       await facturasAPI.emitir(factura.id)
       toast.success('Factura enviada a DIAN. Recibirás el CUFE en breve.')
-      // Refrescar estado
       const { data } = await facturasAPI.get(factura.id)
       setFactura(data)
     } catch {
       toast.error('Error al emitir la factura')
-    } finally {
-      setEmitiendo(false) }
+    } finally { setEmitiendo(false) }
+  }
+
+  const reintentar = async () => {
+    if (!factura) return
+    setReintentando(true)
+    try {
+      await facturasAPI.reintentar(factura.id)
+      toast.success('Reintentando envío a DIAN...')
+      setTimeout(async () => {
+        const { data } = await facturasAPI.get(factura.id)
+        setFactura(data)
+        setReintentando(false)
+      }, 3000)
+    } catch {
+      toast.error('Error al reintentar')
+      setReintentando(false)
+    }
   }
 
   const descargarPDF = async () => {
@@ -163,6 +179,17 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
                 <Send className="w-4 h-4" />
                 {factura.estado === 'error' ? 'Reintentar emisión DIAN' : 'Emitir ante DIAN (SS-CUFE)'}
               </Button>
+            )}
+            {factura.estado === 'enviada' && (
+              <div className="space-y-2">
+                <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 text-center">
+                  ⏳ Procesando en DIAN... Si lleva más de 5 min, usa los botones de abajo.
+                </p>
+                <Button onClick={reintentar} loading={reintentando} variant="secondary" className="w-full">
+                  <RefreshCw className="w-4 h-4" />
+                  Reenviar a Factus
+                </Button>
+              </div>
             )}
             {factura.estado === 'validada' && (
               <>
