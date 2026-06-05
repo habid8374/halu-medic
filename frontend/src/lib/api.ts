@@ -156,6 +156,12 @@ export const cupsAPI = {
   buscar: (q: string) => api.get('/api/cups/', { params: { search: q } }),
 }
 
+export const cie10API = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/cie10/', { params }),
+  get:    (codigo: string) => api.get(`/api/cie10/${codigo}/`),
+  buscar: (q: string) => api.get('/api/cie10/', { params: { search: q } }),
+}
+
 // ── Usuarios ──────────────────────────────────────────────────────────────────
 
 export const usuariosAPI = {

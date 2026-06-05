@@ -450,3 +450,38 @@ class CodigoCUPSViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(Q(codigo__icontains=q) | Q(descripcion__icontains=q) |
                            Q(nombre_servicio__icontains=q))
         return qs
+
+
+# ── CATÁLOGO CIE-10 ───────────────────────────────────────────────────────────
+
+from apps.catalogos.models import CodigoCIE10
+
+
+class CodigoCIE10Serializer(serializers.ModelSerializer):
+    class Meta:
+        model = CodigoCIE10
+        fields = [
+            'codigo', 'nombre', 'descripcion', 'capitulo_codigo',
+            'capitulo_desc', 'sexo', 'edad_minima', 'edad_maxima', 'habilitado',
+        ]
+
+
+class CodigoCIE10ViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Consulta del catálogo CIE-10 (solo lectura).
+
+    Autocompletado:  /api/cie10/?search=colera
+    Por código:      /api/cie10/A000/
+    Solo habilitados: /api/cie10/?search=...  (filtro por defecto)
+    """
+    serializer_class = CodigoCIE10Serializer
+    ordering = ['codigo']
+
+    def get_queryset(self):
+        qs = CodigoCIE10.objects.filter(habilitado=True)
+        q = self.request.query_params.get('search')
+        if q:
+            from django.db.models import Q
+            qs = qs.filter(Q(codigo__icontains=q) | Q(nombre__icontains=q) |
+                           Q(descripcion__icontains=q))
+        return qs

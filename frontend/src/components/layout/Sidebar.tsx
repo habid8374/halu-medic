@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import {
   LayoutDashboard, Users, CalendarDays,
   ClipboardList, Receipt, BarChart3, Settings,
-  LogOut, ChevronRight, Building2, ShieldCheck, FileJson, ListTree,
+  LogOut, ChevronRight, Building2, ShieldCheck, FileJson, ListTree, BookOpen,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -26,6 +26,7 @@ const navItems: NavItem[] = [
   { href: '/facturacion',   label: 'Facturación',   icon: Receipt,       requiere: 'puede_facturar' },
   { href: '/rips',          label: 'RIPS',          icon: FileJson,      requiere: 'puede_facturar' },
   { href: '/cups',          label: 'CUPS',          icon: ListTree },
+  { href: '/cie10',         label: 'CIE-10',        icon: BookOpen },
   { href: '/reportes',      label: 'Reportes',      icon: BarChart3,     requiere: 'es_admin' },
   { href: '/configuracion', label: 'Configuración', icon: Settings,      requiere: 'es_admin' },
   { href: '/superadmin',    label: 'Superadmin',    icon: ShieldCheck,   soloSuperadmin: true },

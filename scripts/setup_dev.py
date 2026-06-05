@@ -127,12 +127,13 @@ def main():
         else:
             print('  · Usuario "demo" ya existe en el tenant')
 
-    # 6. Cargar homologador CUPS al schema público (catálogo nacional)
-    print('\n[6/6] Cargando homologador CUPS...')
-    try:
-        call_command('importar_cups', verbosity=1)
-    except Exception as e:
-        print(f'  ! No se pudo cargar el catálogo CUPS: {e}')
+    # 6. Cargar catálogos nacionales al schema público
+    print('\n[6/6] Cargando catálogos nacionales (CUPS y CIE-10)...')
+    for cmd, label in [('importar_cups', 'CUPS'), ('importar_cie10', 'CIE-10')]:
+        try:
+            call_command(cmd, verbosity=1)
+        except Exception as e:
+            print(f'  ! No se pudo cargar el catálogo {label}: {e}')
 
     print('\n' + '─' * 50)
     print('  Setup completado')

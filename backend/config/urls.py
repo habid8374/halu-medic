@@ -13,6 +13,7 @@ from config.api import (
     ConsultaViewSet,
     FacturaViewSet,
     CodigoCUPSViewSet,
+    CodigoCIE10ViewSet,
 )
 from apps.usuarios.auth import (
     LoginView,
@@ -31,7 +32,8 @@ router.register(r'citas',                 CitaViewSet,      basename='cita')
 router.register(r'consultas',             ConsultaViewSet,  basename='consulta')
 router.register(r'facturacion/facturas',  FacturaViewSet,   basename='factura')
 router.register(r'usuarios',              UsuarioViewSet,   basename='usuario')
-router.register(r'cups',                  CodigoCUPSViewSet, basename='cups')
+router.register(r'cups',                  CodigoCUPSViewSet,  basename='cups')
+router.register(r'cie10',                 CodigoCIE10ViewSet, basename='cie10')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
