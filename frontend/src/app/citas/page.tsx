@@ -13,7 +13,7 @@ type Vista = 'semana' | 'lista'
 
 export default function CitasPage() {
   const { usuario }       = useAuth()
-  const [vista, setVista] = useState<Vista>('semana')
+  const [vista, setVista] = useState<Vista>(typeof window !== 'undefined' && window.innerWidth < 768 ? 'lista' : 'semana')
   const [fechaFiltro, setFechaFiltro] = useState<string | undefined>()
   const { data, loading } = useCitas(fechaFiltro)
   const citas = data?.results ?? []
