@@ -75,3 +75,4 @@ rips_output/
 facturas_pdf/
 # No ignorar lib del frontend — es código fuente, no Python venv
 !frontend/src/lib/
+.claude/
