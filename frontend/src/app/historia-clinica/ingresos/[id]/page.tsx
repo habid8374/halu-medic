@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { ingresosAPI, historiaAPI, medicamentosHCAPI, catalogoMedicamentosAPI, mensajeError } from '@/lib/api'
+import { ingresosAPI, historiaAPI, medicamentosHCAPI, catalogoMedicamentosAPI, cie10API, mensajeError } from '@/lib/api'
 import { Ingreso, HistoriaClinica } from '@/types'
 import { Button, Card, Spinner } from '@/components/ui'
 import {
@@ -110,6 +110,76 @@ function BuscadorMedicamento({ onSelect }: { onSelect: (med: any) => void }) {
   )
 }
 
+function BuscadorCIE10({ value, nombre, onChange }: {
+  value: string
+  nombre?: string
+  onChange: (codigo: string, nombre: string) => void
+}) {
+  const [q, setQ] = useState('')
+  const [resultados, setResultados] = useState<any[]>([])
+  const [buscando, setBuscando] = useState(false)
+  const [abierto, setAbierto] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const buscar = (texto: string) => {
+    setQ(texto)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (texto.length < 2) { setResultados([]); setAbierto(false); return }
+    timerRef.current = setTimeout(async () => {
+      setBuscando(true)
+      try {
+        const { data } = await cie10API.buscar(texto)
+        const items = Array.isArray(data) ? data : data.results ?? []
+        setResultados(items)
+        setAbierto(items.length > 0)
+      } catch { setResultados([]) } finally { setBuscando(false) }
+    }, 300)
+  }
+
+  const seleccionar = (item: any) => {
+    onChange(item.codigo, item.nombre)
+    setQ('')
+    setResultados([])
+    setAbierto(false)
+  }
+
+  return (
+    <div className="relative">
+      {value && (
+        <div className="flex items-center gap-2 mb-1.5 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
+          <span className="text-xs font-bold text-purple-700 shrink-0">{value}</span>
+          {nombre && <span className="text-xs text-purple-700 flex-1 truncate">{nombre}</span>}
+          <button type="button" onClick={() => onChange('', '')} className="text-purple-400 hover:text-purple-600 shrink-0">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+      <div className="flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2">
+        {buscando ? <Spinner size="sm" /> : <Search className="w-4 h-4 text-slate-400" />}
+        <input
+          type="text" value={q} onChange={e => buscar(e.target.value)}
+          placeholder={value ? 'Cambiar diagnóstico…' : 'Código o nombre (ej: J06, hipertensión…)'}
+          className="flex-1 text-sm focus:outline-none"
+        />
+        {q && <button type="button" onClick={() => { setQ(''); setResultados([]); setAbierto(false) }}><X className="w-4 h-4 text-slate-400" /></button>}
+      </div>
+      {abierto && resultados.length > 0 && (
+        <div className="absolute top-full left-0 right-0 z-20 bg-white border border-slate-200 rounded-lg shadow-xl mt-1 max-h-52 overflow-y-auto">
+          {resultados.map(r => (
+            <button key={r.codigo} type="button"
+              className="w-full text-left px-4 py-2.5 hover:bg-purple-50 border-b border-slate-100 last:border-0"
+              onClick={() => seleccionar(r)}>
+              <span className="text-xs font-bold text-purple-700 mr-2">{r.codigo}</span>
+              <span className="text-sm text-slate-800">{r.nombre}</span>
+              {r.descripcion && <p className="text-xs text-slate-400 mt-0.5 truncate">{r.descripcion}</p>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ModalEgreso({ onClose, onConfirm }: { onClose: () => void; onConfirm: (data: Record<string, unknown>) => Promise<void> }) {
   const [form, setForm] = useState({ fecha_egreso: new Date().toISOString().slice(0, 16), tipo_egreso: 'alta_medica', diagnostico_egreso: '', condicion_al_egreso: '', observaciones: '' })
   const [saving, setSaving] = useState(false)
@@ -175,6 +245,7 @@ function ModalNuevaHC({ ingresoId, pacienteId, onClose, onCreated }: {
     sv_pa_s: '', sv_pa_d: '', sv_fc: '', sv_fr: '', sv_temp: '', sv_peso: '', sv_talla: '', sv_spo2: '',
   })
   const [medicamentos, setMedicamentos] = useState<MedItem[]>([])
+  const [dx1nombre, setDx1nombre] = useState('')
   const [saving, setSaving] = useState(false)
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -303,9 +374,12 @@ function ModalNuevaHC({ ingresoId, pacienteId, onClose, onCreated }: {
           ))}
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Diagnóstico CIE-10</label>
-            <input type="text" maxLength={10} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={form.diagnostico_principal} onChange={e => set('diagnostico_principal', e.target.value)} placeholder="Ej: J06.9" />
+            <label className="block text-xs font-medium text-slate-600 mb-1">Diagnóstico principal (CIE-10)</label>
+            <BuscadorCIE10
+              value={form.diagnostico_principal}
+              nombre={dx1nombre}
+              onChange={(codigo, nombre) => { set('diagnostico_principal', codigo); setDx1nombre(nombre) }}
+            />
           </div>
 
           {[
