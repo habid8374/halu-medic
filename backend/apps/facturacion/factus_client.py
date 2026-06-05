@@ -10,18 +10,11 @@ Flujo:
 """
 import httpx
 import logging
-from decouple import config
 from django.core.cache import cache
+from django.db import connection
 
 logger = logging.getLogger(__name__)
 
-FACTUS_BASE_URL    = config('FACTUS_BASE_URL', default='https://api-sandbox.factus.com.co')
-FACTUS_CLIENT_ID   = config('FACTUS_CLIENT_ID', default='')
-FACTUS_CLIENT_SECRET = config('FACTUS_CLIENT_SECRET', default='')
-FACTUS_USERNAME    = config('FACTUS_USERNAME', default='')
-FACTUS_PASSWORD    = config('FACTUS_PASSWORD', default='')
-
-TOKEN_CACHE_KEY    = 'factus_access_token'
 TOKEN_TTL_SECONDS  = 3500  # ~58 min (token dura 1 hora)
 
 
@@ -32,29 +25,71 @@ class FactusAPIError(Exception):
         self.errors = errors or []
 
 
-class FactusClient:
-    """Cliente HTTP para la API de Factus."""
+def _consultorio_actual():
+    """
+    Devuelve el Consultorio (tenant) activo según el schema de la conexión.
+    En multi-tenant cada operación Factus ocurre dentro del schema del consultorio.
+    """
+    return getattr(connection, 'tenant', None)
 
-    def __init__(self):
-        self.base_url = FACTUS_BASE_URL.rstrip('/')
+
+class FactusClient:
+    """
+    Cliente HTTP para la API de Factus.
+
+    Multi-tenant: las credenciales se toman del Consultorio actual
+    (cada prestador tiene su propia cuenta Factus habilitada ante la DIAN).
+    El token se cachea por consultorio para no mezclar sesiones.
+    """
+
+    def __init__(self, consultorio=None):
+        self.consultorio = consultorio or _consultorio_actual()
+        self._creds = self._resolver_credenciales()
+        self.base_url = self._creds['base_url'].rstrip('/')
         self._client = httpx.Client(timeout=30)
+
+    def _resolver_credenciales(self) -> dict:
+        """Lee las credenciales Factus del consultorio (o del entorno en dev)."""
+        if self.consultorio and hasattr(self.consultorio, 'credenciales_factus'):
+            return self.consultorio.credenciales_factus()
+        # Fallback puro a entorno (desarrollo single-tenant)
+        from decouple import config
+        return {
+            'base_url':      config('FACTUS_BASE_URL', default='https://api-sandbox.factus.com.co'),
+            'client_id':     config('FACTUS_CLIENT_ID', default=''),
+            'client_secret': config('FACTUS_CLIENT_SECRET', default=''),
+            'username':      config('FACTUS_USERNAME', default=''),
+            'password':      config('FACTUS_PASSWORD', default=''),
+        }
+
+    @property
+    def _token_cache_key(self) -> str:
+        """Clave de caché única por consultorio (evita mezclar tokens entre tenants)."""
+        schema = getattr(self.consultorio, 'schema_name', None) or self._creds.get('client_id', 'default')
+        return f'factus_access_token::{schema}'
 
     # ── Autenticación ────────────────────────────────────────────────────────
 
     def _obtener_token(self) -> str:
         """Obtiene el access_token, usando caché para no reautenticar en cada llamada."""
-        token = cache.get(TOKEN_CACHE_KEY)
+        token = cache.get(self._token_cache_key)
         if token:
             return token
+
+        if not self._creds['client_id']:
+            raise FactusAPIError(
+                'El consultorio no tiene credenciales Factus configuradas. '
+                'Configúralas en Configuración → Facturación electrónica.'
+            )
 
         response = self._client.post(
             f'{self.base_url}/oauth/token',
             data={
                 'grant_type': 'password',
-                'client_id': FACTUS_CLIENT_ID,
-                'client_secret': FACTUS_CLIENT_SECRET,
-                'username': FACTUS_USERNAME,
-                'password': FACTUS_PASSWORD,
+                'client_id': self._creds['client_id'],
+                'client_secret': self._creds['client_secret'],
+                'username': self._creds['username'],
+                'password': self._creds['password'],
             }
         )
         if response.status_code != 200:
@@ -65,7 +100,7 @@ class FactusClient:
 
         data = response.json()
         token = data['access_token']
-        cache.set(TOKEN_CACHE_KEY, token, TOKEN_TTL_SECONDS)
+        cache.set(self._token_cache_key, token, TOKEN_TTL_SECONDS)
         return token
 
     def _headers(self) -> dict:

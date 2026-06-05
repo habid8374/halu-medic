@@ -178,11 +178,22 @@ class GeneradorRIPS:
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     def _nit_prestador(self) -> str:
+        """NIT del obligado a facturar — propio de cada consultorio (tenant)."""
+        from django.db import connection
         from django.conf import settings
+        tenant = getattr(connection, 'tenant', None)
+        if tenant and getattr(tenant, 'nit', ''):
+            # El NIT puede venir como '900123456-7'; RIPS usa solo el número
+            return tenant.nit.split('-')[0].strip()
         return getattr(settings, 'NIT_PRESTADOR', '')
 
     def _codigo_prestador(self) -> str:
+        """Código de habilitación del prestador — propio de cada consultorio."""
+        from django.db import connection
         from django.conf import settings
+        tenant = getattr(connection, 'tenant', None)
+        if tenant and getattr(tenant, 'codigo_prestador', ''):
+            return tenant.codigo_prestador
         return getattr(settings, 'CODIGO_PRESTADOR_RIPS', '')
 
     def _tipo_usuario(self) -> str:

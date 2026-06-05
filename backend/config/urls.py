@@ -22,6 +22,7 @@ from apps.usuarios.auth import (
     UsuarioViewSet,
 )
 from apps.facturacion.webhook import FactusWebhookView
+from apps.tenants.api import ConfiguracionConsultorioView
 
 router = DefaultRouter()
 router.register(r'pacientes',             PacienteViewSet,  basename='paciente')
@@ -40,6 +41,9 @@ urlpatterns = [
     path('api/auth/me/',                   MiPerfilView.as_view(),         name='me'),
     path('api/auth/recuperar-password/',   RecuperarPasswordView.as_view(), name='recuperar_password'),
     path('api/auth/confirmar-password/',   ConfirmarPasswordView.as_view(), name='confirmar_password'),
+
+    # ── Configuración del consultorio (incluye credenciales Factus) ───────────
+    path('api/consultorio/configuracion/', ConfiguracionConsultorioView.as_view(), name='config_consultorio'),
 
     # ── Webhook Factus (sin autenticación JWT) ────────────────────────────────
     path('api/facturacion/webhook/factus/', FactusWebhookView.as_view(), name='webhook_factus'),

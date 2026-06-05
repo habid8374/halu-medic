@@ -335,5 +335,10 @@ def construir_payload_auto(factura_obj) -> dict:
 
 
 def _codigo_prestador() -> str:
+    """Código de habilitación del prestador — propio de cada consultorio."""
+    from django.db import connection
     from django.conf import settings
+    tenant = getattr(connection, 'tenant', None)
+    if tenant and getattr(tenant, 'codigo_prestador', ''):
+        return tenant.codigo_prestador
     return getattr(settings, 'CODIGO_PRESTADOR_RIPS', '0000000000')

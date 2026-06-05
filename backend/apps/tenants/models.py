@@ -34,7 +34,18 @@ class Consultorio(TenantMixin):
     activo          = models.BooleanField(default=True)
     fecha_vencimiento = models.DateField(null=True, blank=True)
 
-    # Facturación propia del tenant (para Factus)
+    # ── Credenciales Factus (PROPIAS de cada consultorio) ─────────────────────
+    # Cada prestador se habilita ante la DIAN con su propia cuenta Factus.
+    # En producción conviene cifrar client_secret y password (django-cryptography).
+    factus_base_url        = models.CharField(
+        max_length=200, blank=True,
+        default='https://api-sandbox.factus.com.co',
+        help_text='URL Factus (sandbox o producción) del consultorio',
+    )
+    factus_client_id       = models.CharField(max_length=200, blank=True)
+    factus_client_secret   = models.CharField(max_length=255, blank=True)
+    factus_username        = models.CharField(max_length=150, blank=True, help_text='Email/usuario Factus del consultorio')
+    factus_password        = models.CharField(max_length=255, blank=True)
     factus_rango_numeracion_id = models.IntegerField(null=True, blank=True)
 
     creado_en       = models.DateTimeField(auto_now_add=True)
@@ -49,6 +60,28 @@ class Consultorio(TenantMixin):
 
     def __str__(self):
         return f'{self.nombre} ({self.nit})'
+
+    @property
+    def factus_configurado(self) -> bool:
+        """True si el consultorio tiene credenciales Factus completas."""
+        return bool(
+            self.factus_client_id and self.factus_client_secret
+            and self.factus_username and self.factus_password
+        )
+
+    def credenciales_factus(self) -> dict:
+        """
+        Devuelve las credenciales Factus del consultorio.
+        Si no están configuradas, cae a las variables de entorno (solo dev).
+        """
+        from decouple import config
+        return {
+            'base_url':      self.factus_base_url or config('FACTUS_BASE_URL', default='https://api-sandbox.factus.com.co'),
+            'client_id':     self.factus_client_id or config('FACTUS_CLIENT_ID', default=''),
+            'client_secret': self.factus_client_secret or config('FACTUS_CLIENT_SECRET', default=''),
+            'username':      self.factus_username or config('FACTUS_USERNAME', default=''),
+            'password':      self.factus_password or config('FACTUS_PASSWORD', default=''),
+        }
 
 
 class Dominio(DomainMixin):
