@@ -80,3 +80,58 @@ class TarifaProcedimiento(models.Model):
 
     def __str__(self):
         return f'CUPS {self.cups} — ${self.valor:,.0f}'
+
+
+class ManualTarifario(models.Model):
+    """Manual tarifario del consultorio (SOAT, ISS, Particular, Prepagada, etc.)."""
+    id                 = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    nombre             = models.CharField(max_length=200, help_text='Ej: SOAT 2026, ISS, Particular')
+    tipo               = models.CharField(max_length=20, choices=TipoTarifa.choices, default=TipoTarifa.MANUAL)
+    porcentaje_ajuste  = models.DecimalField(max_digits=6, decimal_places=2, default=0,
+                                              help_text='% sobre valor base. 30 = +30%, -10 = -10%')
+    es_predeterminado  = models.BooleanField(default=False,
+                                              help_text='Tarifa usada cuando el paciente no tiene una asignada')
+    activo             = models.BooleanField(default=True)
+    vigente_desde      = models.DateField(null=True, blank=True)
+    vigente_hasta      = models.DateField(null=True, blank=True)
+    observaciones      = models.TextField(blank=True)
+    creado_en          = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Manual tarifario'
+        verbose_name_plural = 'Manuales tarifarios'
+
+    def __str__(self):
+        return f'{self.nombre} ({self.get_tipo_display()})'
+
+    def save(self, *args, **kwargs):
+        # Solo un tarifario predeterminado a la vez
+        if self.es_predeterminado:
+            ManualTarifario.objects.exclude(pk=self.pk).update(es_predeterminado=False)
+        super().save(*args, **kwargs)
+
+
+class ItemTarifario(models.Model):
+    """Valor de un código CUPS dentro de un manual tarifario."""
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    manual      = models.ForeignKey(ManualTarifario, on_delete=models.CASCADE, related_name='items')
+    cups        = models.CharField(max_length=10, help_text='Código CUPS')
+    descripcion = models.CharField(max_length=400, blank=True, help_text='Descripción del procedimiento')
+    valor_base  = models.DecimalField(max_digits=14, decimal_places=2, help_text='Valor base del manual')
+
+    class Meta:
+        ordering = ['cups']
+        unique_together = [['manual', 'cups']]
+        verbose_name = 'Ítem tarifario'
+        verbose_name_plural = 'Ítems tarifarios'
+
+    def __str__(self):
+        return f'{self.cups} — ${self.valor_base:,.0f}'
+
+    @property
+    def valor_final(self):
+        """Valor aplicando el porcentaje de ajuste del manual."""
+        from decimal import Decimal
+        factor = 1 + self.manual.porcentaje_ajuste / Decimal('100')
+        return round(self.valor_base * factor, 0)

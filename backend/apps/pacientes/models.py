@@ -66,6 +66,13 @@ class Paciente(models.Model):
     # Aseguramiento
     regimen            = models.CharField(max_length=1, choices=RegimenAfiliacion.choices, default=RegimenAfiliacion.PARTICULAR)
     aseguradora        = models.ForeignKey(Aseguradora, null=True, blank=True, on_delete=models.SET_NULL, related_name='pacientes')
+    tarifa             = models.ForeignKey(
+        'tarifas.ManualTarifario',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='pacientes',
+        help_text='Tarifa asignada a este paciente. Si está vacío, se usa la predeterminada del consultorio.'
+    )
     numero_poliza      = models.CharField(max_length=50, blank=True)
 
     activo             = models.BooleanField(default=True)

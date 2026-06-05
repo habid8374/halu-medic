@@ -15,6 +15,7 @@ from django.utils import timezone
 # ── PACIENTES ─────────────────────────────────────────────────────────────────
 
 from apps.pacientes.models import Paciente, Aseguradora
+from apps.tarifas.models import ManualTarifario
 
 
 class AseguradoraSerializer(serializers.ModelSerializer):
@@ -26,6 +27,11 @@ class AseguradoraSerializer(serializers.ModelSerializer):
 class PacienteSerializer(serializers.ModelSerializer):
     aseguradora_nombre = serializers.CharField(source='aseguradora.nombre', read_only=True)
     nombre_completo    = serializers.CharField(read_only=True)
+    tarifa             = serializers.PrimaryKeyRelatedField(
+        queryset=ManualTarifario.objects.all(),
+        allow_null=True, required=False
+    )
+    tarifa_nombre      = serializers.CharField(source='tarifa.nombre', read_only=True, default='')
 
     class Meta:
         model = Paciente
@@ -35,6 +41,7 @@ class PacienteSerializer(serializers.ModelSerializer):
             'nombre_completo', 'fecha_nacimiento', 'sexo',
             'email', 'telefono', 'direccion', 'municipio_codigo',
             'regimen', 'aseguradora', 'aseguradora_nombre', 'numero_poliza',
+            'tarifa', 'tarifa_nombre',
             'activo', 'creado_en',
         ]
         read_only_fields = ['id', 'creado_en']

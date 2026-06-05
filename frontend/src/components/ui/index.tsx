@@ -203,3 +203,6 @@ export function SearchBar({ value, onChange, placeholder = 'Buscar...', classNam
     </div>
   )
 }
+
+export { CupsAutocomplete } from './CupsAutocomplete'
+export { Cie10Autocomplete } from './Cie10Autocomplete'

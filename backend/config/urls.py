@@ -15,6 +15,7 @@ from config.api import (
     CodigoCUPSViewSet,
     CodigoCIE10ViewSet,
 )
+from apps.tarifas.api import ManualTarifarioViewSet
 from apps.usuarios.auth import (
     LoginView,
     LogoutView,
@@ -34,6 +35,7 @@ router.register(r'facturacion/facturas',  FacturaViewSet,   basename='factura')
 router.register(r'usuarios',              UsuarioViewSet,   basename='usuario')
 router.register(r'cups',                  CodigoCUPSViewSet,  basename='cups')
 router.register(r'cie10',                 CodigoCIE10ViewSet, basename='cie10')
+router.register(r'tarifas',              ManualTarifarioViewSet, basename='tarifa')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

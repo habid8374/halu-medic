@@ -5,10 +5,11 @@ import { consultorioAPI, mensajeError } from '@/lib/api'
 import { PageHeader, Button, Input, Card } from '@/components/ui'
 import toast from 'react-hot-toast'
 import {
-  Building2, Shield, FileText, Settings2,
+  Building2, Shield, FileText,
   Save, Eye, EyeOff, CheckCircle, AlertCircle,
-  Hash, Calendar, Tag, AlignLeft, Zap,
+  Hash, Calendar, Tag, AlignLeft, Zap, DollarSign,
 } from 'lucide-react'
+import { TarifariosTab } from '@/components/configuracion/TarifariosTab'
 
 interface ConfigData {
   nombre: string
@@ -37,6 +38,7 @@ const TABS = [
   { id: 'general',     label: 'Datos del consultorio', icon: Building2 },
   { id: 'factus',      label: 'Facturación electrónica', icon: Zap },
   { id: 'resolucion',  label: 'Resolución DIAN', icon: FileText },
+  { id: 'tarifarios',  label: 'Tarifarios', icon: DollarSign },
 ]
 
 export default function ConfiguracionPage() {
@@ -337,8 +339,13 @@ Vigente del 1 al 5000. Este documento no genera obligaciones tributarias adicion
         </Card>
       )}
 
+      {/* ── Tab: Tarifarios ───────────────────────────────────────────────── */}
+      {tab === 'tarifarios' && (
+        <TarifariosTab />
+      )}
+
       {/* Botón guardar fijo en mobile */}
-      {esAdmin && (
+      {esAdmin && tab !== 'tarifarios' && (
         <div className="mt-8 flex justify-end">
           <Button onClick={guardar} loading={saving} className="w-full sm:w-auto">
             <Save className="w-4 h-4" />

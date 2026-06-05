@@ -1,10 +1,10 @@
 'use client'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { consultasAPI, facturasAPI } from '@/lib/api'
+import { consultasAPI, facturasAPI, tarifasAPI } from '@/lib/api'
 import { Procedimiento } from '@/types'
-import { Input, Select, Button, Card } from '@/components/ui'
-import { Stethoscope, Plus, Trash2, Receipt, FileText, ClipboardList } from 'lucide-react'
+import { Input, Select, Button, Card, CupsAutocomplete, Cie10Autocomplete } from '@/components/ui'
+import { Stethoscope, Plus, Trash2, Receipt, FileText, ClipboardList, DollarSign } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface FormData {
@@ -51,10 +51,37 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [crearFactura, setCrearFactura] = useState(true)
+  const [buscandoPrecio, setBuscandoPrecio] = useState(false)
 
   const set = (field: keyof FormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm(f => ({ ...f, [field]: e.target.value }))
+
+  // Cuando se selecciona el CUPS principal: auto-rellena descripción y busca precio
+  const onCupsPrincipalChange = useCallback(async (codigo: string, descripcion: string) => {
+    setForm(f => ({ ...f, cups_principal: codigo, descripcion_cups: descripcion }))
+    if (!codigo) return
+    setBuscandoPrecio(true)
+    try {
+      const { data } = await tarifasAPI.precio(codigo, pacienteId || undefined)
+      if (data.encontrado && data.valor != null) {
+        setForm(f => ({ ...f, valor_consulta: String(Math.round(data.valor)) }))
+        toast.success(`Precio de tarifa "${data.manual_nombre}": $${Number(data.valor).toLocaleString('es-CO')}`, { duration: 2500 })
+      }
+    } catch { /* no tarifa, no problem */ } finally { setBuscandoPrecio(false) }
+  }, [pacienteId])
+
+  // Cuando se selecciona CUPS en un procedimiento adicional
+  const onCupsProcChange = useCallback(async (i: number, codigo: string, descripcion: string) => {
+    setProcs(p => p.map((pr, idx) => idx === i ? { ...pr, cups: codigo, descripcion } : pr))
+    if (!codigo) return
+    try {
+      const { data } = await tarifasAPI.precio(codigo, pacienteId || undefined)
+      if (data.encontrado && data.valor != null) {
+        setProcs(p => p.map((pr, idx) => idx === i ? { ...pr, valor_facturar: Math.round(data.valor) } : pr))
+      }
+    } catch { /* ignore */ }
+  }, [pacienteId])
 
   const addProc = () => setProcs(p => [...p, { ...PROC_EMPTY }])
   const removeProc = (i: number) => setProcs(p => p.filter((_, idx) => idx !== i))
@@ -130,18 +157,45 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
             <Stethoscope className="w-3.5 h-3.5 text-halu-600" />
           </div>
           <h3 className="font-semibold text-slate-900 text-sm">CUPS y diagnóstico</h3>
+          {buscandoPrecio && (
+            <span className="ml-auto text-xs text-halu-600 flex items-center gap-1.5">
+              <div className="w-3 h-3 border-2 border-halu-500 border-t-transparent rounded-full animate-spin" />
+              Buscando precio en tarifa...
+            </span>
+          )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="CUPS principal *" value={form.cups_principal} onChange={set('cups_principal')}
-            placeholder="Ej: 890201" error={errors.cups_principal} />
+          <CupsAutocomplete
+            label="CUPS principal"
+            value={form.cups_principal}
+            descripcion={form.descripcion_cups}
+            onChange={(cod, desc) => onCupsPrincipalChange(cod, desc)}
+            error={errors.cups_principal}
+            required
+            placeholder="Código o nombre del procedimiento..."
+          />
           <Input label="Descripción del CUPS" value={form.descripcion_cups} onChange={set('descripcion_cups')}
-            placeholder="Consulta de primera vez..." />
-          <Input label="Diagnóstico principal CIE-10 *" value={form.diagnostico_principal}
-            onChange={set('diagnostico_principal')} placeholder="Ej: M54.5" error={errors.diagnostico_principal} />
-          <Input label="Diagnóstico relacionado 1" value={form.diagnostico_relacionado_1}
-            onChange={set('diagnostico_relacionado_1')} placeholder="Ej: M47.8 (opcional)" />
-          <Input label="Diagnóstico relacionado 2" value={form.diagnostico_relacionado_2}
-            onChange={set('diagnostico_relacionado_2')} placeholder="Opcional" />
+            placeholder="Se autocompleta al seleccionar el CUPS" />
+          <Cie10Autocomplete
+            label="Diagnóstico principal CIE-10"
+            value={form.diagnostico_principal}
+            onChange={(cod) => setForm(f => ({ ...f, diagnostico_principal: cod }))}
+            error={errors.diagnostico_principal}
+            required
+            placeholder="Código o nombre del diagnóstico..."
+          />
+          <Cie10Autocomplete
+            label="Diagnóstico relacionado 1"
+            value={form.diagnostico_relacionado_1}
+            onChange={(cod) => setForm(f => ({ ...f, diagnostico_relacionado_1: cod }))}
+            placeholder="Opcional"
+          />
+          <Cie10Autocomplete
+            label="Diagnóstico relacionado 2"
+            value={form.diagnostico_relacionado_2}
+            onChange={(cod) => setForm(f => ({ ...f, diagnostico_relacionado_2: cod }))}
+            placeholder="Opcional"
+          />
           <Select label="Tipo de diagnóstico" value={form.tipo_diagnostico} onChange={set('tipo_diagnostico')}>
             <option value="1">Impresión diagnóstica</option>
             <option value="2">Confirmado nuevo</option>
@@ -196,17 +250,27 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
           <div className="space-y-3">
             {procs.map((proc, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 items-start p-3 bg-slate-50 rounded-xl">
-                <div className="col-span-2">
-                  <Input label="CUPS" value={proc.cups ?? ''} onChange={e => setProc(i, 'cups', e.target.value)} placeholder="Código" />
+                <div className="col-span-4">
+                  <CupsAutocomplete
+                    label="CUPS"
+                    value={proc.cups ?? ''}
+                    descripcion={proc.descripcion ?? ''}
+                    onChange={(cod, desc) => onCupsProcChange(i, cod, desc)}
+                    placeholder="Código..."
+                  />
                 </div>
-                <div className="col-span-5">
-                  <Input label="Descripción" value={proc.descripcion ?? ''} onChange={e => setProc(i, 'descripcion', e.target.value)} placeholder="Procedimiento..." />
+                <div className="col-span-4">
+                  <Input label="Descripción" value={proc.descripcion ?? ''}
+                    onChange={e => setProc(i, 'descripcion', e.target.value)}
+                    placeholder="Se autocompleta..." />
+                </div>
+                <div className="col-span-1">
+                  <Input label="Cant." type="number" value={String(proc.cantidad ?? 1)}
+                    onChange={e => setProc(i, 'cantidad', parseInt(e.target.value))} />
                 </div>
                 <div className="col-span-2">
-                  <Input label="Cant." type="number" value={String(proc.cantidad ?? 1)} onChange={e => setProc(i, 'cantidad', parseInt(e.target.value))} />
-                </div>
-                <div className="col-span-2">
-                  <Input label="Valor $" type="number" value={String(proc.valor_facturar ?? 0)} onChange={e => setProc(i, 'valor_facturar', parseFloat(e.target.value))} />
+                  <Input label="Valor $" type="number" value={String(proc.valor_facturar ?? 0)}
+                    onChange={e => setProc(i, 'valor_facturar', parseFloat(e.target.value))} />
                 </div>
                 <div className="col-span-1 flex items-end pb-2.5">
                   <button type="button" onClick={() => removeProc(i)}
@@ -229,8 +293,14 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
           <h3 className="font-semibold text-slate-900 text-sm">Datos financieros y RIPS</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Valor consulta * ($)" type="number" value={form.valor_consulta}
-            onChange={set('valor_consulta')} placeholder="85000" error={errors.valor_consulta} />
+          <div className="relative">
+            <Input label="Valor consulta * ($)" type="number" value={form.valor_consulta}
+              onChange={set('valor_consulta')} placeholder="Se rellena desde la tarifa"
+              error={errors.valor_consulta} />
+            {buscandoPrecio && (
+              <div className="absolute right-3 top-9 w-3.5 h-3.5 border-2 border-halu-400 border-t-transparent rounded-full animate-spin" />
+            )}
+          </div>
           <Input label="Copago / Cuota moderadora ($)" type="number" value={form.valor_copago}
             onChange={set('valor_copago')} placeholder="0" />
           <Input label="Nº Autorización EPS" value={form.numero_autorizacion}
@@ -246,7 +316,9 @@ export function FormConsulta({ pacienteId, citaId }: { pacienteId?: string; cita
 
         {/* Total */}
         <div className="mt-4 p-3 bg-halu-50 rounded-xl flex items-center justify-between">
-          <span className="text-sm font-medium text-halu-700">Total a facturar</span>
+          <span className="text-sm font-medium text-halu-700 flex items-center gap-2">
+            <DollarSign className="w-4 h-4" />Total a facturar
+          </span>
           <span className="text-lg font-bold text-halu-900">
             ${totalConsulta.toLocaleString('es-CO')}
           </span>

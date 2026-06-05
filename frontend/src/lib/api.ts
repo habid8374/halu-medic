@@ -162,6 +162,26 @@ export const cie10API = {
   buscar: (q: string) => api.get('/api/cie10/', { params: { search: q } }),
 }
 
+// ── Tarifarios ────────────────────────────────────────────────────────────────
+
+export const tarifasAPI = {
+  list:          (params?: Record<string, unknown>) => api.get('/api/tarifas/', { params }),
+  get:           (id: string) => api.get(`/api/tarifas/${id}/`),
+  create:        (data: Record<string, unknown>) => api.post('/api/tarifas/', data),
+  update:        (id: string, data: Record<string, unknown>) => api.patch(`/api/tarifas/${id}/`, data),
+  delete:        (id: string) => api.delete(`/api/tarifas/${id}/`),
+  listarItems:   (id: string, params?: Record<string, unknown>) => api.get(`/api/tarifas/${id}/items/`, { params }),
+  agregarItem:   (id: string, data: Record<string, unknown>) => api.post(`/api/tarifas/${id}/items/agregar/`, data),
+  editarItem:    (id: string, itemId: string, data: Record<string, unknown>) => api.patch(`/api/tarifas/${id}/items/${itemId}/editar/`, data),
+  eliminarItem:  (id: string, itemId: string) => api.delete(`/api/tarifas/${id}/items/${itemId}/eliminar/`),
+  importar:      (id: string, archivo: File) => {
+    const fd = new FormData(); fd.append('archivo', archivo)
+    return api.post(`/api/tarifas/${id}/importar/`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  precio:        (cups: string, pacienteId?: string) =>
+    api.get('/api/tarifas/precio/', { params: { cups, ...(pacienteId ? { paciente: pacienteId } : {}) } }),
+}
+
 // ── Usuarios ──────────────────────────────────────────────────────────────────
 
 export const usuariosAPI = {

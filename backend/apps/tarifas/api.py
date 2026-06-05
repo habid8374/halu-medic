@@ -1,0 +1,250 @@
+"""
+API para manuales tarifarios.
+  /api/tarifas/                    - CRUD de manuales
+  /api/tarifas/{id}/items/         - ítems del manual
+  /api/tarifas/{id}/importar/      - importar Excel/CSV
+  /api/tarifas/precio/             - buscar precio CUPS para un paciente
+"""
+import io
+from decimal import Decimal
+from rest_framework import serializers, viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
+from apps.tarifas.models import ManualTarifario, ItemTarifario
+
+
+class ItemTarifarioSerializer(serializers.ModelSerializer):
+    valor_final = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = ItemTarifario
+        fields = ['id', 'cups', 'descripcion', 'valor_base', 'valor_final']
+
+
+class ManualTarifarioSerializer(serializers.ModelSerializer):
+    total_items = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ManualTarifario
+        fields = [
+            'id', 'nombre', 'tipo', 'porcentaje_ajuste',
+            'es_predeterminado', 'activo', 'vigente_desde',
+            'vigente_hasta', 'observaciones', 'creado_en', 'total_items',
+        ]
+        read_only_fields = ['id', 'creado_en']
+
+    def get_total_items(self, obj):
+        return obj.items.count()
+
+
+class ManualTarifarioViewSet(viewsets.ModelViewSet):
+    serializer_class = ManualTarifarioSerializer
+    ordering = ['nombre']
+
+    def get_queryset(self):
+        return ManualTarifario.objects.all()
+
+    # ── Ítems del manual ──────────────────────────────────────────────────────
+
+    @action(detail=True, methods=['get'], url_path='items')
+    def listar_items(self, request, pk=None):
+        manual = self.get_object()
+        q = request.query_params.get('search')
+        qs = manual.items.all()
+        if q:
+            from django.db.models import Q
+            qs = qs.filter(Q(cups__icontains=q) | Q(descripcion__icontains=q))
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            return self.get_paginated_response(ItemTarifarioSerializer(page, many=True).data)
+        return Response(ItemTarifarioSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['post'], url_path='items/agregar')
+    def agregar_item(self, request, pk=None):
+        manual = self.get_object()
+        s = ItemTarifarioSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        item = s.save(manual=manual)
+        return Response(ItemTarifarioSerializer(item).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['patch'], url_path='items/(?P<item_id>[^/.]+)/editar')
+    def editar_item(self, request, pk=None, item_id=None):
+        item = ItemTarifario.objects.get(pk=item_id, manual=self.get_object())
+        s = ItemTarifarioSerializer(item, data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+        return Response(ItemTarifarioSerializer(s.save()).data)
+
+    @action(detail=True, methods=['delete'], url_path='items/(?P<item_id>[^/.]+)/eliminar')
+    def eliminar_item(self, request, pk=None, item_id=None):
+        ItemTarifario.objects.filter(pk=item_id, manual=self.get_object()).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # ── Importar desde Excel/CSV ──────────────────────────────────────────────
+
+    @action(detail=True, methods=['post'], url_path='importar')
+    def importar(self, request, pk=None):
+        """
+        POST multipart/form-data con campo 'archivo' (.xlsx, .xls, .csv).
+        Columnas detectadas automáticamente: cups/codigo, descripcion/nombre, valor/precio.
+        Devuelve: { importados, actualizados, errores }
+        """
+        manual = self.get_object()
+        archivo = request.FILES.get('archivo')
+        if not archivo:
+            return Response({'error': 'Debes enviar el campo "archivo".'}, status=400)
+
+        nombre = archivo.name.lower()
+        try:
+            if nombre.endswith('.csv'):
+                filas = _parse_csv(archivo)
+            else:
+                filas = _parse_excel(archivo)
+        except Exception as e:
+            return Response({'error': f'Error leyendo archivo: {e}'}, status=400)
+
+        importados = actualizados = errores = 0
+        for fila in filas:
+            cups = fila.get('cups', '').strip()
+            if not cups:
+                errores += 1
+                continue
+            try:
+                valor = Decimal(str(fila.get('valor', 0)).replace(',', '.').replace(' ', ''))
+            except Exception:
+                errores += 1
+                continue
+            desc = fila.get('descripcion', '')
+            obj, created = ItemTarifario.objects.update_or_create(
+                manual=manual, cups=cups,
+                defaults={'valor_base': valor, 'descripcion': desc[:400]},
+            )
+            if created:
+                importados += 1
+            else:
+                actualizados += 1
+
+        return Response({
+            'importados': importados,
+            'actualizados': actualizados,
+            'errores': errores,
+            'total_items': manual.items.count(),
+        })
+
+    # ── Lookup de precio para un CUPS + paciente ──────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='precio')
+    def precio(self, request):
+        """
+        GET /api/tarifas/precio/?cups=890201&paciente=<uuid>
+        Devuelve el valor_final del CUPS en la tarifa del paciente
+        (o la predeterminada si no tiene asignada).
+        """
+        cups_code = request.query_params.get('cups')
+        paciente_id = request.query_params.get('paciente')
+        if not cups_code:
+            return Response({'error': 'Parámetro cups requerido.'}, status=400)
+
+        manual = None
+        if paciente_id:
+            try:
+                from apps.pacientes.models import Paciente
+                p = Paciente.objects.select_related('tarifa').get(pk=paciente_id)
+                manual = p.tarifa
+            except Paciente.DoesNotExist:
+                pass
+
+        if manual is None:
+            manual = ManualTarifario.objects.filter(es_predeterminado=True, activo=True).first()
+
+        if manual is None:
+            return Response({'encontrado': False, 'valor': None, 'manual': None})
+
+        try:
+            item = manual.items.get(cups=cups_code)
+            return Response({
+                'encontrado': True,
+                'valor': float(item.valor_final),
+                'valor_base': float(item.valor_base),
+                'manual_id': str(manual.id),
+                'manual_nombre': manual.nombre,
+                'porcentaje_ajuste': float(manual.porcentaje_ajuste),
+            })
+        except ItemTarifario.DoesNotExist:
+            return Response({
+                'encontrado': False,
+                'valor': None,
+                'manual_id': str(manual.id),
+                'manual_nombre': manual.nombre,
+            })
+
+
+# ── Helpers de parseo ─────────────────────────────────────────────────────────
+
+_CUPS_COLS  = {'cups', 'codigo', 'cod', 'code', 'cod_cups', 'codigo_cups'}
+_DESC_COLS  = {'descripcion', 'nombre', 'description', 'name', 'procedimiento'}
+_VALOR_COLS = {'valor', 'precio', 'value', 'price', 'tarifa', 'valor_base'}
+
+
+def _norm_header(h):
+    return str(h).lower().strip().replace(' ', '_').replace('.', '').replace(':', '')
+
+
+def _map_headers(headers):
+    """Retorna dict {cups, descripcion, valor} con los índices de columna."""
+    m = {}
+    for i, h in enumerate(headers):
+        hn = _norm_header(h)
+        if hn in _CUPS_COLS and 'cups' not in m:
+            m['cups'] = i
+        elif hn in _DESC_COLS and 'descripcion' not in m:
+            m['descripcion'] = i
+        elif hn in _VALOR_COLS and 'valor' not in m:
+            m['valor'] = i
+    return m
+
+
+def _parse_excel(archivo):
+    import openpyxl
+    content = archivo.read()
+    wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+    headers = [str(c) if c is not None else '' for c in rows[0]]
+    m = _map_headers(headers)
+    if 'cups' not in m or 'valor' not in m:
+        raise ValueError(
+            f'No se encontraron columnas CUPS y valor. '
+            f'Columnas detectadas: {headers}. '
+            f'Nombra las columnas "CUPS" y "Valor" (o similar).'
+        )
+    result = []
+    for row in rows[1:]:
+        def _v(idx):
+            return row[idx] if idx < len(row) else None
+        result.append({
+            'cups': str(_v(m['cups']) or '').strip(),
+            'descripcion': str(_v(m.get('descripcion', -1)) or '').strip(),
+            'valor': _v(m['valor']) or 0,
+        })
+    return result
+
+
+def _parse_csv(archivo):
+    import csv
+    content = archivo.read().decode('utf-8-sig', errors='replace')
+    reader = csv.DictReader(io.StringIO(content))
+    m = _map_headers(reader.fieldnames or [])
+    if 'cups' not in m or 'valor' not in m:
+        raise ValueError('No se encontraron columnas CUPS y valor en el CSV.')
+    result = []
+    for row in reader:
+        headers = list(row.keys())
+        result.append({
+            'cups': str(row.get(headers[m['cups']], '') or '').strip(),
+            'descripcion': str(row.get(headers[m.get('descripcion', -1)], '') or '').strip() if 'descripcion' in m else '',
+            'valor': row.get(headers[m['valor']], 0) or 0,
+        })
+    return result

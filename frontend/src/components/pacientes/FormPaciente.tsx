@@ -1,12 +1,12 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { pacientesAPI } from '@/lib/api'
+import { pacientesAPI, tarifasAPI } from '@/lib/api'
 import { Paciente } from '@/types'
 import { Input, Select, Button, Card } from '@/components/ui'
 import { TIPOS_DOC, REGIMENES, SEXOS } from './helpers'
 import toast from 'react-hot-toast'
-import { User, Phone, Mail, MapPin, Shield } from 'lucide-react'
+import { User, Phone, Shield } from 'lucide-react'
 
 interface FormData {
   tipo_identificacion: string
@@ -23,7 +23,10 @@ interface FormData {
   municipio_codigo: string
   regimen: string
   numero_poliza: string
+  tarifa: string
 }
+
+interface Tarifario { id: string; nombre: string; tipo: string; es_predeterminado: boolean }
 
 const EMPTY: FormData = {
   tipo_identificacion: 'CC',
@@ -40,6 +43,7 @@ const EMPTY: FormData = {
   municipio_codigo: '08001',
   regimen: 'P',
   numero_poliza: '',
+  tarifa: '',
 }
 
 interface Errors { [k: string]: string }
@@ -64,9 +68,17 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
   const [form, setForm] = useState<FormData>({
     ...EMPTY,
     ...inicial,
+    tarifa: (inicial as Record<string, unknown>)?.tarifa as string ?? '',
   })
   const [errors, setErrors] = useState<Errors>({})
   const [saving, setSaving] = useState(false)
+  const [tarifarios, setTarifarios] = useState<Tarifario[]>([])
+
+  useEffect(() => {
+    tarifasAPI.list({ activo: true })
+      .then(({ data }) => setTarifarios(data.results ?? data))
+      .catch(() => {/* silencioso */})
+  }, [])
 
   const set = (field: keyof FormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -79,11 +91,12 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
     setErrors({})
     setSaving(true)
     try {
+      const payload = { ...form, tarifa: form.tarifa || null }
       if (esEdicion) {
-        await pacientesAPI.update(inicial!.id!, form)
+        await pacientesAPI.update(inicial!.id!, payload)
         toast.success('Paciente actualizado')
       } else {
-        const { data } = await pacientesAPI.create(form)
+        const { data } = await pacientesAPI.create(payload)
         toast.success('Paciente registrado correctamente')
         router.push(`/pacientes/${data.id}`)
         return
@@ -257,6 +270,18 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
             onChange={set('numero_poliza')}
             placeholder="Opcional"
           />
+          <Select
+            label="Tarifa asignada"
+            value={form.tarifa}
+            onChange={set('tarifa')}
+          >
+            <option value="">— Usar tarifa predeterminada del consultorio —</option>
+            {tarifarios.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.nombre}{t.es_predeterminado ? ' (predeterminada)' : ''}
+              </option>
+            ))}
+          </Select>
         </div>
 
         {/* Aviso RIPS */}
