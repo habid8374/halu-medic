@@ -12,14 +12,14 @@ export default function EditarPacientePage({ params }: { params: { id: string } 
 
   if (loading) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-[400px]">
+      <div className="page-padding flex items-center justify-center min-h-[400px]">
         <Spinner size="lg" />
       </div>
     )
   }
 
   return (
-    <div className="p-8 max-w-3xl animate-fade-in">
+    <div className="page-padding max-w-3xl animate-fade-in">
       <div className="flex items-center gap-3 mb-6">
         <Link href={`/pacientes/${id}`}>
           <Button variant="ghost" className="px-2"><ArrowLeft className="w-4 h-4" /></Button>

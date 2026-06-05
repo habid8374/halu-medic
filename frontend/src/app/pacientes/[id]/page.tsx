@@ -23,7 +23,7 @@ export default function PacienteDetallePage({ params }: { params: { id: string }
 
   if (loading) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-[400px]">
+      <div className="page-padding flex items-center justify-center min-h-[400px]">
         <Spinner size="lg" />
       </div>
     )
@@ -43,7 +43,7 @@ export default function PacienteDetallePage({ params }: { params: { id: string }
   const ini     = iniciales(paciente.nombre_completo)
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/pacientes">

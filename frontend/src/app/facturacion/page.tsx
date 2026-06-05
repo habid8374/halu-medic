@@ -27,7 +27,7 @@ export default function FacturacionPage() {
   const facturas = data?.results ?? []
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       <PageHeader
         title="Facturación electrónica"
         description="SS-CUFE · SS-SinAporte · Res. 948/2026 · Factus API"

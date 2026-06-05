@@ -76,7 +76,7 @@ export default function RipsPage() {
   const validadas  = facturas.filter(f => f.estado === 'validada').length
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       <PageHeader
         title="RIPS"
         description="Registro Individual de Prestación de Servicios — soporte de la factura electrónica (Res. 948/2026)"

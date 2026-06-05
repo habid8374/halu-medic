@@ -13,7 +13,7 @@ function NuevaConsultaInner() {
 
 export default function NuevaConsultaPage() {
   return (
-    <div className="p-8 max-w-3xl animate-fade-in">
+    <div className="page-padding max-w-3xl animate-fade-in">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/consultas"><Button variant="ghost" className="px-2"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <PageHeader title="Nueva consulta" description="Registro clínico + RIPS + Factura electrónica" />

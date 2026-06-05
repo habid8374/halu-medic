@@ -96,7 +96,7 @@ export default function ReportesPage() {
   const r = resumen!
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       <PageHeader
         title="Reportes"
         description={`Resumen del consultorio · ${periodoLabel}`}

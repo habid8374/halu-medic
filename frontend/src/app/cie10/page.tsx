@@ -70,7 +70,7 @@ export default function Cie10Page() {
   }
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       <PageHeader
         title="Diagnósticos CIE-10"
         description="Clasificación Internacional de Enfermedades, 10.ª revisión — 12.634 diagnósticos habilitados"

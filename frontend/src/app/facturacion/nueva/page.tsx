@@ -36,7 +36,7 @@ export default function NuevaFacturaPage() {
   }
 
   return (
-    <div className="p-8 max-w-2xl animate-fade-in">
+    <div className="page-padding max-w-2xl animate-fade-in">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/facturacion"><Button variant="ghost" className="px-2"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <PageHeader title="Nueva factura" description="Selecciona la consulta a facturar" />

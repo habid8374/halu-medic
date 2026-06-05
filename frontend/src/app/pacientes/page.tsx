@@ -21,7 +21,7 @@ export default function PacientesPage() {
   const totalPages = data ? Math.ceil(data.count / 25) : 0
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       <PageHeader
         title="Pacientes"
         description={data ? `${data.count} pacientes registrados` : 'Gestión de pacientes'}

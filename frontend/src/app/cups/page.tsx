@@ -85,7 +85,7 @@ export default function CupsPage() {
   }
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       <PageHeader
         title="Homologador CUPS"
         description="Catálogo CUPS con homologación REPS y campos RIPS (Res. 948/2026)"

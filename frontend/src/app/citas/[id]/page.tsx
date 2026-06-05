@@ -13,13 +13,13 @@ export default function CitaDetallePage({ params }: { params: { id: string } }) 
   const { usuario } = useAuth()
   const { cita, loading } = useCita(id)
 
-  if (loading) return <div className="p-8 flex justify-center py-20"><Spinner size="lg" /></div>
+  if (loading) return <div className="page-padding flex justify-center py-20"><Spinner size="lg" /></div>
   if (!cita)   return <div className="p-8"><p className="text-slate-500">Cita no encontrada.</p></div>
 
   const est = ESTADO_CITA[cita.estado]
 
   return (
-    <div className="p-8 max-w-2xl animate-fade-in">
+    <div className="page-padding max-w-2xl animate-fade-in">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/citas"><Button variant="ghost" className="px-2"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <PageHeader title="Detalle de cita" />

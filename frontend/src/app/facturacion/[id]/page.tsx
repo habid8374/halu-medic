@@ -47,13 +47,13 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
     }
   }
 
-  if (loading) return <div className="p-8 flex justify-center py-20"><Spinner size="lg" /></div>
+  if (loading) return <div className="page-padding flex justify-center py-20"><Spinner size="lg" /></div>
   if (!factura) return <div className="p-8"><p className="text-slate-500">Factura no encontrada.</p></div>
 
   const est = ESTADO_FACTURA[factura.estado]
 
   return (
-    <div className="p-8 max-w-3xl animate-fade-in">
+    <div className="page-padding max-w-3xl animate-fade-in">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/facturacion"><Button variant="ghost" className="px-2"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <PageHeader title="Factura electrónica" description={factura.numero_factus || 'En proceso'} />

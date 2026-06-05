@@ -14,7 +14,7 @@ function NuevaCitaInner() {
 
 export default function NuevaCitaPage() {
   return (
-    <div className="p-8 max-w-2xl animate-fade-in">
+    <div className="page-padding max-w-2xl animate-fade-in">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/citas"><Button variant="ghost" className="px-2"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <PageHeader title="Nueva cita" description="Agenda una cita para un paciente" />

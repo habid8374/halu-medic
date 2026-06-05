@@ -18,7 +18,7 @@ export default function ConsultasPage() {
   const consultas = data?.results ?? []
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       <PageHeader
         title="Consultas clínicas"
         description={`${data?.count ?? 0} consultas registradas`}

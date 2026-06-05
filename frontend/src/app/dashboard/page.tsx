@@ -81,7 +81,7 @@ export default function DashboardPage() {
   ].filter(a => a.visible)
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>

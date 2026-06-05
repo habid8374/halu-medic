@@ -83,7 +83,7 @@ export default function SuperadminPage() {
   }
 
   if (!usuario?.permisos.es_superadmin) return (
-    <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
+    <div className="page-padding flex flex-col items-center justify-center min-h-[400px]">
       <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
       <h2 className="text-xl font-bold text-slate-800">Acceso restringido</h2>
       <p className="text-slate-500 mt-2">Solo el superadmin de Axentia puede acceder aquí.</p>
@@ -95,7 +95,7 @@ export default function SuperadminPage() {
   const canceladas = suscripciones.filter(s => s.estado === 'cancelada').length
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       <PageHeader title="Superadmin — Axentia" description="Gestión de consultorios y suscripciones SaaS"
         action={<Button variant="secondary" onClick={cargar}><RefreshCw className="w-4 h-4" />Actualizar</Button>} />
 

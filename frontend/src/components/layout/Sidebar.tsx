@@ -1,4 +1,5 @@
 'use client'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
@@ -7,6 +8,7 @@ import {
   LayoutDashboard, Users, CalendarDays,
   ClipboardList, Receipt, BarChart3, Settings,
   LogOut, ChevronRight, Building2, ShieldCheck, FileJson, ListTree, BookOpen,
+  Menu, X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -45,6 +47,17 @@ export default function Sidebar() {
   const { usuario, logout } = useAuth()
   const pathname = usePathname()
   const router   = useRouter()
+  const [open, setOpen] = useState(false)
+
+  // Cerrar al cambiar de ruta (móvil)
+  useEffect(() => { setOpen(false) }, [pathname])
+
+  // Cerrar con Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
 
   if (!usuario) return null
 
@@ -60,20 +73,18 @@ export default function Sidebar() {
     return true
   })
 
-  return (
-    <aside className="fixed inset-y-0 left-0 w-[var(--sidebar-width)] bg-white border-r border-slate-100 flex flex-col z-40">
-      {/* Logo real */}
+  const sidebarContent = (
+    <div className="h-full flex flex-col">
+      {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-slate-100">
-        <Link href="/dashboard" className="flex items-center gap-2">
+        <Link href="/dashboard" className="flex items-center gap-2" onClick={() => setOpen(false)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.png"
-            alt="Halu Medic"
-            width={140}
-            height={40}
-            className="object-contain h-9 w-auto"
-          />
+          <img src="/logo.png" alt="Halu Medic" width={140} height={40} className="object-contain h-9 w-auto" />
         </Link>
+        {/* Botón cerrar en móvil */}
+        <button onClick={() => setOpen(false)} className="ml-auto p-1.5 rounded-lg hover:bg-slate-100 lg:hidden">
+          <X className="w-5 h-5 text-slate-500" />
+        </button>
       </div>
 
       {/* Consultorio activo */}
@@ -121,24 +132,53 @@ export default function Sidebar() {
             </span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-slate-900 truncate leading-none">
-              {usuario.nombre}
-            </p>
+            <p className="text-sm font-medium text-slate-900 truncate leading-none">{usuario.nombre}</p>
             <span className={clsx('text-xs px-1.5 py-0.5 rounded-md font-medium mt-1 inline-block',
               rolColor[usuario.rol] || 'bg-slate-100 text-slate-600'
             )}>
               {usuario.rol_label}
             </span>
           </div>
-          <button
-            onClick={handleLogout}
-            title="Cerrar sesión"
-            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-          >
+          <button onClick={handleLogout} title="Cerrar sesión"
+            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>
-    </aside>
+    </div>
+  )
+
+  return (
+    <>
+      {/* Botón hamburguesa — solo móvil */}
+      <button
+        onClick={() => setOpen(true)}
+        className="fixed top-3 left-3 z-50 p-2 bg-white rounded-xl shadow-md border border-slate-100 lg:hidden"
+        aria-label="Abrir menú"
+      >
+        <Menu className="w-5 h-5 text-slate-600" />
+      </button>
+
+      {/* Overlay — solo móvil cuando abierto */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* Sidebar móvil — drawer */}
+      <aside className={clsx(
+        'fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-100 transition-transform duration-300 lg:hidden',
+        open ? 'translate-x-0' : '-translate-x-full'
+      )}>
+        {sidebarContent}
+      </aside>
+
+      {/* Sidebar desktop — siempre visible */}
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[var(--sidebar-width)] bg-white border-r border-slate-100 flex-col z-40">
+        {sidebarContent}
+      </aside>
+    </>
   )
 }

@@ -19,7 +19,7 @@ export default function CitasPage() {
   const citas = data?.results ?? []
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="page-padding animate-fade-in">
       <PageHeader
         title="Agenda de citas"
         description={`${data?.count ?? 0} citas registradas`}

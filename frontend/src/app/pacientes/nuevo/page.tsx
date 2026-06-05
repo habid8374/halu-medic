@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react'
 
 export default function NuevoPacientePage() {
   return (
-    <div className="p-8 max-w-3xl animate-fade-in">
+    <div className="page-padding max-w-3xl animate-fade-in">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/pacientes">
           <Button variant="ghost" className="px-2">
