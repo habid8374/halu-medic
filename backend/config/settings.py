@@ -144,11 +144,15 @@ SIMPLE_JWT = {
 }
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = config(
+CORS_ALLOWED_ORIGINS = list(config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://127.0.0.1:3000,https://halu-medic.vercel.app',
+    default='http://localhost:3000,http://127.0.0.1:3000',
     cast=Csv()
-)
+))
+# Siempre permitir el frontend de producción en Vercel
+_VERCEL = 'https://halu-medic.vercel.app'
+if _VERCEL not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(_VERCEL)
 
 # ── Almacenamiento ────────────────────────────────────────────────────────────
 if config('AWS_ACCESS_KEY_ID', default=''):
