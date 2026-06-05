@@ -66,58 +66,172 @@ export default function FacturaDetallePage({ params }: { params: { id: string } 
 
   const descargarPDF = () => {
     if (!factura) return
+    const info = factura.consulta_info || {}
+    const items: Array<{cups:string;descripcion:string;cantidad:number;valor_unit:number;total:number}> = info.items || []
+    const tieneEPS = !!info.eps_nombre
+    const regimen: Record<string,string> = { C:'Contributivo', S:'Subsidiado', V:'Vinculado', P:'Particular', A:'ARL', T:'SOAT' }
+    const fmt = (v: number) => new Intl.NumberFormat('es-CO', { style:'currency', currency:'COP', minimumFractionDigits:0 }).format(v)
+    const itemsHtml = items.map(it => `
+      <tr>
+        <td>${it.cups}</td>
+        <td>${it.descripcion}</td>
+        <td style="text-align:center">${it.cantidad}</td>
+        <td style="text-align:right">${fmt(it.valor_unit)}</td>
+        <td style="text-align:right">${fmt(it.total)}</td>
+      </tr>`).join('')
+
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<title>Factura ${factura.numero_factus}</title>
+<title>FEV ${factura.numero_factus}</title>
 <style>
-  body { font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 0; padding: 20px; }
-  .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0d6efd; padding-bottom: 12px; margin-bottom: 16px; }
-  .logo-area h1 { font-size: 18px; color: #0d6efd; margin: 0; }
-  .logo-area p { margin: 2px 0; font-size: 10px; color: #555; }
-  .badge { background: #198754; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 10px; font-weight: bold; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-  th { background: #f1f5f9; text-align: left; padding: 6px 8px; font-size: 10px; color: #444; }
-  td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
-  .totales td { border: none; }
-  .total-final td { font-weight: bold; font-size: 13px; border-top: 2px solid #0d6efd; }
-  .cufe { font-size: 8px; color: #555; word-break: break-all; background: #f8fafc; padding: 8px; border-radius: 4px; margin-top: 8px; }
-  .footer { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 10px; font-size: 9px; color: #888; text-align: center; }
-  @media print { body { padding: 0; } }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;font-size:10px;color:#111;padding:18px;background:#fff}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a56db;padding-bottom:12px;margin-bottom:14px}
+  .brand h1{font-size:20px;color:#1a56db;font-weight:900;letter-spacing:-0.5px}
+  .brand p{font-size:9px;color:#555;margin-top:2px}
+  .brand .sub{font-size:9px;color:#777;margin-top:6px;line-height:1.5}
+  .fev-box{text-align:right}
+  .fev-box .badge{background:#1a56db;color:#fff;padding:3px 8px;border-radius:3px;font-size:9px;font-weight:bold}
+  .fev-box .num{font-size:20px;font-weight:900;color:#111;margin:4px 0}
+  .fev-box .fecha{font-size:9px;color:#555}
+  .validada{color:#059669;font-weight:bold;font-size:9px;margin-top:4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+  .box{border:1px solid #e2e8f0;border-radius:4px;padding:8px}
+  .box h3{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;border-bottom:1px solid #f1f5f9;padding-bottom:4px}
+  .box p{font-size:10px;line-height:1.6}
+  .box strong{color:#111}
+  section{margin-bottom:12px}
+  section h3{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;background:#f8fafc;padding:5px 8px;border-left:3px solid #1a56db;margin-bottom:0}
+  table{width:100%;border-collapse:collapse}
+  thead th{background:#1e40af;color:#fff;padding:5px 8px;font-size:9px;text-align:left}
+  tbody td{padding:5px 8px;border-bottom:1px solid #f1f5f9;font-size:10px}
+  tbody tr:nth-child(even) td{background:#f8fafc}
+  .iva-row td{color:#888;font-style:italic}
+  .grid3{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+  .totales-table td{padding:4px 8px;border:none}
+  .total-row td{font-weight:bold;font-size:12px;border-top:2px solid #1a56db;padding-top:6px}
+  .eps-row td{color:#059669;font-weight:bold}
+  .dian-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:10px;margin-bottom:12px}
+  .dian-box h3{font-size:9px;color:#059669;text-transform:uppercase;margin-bottom:8px}
+  .dian-field{margin-bottom:6px}
+  .dian-field label{font-size:8px;color:#888;display:block}
+  .dian-field span{font-size:8px;font-family:monospace;color:#111;word-break:break-all}
+  .bottom-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;border-top:1px solid #e2e8f0;padding-top:8px;margin-bottom:10px}
+  .bottom-cell label{font-size:8px;color:#888;display:block}
+  .bottom-cell span{font-size:9px;font-weight:bold}
+  .footer{font-size:8px;color:#aaa;text-align:center;border-top:1px solid #e2e8f0;padding-top:8px}
+  @media print{body{padding:10px}}
 </style>
 </head>
 <body>
-<div class="header">
-  <div class="logo-area">
-    <h1>FACTURA ELECTRÓNICA DE SALUD</h1>
-    <p>Resolución 948/2026 · Factus API DIAN</p>
-    <p><strong>No. FEV:</strong> ${factura.numero_factus}</p>
-    <p><strong>Tipo:</strong> ${tipoOperacionLabel(factura)}</p>
+
+<!-- ENCABEZADO -->
+<div class="top">
+  <div class="brand">
+    <h1>HaluMedic</h1>
+    <p>Sistema de Gestión Clínica</p>
+    <div class="sub">
+      ${info.consultorio_nombre || 'Consultorio'}<br/>
+      NIT: ${info.consultorio_nit || ''} &nbsp;|&nbsp; Cód. Prestador: ${info.consultorio_cod_prestador || ''}<br/>
+      ${info.consultorio_direccion || ''}<br/>
+      ${info.consultorio_tel ? 'Tel: ' + info.consultorio_tel : ''}
+    </div>
   </div>
-  <div>
-    <span class="badge">VALIDADA DIAN</span>
-    <p style="margin-top:8px;font-size:10px;">Fecha: ${formatFechaFactura(factura.fecha_validacion)}</p>
+  <div class="fev-box">
+    <div class="badge">${tipoOperacionLabel(factura)} · Sector Salud</div>
+    <div class="num">${factura.numero_factus}</div>
+    <div class="fecha">Factura electrónica de venta<br/>Fecha: ${formatFechaFactura(factura.fecha_validacion)}</div>
+    <div class="validada">✓ Validada DIAN</div>
   </div>
 </div>
 
-<table>
-  <tr><th colspan="2">PACIENTE</th></tr>
-  <tr><td><strong>${factura.consulta_info?.paciente || ''}</strong></td><td>CUPS: ${factura.consulta_info?.cups || ''}</td></tr>
-</table>
+<!-- EPS / PACIENTE -->
+<div class="grid2">
+  ${tieneEPS ? `
+  <div class="box">
+    <h3>Adquirente (EPS)</h3>
+    <p><strong>${info.eps_nombre}</strong><br/>
+    NIT: ${info.eps_nit}<br/>
+    Régimen: ${regimen[info.regimen] || info.regimen}<br/>
+    ${info.num_contrato ? 'Contrato: ' + info.num_contrato : ''}
+    ${factura.convenio_cucon ? '<br/>CUCON: ' + factura.convenio_cucon : ''}</p>
+  </div>` : `
+  <div class="box">
+    <h3>Paciente (Particular)</h3>
+    <p><strong>${info.paciente}</strong><br/>
+    ${info.paciente_doc}<br/>
+    Régimen: ${regimen[info.regimen] || 'Particular'}</p>
+  </div>`}
+  <div class="box">
+    <h3>Paciente Beneficiario</h3>
+    <p><strong>${info.paciente}</strong><br/>
+    ${info.paciente_doc}<br/>
+    ${info.num_autorizacion ? 'Autorización: ' + info.num_autorizacion : 'Sin autorización'}</p>
+  </div>
+</div>
 
-<table>
-  <thead><tr><th>Descripción</th><th style="text-align:right">Valor</th></tr></thead>
-  <tbody class="totales">
-    <tr><td>Subtotal</td><td style="text-align:right">${formatCOP(factura.subtotal)}</td></tr>
-    <tr><td>Descuento</td><td style="text-align:right">${formatCOP(factura.descuento)}</td></tr>
-    <tr><td>IVA (exento servicios salud)</td><td style="text-align:right">${formatCOP(factura.iva)}</td></tr>
-    <tr><td>Copago / Cuota moderadora</td><td style="text-align:right">${formatCOP(factura.valor_copago)}</td></tr>
-  </tbody>
-  <tbody class="total-final">
-    <tr><td><strong>TOTAL</strong></td><td style="text-align:right"><strong>${formatCOP(factura.total)}</strong></td></tr>
-  </tbody>
-</table>
+<!-- DETALLE DE SERVICIOS -->
+<section>
+  <h3>Detalle de Servicios</h3>
+  <table>
+    <thead><tr><th>CUPS</th><th>Descripción</th><th style="text-align:center">Cant.</th><th style="text-align:right">Vlr. Unit.</th><th style="text-align:right">Total</th></tr></thead>
+    <tbody>${itemsHtml}</tbody>
+    <tbody><tr class="iva-row"><td colspan="4">IVA: Exento — Servicios de salud Art. 476 E.T.</td><td style="text-align:right">$0</td></tr></tbody>
+  </table>
+</section>
+
+<!-- APORTES + RESUMEN -->
+<div class="grid3">
+  <div class="box">
+    <h3>Aportes del Paciente</h3>
+    <table class="totales-table">
+      <tr><td>${info.regimen === 'C' ? 'Cuota moderadora' : info.regimen === 'S' ? 'Copago' : 'Pagos voluntarios'}</td><td style="text-align:right">${fmt(Number(factura.valor_copago) || 0)}</td></tr>
+      <tr><td>Pagos voluntarios</td><td style="text-align:right">$0</td></tr>
+      <tr style="border-top:1px solid #e2e8f0"><td><strong>Total aporte</strong></td><td style="text-align:right"><strong>${fmt(Number(factura.valor_copago) || 0)}</strong></td></tr>
+    </table>
+  </div>
+  <div class="box">
+    <h3>Resumen Factura</h3>
+    <table class="totales-table">
+      <tr><td>Subtotal</td><td style="text-align:right">${fmt(Number(factura.subtotal))}</td></tr>
+      <tr><td>Descuento</td><td style="text-align:right">${fmt(Number(factura.descuento) || 0)}</td></tr>
+      <tr><td>IVA (0%)</td><td style="text-align:right">$0</td></tr>
+      <tr class="total-row"><td><strong>Total factura</strong></td><td style="text-align:right"><strong>${fmt(Number(factura.total))}</strong></td></tr>
+      ${tieneEPS ? `<tr class="eps-row"><td>A cobrar a EPS</td><td style="text-align:right">${fmt((info.a_cobrar_eps ?? Number(factura.total)))}</td></tr>` : ''}
+    </table>
+  </div>
+</div>
+
+<!-- DATOS DIAN -->
+<div class="dian-box">
+  <h3>Datos de Validación DIAN</h3>
+  <div class="dian-field"><label>CUFE</label><span>${factura.cufe || ''}</span></div>
+  ${factura.cuv ? `<div class="dian-field"><label>CUV MinSalud (MUV)</label><span style="color:#059669">${factura.cuv}</span></div>` : ''}
+</div>
+
+<!-- FILA INFERIOR -->
+<div class="bottom-row">
+  <div class="bottom-cell"><label>Cobertura</label><span>${tieneEPS ? (regimen[info.regimen] || info.regimen) + ' (0' + ({C:'1',S:'2',V:'3',P:'5',A:'4',T:'6'}[info.regimen]||'5') + ')' : 'Particular (05)'}</span></div>
+  <div class="bottom-cell"><label>Modalidad pago</label><span>Por evento (01)</span></div>
+  <div class="bottom-cell"><label>Tipo operación</label><span>${tipoOperacionLabel(factura)}</span></div>
+  <div class="bottom-cell"><label>Forma de pago</label><span>Crédito 30 días</span></div>
+</div>
+
+<div class="footer">
+  Generado por Halu Medic · Facturación electrónica procesada por Factus API · PT habilitado DIAN
+</div>
+</body>
+</html>`
+
+    const win = window.open('', '_blank')
+    if (!win) { toast.error('Permite ventanas emergentes para descargar el PDF'); return }
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print() }, 500)
+  }
 
 <div class="cufe">
   <strong>CUFE:</strong> ${factura.cufe}

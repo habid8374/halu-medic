@@ -215,11 +215,54 @@ class FacturaSerializer(serializers.ModelSerializer):
         ]
 
     def get_consulta_info(self, obj):
+        consulta = obj.consulta
+        paciente = consulta.paciente
+        convenio = obj.convenio
+
+        # Items: consulta principal + procedimientos
+        items = []
+        if consulta.valor_consulta and float(consulta.valor_consulta) > 0:
+            items.append({
+                'cups':        consulta.cups_principal,
+                'descripcion': consulta.descripcion_cups or f'Consulta {consulta.cups_principal}',
+                'cantidad':    1,
+                'valor_unit':  float(consulta.valor_consulta),
+                'total':       float(consulta.valor_consulta),
+            })
+        for proc in consulta.procedimientos.all():
+            items.append({
+                'cups':        proc.cups,
+                'descripcion': proc.descripcion,
+                'cantidad':    int(proc.cantidad),
+                'valor_unit':  float(proc.valor_facturar),
+                'total':       float(proc.valor_facturar) * int(proc.cantidad),
+            })
+
+        # Datos del consultorio (tenant)
+        from django.db import connection
+        tenant = getattr(connection, 'tenant', None)
+
         return {
-            'paciente': obj.consulta.paciente.nombre_completo,
-            'fecha': obj.consulta.fecha_atencion,
-            'cups': obj.consulta.cups_principal,
-            'diagnostico': obj.consulta.diagnostico_principal,
+            'paciente':          paciente.nombre_completo,
+            'paciente_doc':      f'{paciente.tipo_identificacion}: {paciente.numero_identificacion}',
+            'fecha':             consulta.fecha_atencion,
+            'cups':              consulta.cups_principal,
+            'diagnostico':       consulta.diagnostico_principal,
+            'medico':            consulta.medico.usuario.get_full_name() if consulta.medico else '',
+            'num_autorizacion':  consulta.numero_autorizacion or '',
+            'items':             items,
+            # EPS / convenio
+            'eps_nombre':        convenio.aseguradora.nombre if convenio else '',
+            'eps_nit':           convenio.aseguradora.nit if convenio else '',
+            'regimen':           paciente.regimen,
+            'num_contrato':      convenio.numero_contrato if convenio else '',
+            'a_cobrar_eps':      float(obj.total) - float(obj.valor_copago or 0),
+            # Consultorio
+            'consultorio_nombre':        getattr(tenant, 'nombre', '') if tenant else '',
+            'consultorio_nit':           getattr(tenant, 'nit', '') if tenant else '',
+            'consultorio_cod_prestador': getattr(tenant, 'codigo_prestador', '') if tenant else '',
+            'consultorio_direccion':     getattr(tenant, 'direccion', '') if tenant else '',
+            'consultorio_tel':           getattr(tenant, 'telefono', '') if tenant else '',
         }
 
     def get_tiene_rips(self, obj):
