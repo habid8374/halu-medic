@@ -47,9 +47,13 @@ export function Cie10Autocomplete({ label, value, onChange, error, placeholder, 
     setLoading(true)
     try {
       const { data } = await cie10API.buscar(q)
-      setResults(data.results ?? data)
+      const items = data.results ?? data
+      setResults(Array.isArray(items) ? items : [])
       setOpen(true)
-    } catch { /* ignore */ } finally { setLoading(false) }
+    } catch (err) {
+      console.error('Error buscando CIE-10:', err)
+      setResults([])
+    } finally { setLoading(false) }
   }, [value])
 
   useEffect(() => {

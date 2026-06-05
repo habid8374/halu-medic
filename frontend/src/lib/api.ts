@@ -153,13 +153,13 @@ export const facturasAPI = {
 export const cupsAPI = {
   list:   (params?: Record<string, unknown>) => api.get('/api/cups/', { params }),
   get:    (codigo: string) => api.get(`/api/cups/${codigo}/`),
-  buscar: (q: string) => api.get('/api/cups/', { params: { search: q } }),
+  buscar: (q: string) => api.get('/api/cups/', { params: { search: q, page_size: 50 } }),
 }
 
 export const cie10API = {
   list:   (params?: Record<string, unknown>) => api.get('/api/cie10/', { params }),
   get:    (codigo: string) => api.get(`/api/cie10/${codigo}/`),
-  buscar: (q: string) => api.get('/api/cie10/', { params: { search: q } }),
+  buscar: (q: string) => api.get('/api/cie10/', { params: { search: q, page_size: 50 } }),
 }
 
 // ── Tarifarios ────────────────────────────────────────────────────────────────

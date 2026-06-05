@@ -47,9 +47,13 @@ export function CupsAutocomplete({ label, value, descripcion, onChange, error, p
     setLoading(true)
     try {
       const { data } = await cupsAPI.buscar(q)
-      setResults(data.results ?? data)
+      const items = data.results ?? data
+      setResults(Array.isArray(items) ? items : [])
       setOpen(true)
-    } catch { /* ignore */ } finally { setLoading(false) }
+    } catch (err) {
+      console.error('Error buscando CUPS:', err)
+      setResults([])
+    } finally { setLoading(false) }
   }, [value])
 
   useEffect(() => {
