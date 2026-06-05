@@ -65,8 +65,8 @@ MIDDLEWARE = [
     'apps.suscripciones.middleware.SuscripcionActivaMiddleware',  # Bloqueo por vencimiento
 ]
 
-ROOT_URLCONF = 'backend.config.urls'
-PUBLIC_SCHEMA_URLCONF = 'backend.config.urls_public'
+ROOT_URLCONF = 'config.urls'
+PUBLIC_SCHEMA_URLCONF = 'config.urls_public'
 
 # ── Templates ─────────────────────────────────────────────────────────────────
 TEMPLATES = [
@@ -85,7 +85,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'backend.config.wsgi.application'
+WSGI_APPLICATION = 'config.wsgi.application'
 
 # ── Base de datos ─────────────────────────────────────────────────────────────
 DATABASES = {
