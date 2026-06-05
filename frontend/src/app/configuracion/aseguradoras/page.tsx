@@ -132,19 +132,25 @@ export default function AseguradorasPage() {
   return (
     <div className="animate-fade-in max-w-4xl">
       {/* Header */}
-      <div className="px-4 pt-16 pb-4 lg:px-8 lg:pt-8">
-        <div className="flex items-center gap-3 mb-1">
+      <div className="px-4 pt-16 pb-2 lg:px-8 lg:pt-8">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3">
+          <Link href="/configuracion" className="hover:text-halu-600 transition-colors">Configuración</Link>
+          <span>/</span>
+          <span className="text-slate-700 font-medium">Aseguradoras</span>
+        </div>
+        <div className="flex items-center gap-3">
           <Link href="/configuracion" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <h1 className="text-xl lg:text-2xl font-bold text-slate-900">Aseguradoras</h1>
-          <div className="flex-1" />
+          <h1 className="text-xl lg:text-2xl font-bold text-slate-900 flex-1">Aseguradoras</h1>
           <Button onClick={abrirNueva} className="text-sm px-3 py-2">
             <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Nueva</span>
+            <span className="hidden sm:inline">Nueva aseguradora</span>
+            <span className="sm:hidden">Nueva</span>
           </Button>
         </div>
-        <p className="text-xs text-slate-500 ml-11">EPS, prepagadas, ARL y SOAT · Asigna tarifario por aseguradora</p>
+        <p className="text-xs text-slate-500 mt-1 ml-11">EPS, prepagadas, ARL y SOAT · Asigna el tarifario que aplica a cada una</p>
       </div>
 
       <div className="px-4 lg:px-8 pb-8">

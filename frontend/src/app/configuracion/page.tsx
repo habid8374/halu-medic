@@ -8,7 +8,7 @@ import Link from 'next/link'
 import {
   Building2, Shield, FileText,
   Save, Eye, EyeOff, CheckCircle, AlertCircle,
-  Hash, Calendar, Tag, AlignLeft, Zap, DollarSign, ArrowRight, ShieldCheck,
+  Hash, Calendar, Tag, AlignLeft, Zap, DollarSign, ShieldCheck,
 } from 'lucide-react'
 import { TarifariosTab } from '@/components/configuracion/TarifariosTab'
 
@@ -36,10 +36,12 @@ interface ConfigData {
 }
 
 const TABS = [
-  { id: 'general',     label: 'Datos del consultorio', icon: Building2 },
-  { id: 'factus',      label: 'Facturación electrónica', icon: Zap },
-  { id: 'resolucion',  label: 'Resolución DIAN', icon: FileText },
-  { id: 'tarifarios',  label: 'Tarifarios', icon: DollarSign },
+  { id: 'general',      label: 'Consultorio',   icon: Building2,  link: null },
+  { id: 'factus',       label: 'Facturación',   icon: Zap,        link: null },
+  { id: 'resolucion',   label: 'Resolución',    icon: FileText,   link: null },
+  { id: 'tarifarios',   label: 'Tarifarios',    icon: DollarSign, link: null },
+  { id: 'aseguradoras', label: 'Aseguradoras',  icon: ShieldCheck, link: '/configuracion/aseguradoras' },
+  { id: 'convenios',    label: 'Convenios EPS', icon: FileText,   link: '/configuracion/convenios' },
 ]
 
 export default function ConfiguracionPage() {
@@ -121,39 +123,17 @@ export default function ConfiguracionPage() {
         )}
       </div>
 
-      {/* ── Accesos directos a secciones ── visible siempre arriba */}
-      <div className="px-4 lg:px-8 mb-4">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Secciones</p>
-        <div className="grid grid-cols-2 gap-3">
-          <Link href="/configuracion/aseguradoras">
-            <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl p-3.5 hover:border-halu-300 hover:shadow-sm transition-all group active:scale-95">
-              <div className="w-9 h-9 bg-halu-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-halu-100 transition-colors">
-                <ShieldCheck className="w-4 h-4 text-halu-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-slate-900 text-sm leading-tight">Aseguradoras</p>
-                <p className="text-xs text-slate-400 leading-tight mt-0.5">EPS · ARL · SOAT</p>
-              </div>
-            </div>
-          </Link>
-          <Link href="/configuracion/convenios">
-            <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl p-3.5 hover:border-halu-300 hover:shadow-sm transition-all group active:scale-95">
-              <div className="w-9 h-9 bg-teal-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-teal-100 transition-colors">
-                <FileText className="w-4 h-4 text-teal-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-slate-900 text-sm leading-tight">Convenios EPS</p>
-                <p className="text-xs text-slate-400 leading-tight mt-0.5">Contratos · CUCON</p>
-              </div>
-            </div>
-          </Link>
-        </div>
-      </div>
-
-      {/* Tabs — scroll horizontal en móvil */}
+      {/* Tabs — scroll horizontal en móvil, incluye links a sub-páginas */}
       <div className="px-4 lg:px-8 mb-4">
         <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto scrollbar-none">
-          {TABS.map(t => (
+          {TABS.map(t => t.link ? (
+            <Link key={t.id} href={t.link}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs lg:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 text-slate-500 hover:text-slate-700 hover:bg-white/60"
+            >
+              <t.icon className="w-3.5 h-3.5" />
+              {t.label}
+            </Link>
+          ) : (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
