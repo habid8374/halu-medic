@@ -156,7 +156,7 @@ def _items_desde_consulta(factura_obj) -> list:
             'tax_rate': '0.00',
             'unit_measure_code': '94',
             'standard_code': '1',
-            'taxes': [],
+            'taxes': [{'tax_rate': '0.00', 'tax_code': '01'}],
         })
 
     return items
