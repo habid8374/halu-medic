@@ -57,7 +57,7 @@ TENANT_DOMAIN_MODEL = 'tenants.Dominio'
 MIDDLEWARE = [
     'config.health.HealthCheckMiddleware',               # ANTES del tenant middleware
     'corsheaders.middleware.CorsMiddleware',             # ANTES del tenant middleware para OPTIONS
-    'django_tenants.middleware.main.TenantMainMiddleware',
+    'config.tenant_middleware.FallbackToPublicMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
