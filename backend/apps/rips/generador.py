@@ -275,9 +275,6 @@ class GeneradorRIPS:
         if not rips.get('numDocumentoIdObligado'):
             errores.append('numDocumentoIdObligado es obligatorio')
 
-        if not rips.get('numFactura'):
-            errores.append('numFactura es obligatorio (CUFE de la FEV)')
-
         # Validar CUCON si hay convenio (Res. 948/2026)
         if self.convenio:
             cucon = rips.get('cucon', '')

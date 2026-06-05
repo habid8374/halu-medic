@@ -473,29 +473,15 @@ class FacturaViewSet(viewsets.ModelViewSet):
             factura.errores_dian = []
             factura.save(update_fields=['estado', 'errores_dian'])
 
-            # 1. Generar y validar RIPS
-            gen  = GeneradorRIPS(factura)
-            rips = gen.generar()
-            errs = gen.validar(rips)
-            if errs:
-                factura.estado       = EstadoFactura.ERROR
-                factura.errores_dian = errs
-                factura.save(update_fields=['estado', 'errores_dian'])
-                return Response(
-                    {'error': 'RIPS inválido', 'detalles': errs},
-                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                )
+            # 1. Enviar a Factus primero (Factus asigna el número de FEV)
+            factura.estado = EstadoFactura.ENVIADA
+            factura.save(update_fields=['estado'])
 
-            factura.rips_json = rips
-            factura.estado    = EstadoFactura.ENVIADA
-            factura.save(update_fields=['rips_json', 'estado'])
-
-            # 2. Enviar a Factus
             payload = construir_payload_auto(factura)
             with FactusSaludClient() as client:
                 resultado = client.crear_factura_salud(payload)
 
-            # 3. Guardar resultado
+            # 2. Guardar resultado de Factus
             factura.numero_factus    = resultado.get('number', '')
             factura.cufe             = resultado.get('cufe', '')
             factura.qr_url           = resultado.get('qr', '')
@@ -505,6 +491,16 @@ class FacturaViewSet(viewsets.ModelViewSet):
             factura.fecha_validacion = tz.now()
             factura.errores_dian     = resultado.get('errors', [])
             factura.save()
+
+            # 3. Generar RIPS con el numFactura real (para reportar al MUV MinSalud)
+            if factura.numero_factus:
+                try:
+                    gen  = GeneradorRIPS(factura)
+                    rips = gen.generar()
+                    factura.rips_json = rips
+                    factura.save(update_fields=['rips_json'])
+                except Exception as e_rips:
+                    logger.warning(f'RIPS generación fallida (no crítico): {e_rips}')
 
             if factura.estado == EstadoFactura.VALIDADA:
                 try:

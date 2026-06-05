@@ -42,27 +42,13 @@ def emitir_factura(self, factura_id: str):
             logger.info(f'Factura {factura_id} ya validada (CUFE={factura.cufe[:20]}...). Ignorando reintento.')
             return {'status': 'ya_validada', 'cufe': factura.cufe, 'numero': factura.numero_factus}
 
-        # 1. Generar RIPS
-        gen   = GeneradorRIPS(factura)
-        rips  = gen.generar()
-        errs  = gen.validar(rips)
-        if errs:
-            logger.error(f'[Factura {factura_id}] RIPS inválido: {errs}')
-            factura.estado = EstadoFactura.ERROR
-            factura.errores_dian = errs
-            factura.save(update_fields=['estado', 'errores_dian'])
-            return {'status': 'error_rips', 'errores': errs}
-
-        factura.rips_json = rips
-        factura.save(update_fields=['rips_json'])
-
-        # 2. Construir payload y emitir
+        # 1. Enviar a Factus (Factus asigna el número de FEV)
         payload = construir_payload_auto(factura)
 
         with FactusSaludClient() as client:
             resultado = client.crear_factura_salud(payload)
 
-        # 3. Guardar resultado completo de Factus
+        # 2. Guardar resultado completo de Factus
         factura.numero_factus    = resultado.get('number', '')
         factura.cufe             = resultado.get('cufe', '')
         factura.qr_url           = resultado.get('qr', '')
@@ -72,6 +58,16 @@ def emitir_factura(self, factura_id: str):
         factura.fecha_validacion = timezone.now()
         factura.errores_dian     = resultado.get('errors', [])
         factura.save()
+
+        # 3. Generar RIPS con el numFactura real (para reportar al MUV MinSalud)
+        if factura.numero_factus:
+            try:
+                gen  = GeneradorRIPS(factura)
+                rips = gen.generar()
+                factura.rips_json = rips
+                factura.save(update_fields=['rips_json'])
+            except Exception as e_rips:
+                logger.warning(f'[Factura {factura_id}] RIPS generación: {e_rips}')
 
         # 4. Cerrar consulta
         factura.consulta.estado = 'facturada'
