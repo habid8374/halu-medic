@@ -1,34 +1,30 @@
-'use client'
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/auth-context'
-import Sidebar from '@/components/layout/Sidebar'
+import type { Metadata } from 'next'
+import './globals.css'
+import { AuthProvider } from '@/lib/auth-context'
+import { Toaster } from 'react-hot-toast'
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { usuario, isLoading } = useAuth()
-  const router = useRouter()
+export const metadata: Metadata = {
+  title: 'Halu Medic — Gestión clínica y facturación electrónica',
+  description: 'Software SaaS para médicos especialistas y clínicas en Colombia',
+}
 
-  useEffect(() => {
-    if (!isLoading && !usuario) router.replace('/login')
-  }, [usuario, isLoading, router])
-
-  if (isLoading || !usuario) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-8 h-8 border-4 border-halu-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Sidebar />
-      <main
-        className="ml-[var(--sidebar-width)] min-h-screen"
-        style={{ marginLeft: 'var(--sidebar-width)' }}
-      >
-        {children}
-      </main>
-    </div>
+    <html lang="es">
+      <body>
+        <AuthProvider>
+          {children}
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: { borderRadius: '12px', fontSize: '14px' },
+              success: { style: { background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' } },
+              error:   { style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' } },
+            }}
+          />
+        </AuthProvider>
+      </body>
+    </html>
   )
 }

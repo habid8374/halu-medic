@@ -1,0 +1,175 @@
+/**
+ * Cliente HTTP centralizado para la API de Halu Medic.
+ * Maneja: autenticación JWT, refresh automático, errores, y todos los endpoints.
+ */
+import axios, { AxiosInstance, AxiosError } from 'axios'
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+// ── Instancia base ────────────────────────────────────────────────────────────
+
+const api: AxiosInstance = axios.create({
+  baseURL: BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 15000,
+})
+
+// ── Interceptor: adjunta el token de acceso ───────────────────────────────────
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token')
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+
+// ── Interceptor: refresca token automáticamente si expira ─────────────────────
+
+let refreshing = false
+let cola: Array<(token: string) => void> = []
+
+api.interceptors.response.use(
+  (res) => res,
+  async (error: AxiosError) => {
+    const original = error.config as any
+    if (error.response?.status === 401 && !original._retry) {
+      if (refreshing) {
+        return new Promise((resolve) => {
+          cola.push((token) => {
+            original.headers.Authorization = `Bearer ${token}`
+            resolve(api(original))
+          })
+        })
+      }
+      original._retry = true
+      refreshing = true
+      try {
+        const refresh = localStorage.getItem('refresh_token')
+        if (!refresh) throw new Error('Sin refresh token')
+        const { data } = await axios.post(`${BASE_URL}/api/auth/refresh/`, { refresh })
+        const newAccess = data.access
+        localStorage.setItem('access_token', newAccess)
+        cola.forEach((cb) => cb(newAccess))
+        cola = []
+        original.headers.Authorization = `Bearer ${newAccess}`
+        return api(original)
+      } catch {
+        localStorage.clear()
+        window.location.href = '/login'
+      } finally {
+        refreshing = false
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
+// ── Helper: extraer mensaje de error de la API ────────────────────────────────
+
+export function mensajeError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data
+    if (typeof data === 'string') return data
+    if (data?.detail) return data.detail
+    if (data?.error) return data.error
+    if (data?.mensaje) return data.mensaje
+    if (data?.non_field_errors) return data.non_field_errors[0]
+    const firstField = Object.values(data || {})[0]
+    if (Array.isArray(firstField)) return firstField[0] as string
+  }
+  return 'Error inesperado. Intenta de nuevo.'
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+
+export const authAPI = {
+  login: (username: string, password: string) =>
+    api.post('/api/auth/login/', { username, password }),
+
+  logout: (refresh: string) =>
+    api.post('/api/auth/logout/', { refresh }),
+
+  me: () =>
+    api.get('/api/auth/me/'),
+
+  recuperarPassword: (email: string) =>
+    api.post('/api/auth/recuperar-password/', { email }),
+
+  confirmarPassword: (uid: string, token: string, password: string, password2: string) =>
+    api.post('/api/auth/confirmar-password/', { uid, token, password, password2 }),
+}
+
+// ── Configuración del consultorio ─────────────────────────────────────────────
+
+export const consultorioAPI = {
+  get: () => api.get('/api/consultorio/configuracion/'),
+  update: (data: Record<string, unknown>) => api.put('/api/consultorio/configuracion/', data),
+}
+
+// ── Pacientes ─────────────────────────────────────────────────────────────────
+
+export const pacientesAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/pacientes/', { params }),
+  get:    (id: string) => api.get(`/api/pacientes/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/pacientes/', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/api/pacientes/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/pacientes/${id}/`),
+}
+
+// ── Citas ─────────────────────────────────────────────────────────────────────
+
+export const citasAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/citas/', { params }),
+  get:    (id: string) => api.get(`/api/citas/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/citas/', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/api/citas/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/citas/${id}/`),
+}
+
+// ── Consultas ─────────────────────────────────────────────────────────────────
+
+export const consultasAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/consultas/', { params }),
+  get:    (id: string) => api.get(`/api/consultas/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/consultas/', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/api/consultas/${id}/`, data),
+}
+
+// ── Facturación ───────────────────────────────────────────────────────────────
+
+export const facturasAPI = {
+  list:        (params?: Record<string, unknown>) => api.get('/api/facturacion/facturas/', { params }),
+  get:         (id: string) => api.get(`/api/facturacion/facturas/${id}/`),
+  create:      (data: Record<string, unknown>) => api.post('/api/facturacion/facturas/', data),
+  emitir:      (id: string) => api.post(`/api/facturacion/facturas/${id}/emitir/`),
+  anular:      (id: string, motivo: string) => api.post(`/api/facturacion/facturas/${id}/anular/`, { motivo }),
+  sincronizar: (id: string) => api.post(`/api/facturacion/facturas/${id}/sincronizar/`),
+  pdf:         (id: string) => api.get(`/api/facturacion/facturas/${id}/pdf/`),
+  xml:         (id: string) => api.get(`/api/facturacion/facturas/${id}/xml/`),
+  rips:        (id: string) => api.get(`/api/facturacion/facturas/${id}/rips/`),
+}
+
+// ── Usuarios ──────────────────────────────────────────────────────────────────
+
+export const usuariosAPI = {
+  list:             (params?: Record<string, unknown>) => api.get('/api/usuarios/', { params }),
+  get:              (id: string) => api.get(`/api/usuarios/${id}/`),
+  create:           (data: Record<string, unknown>) => api.post('/api/usuarios/', data),
+  update:           (id: string, data: Record<string, unknown>) => api.put(`/api/usuarios/${id}/`, data),
+  cambiarPassword:  (id: string, data: Record<string, unknown>) => api.post(`/api/usuarios/${id}/cambiar_password/`, data),
+  desactivar:       (id: string) => api.post(`/api/usuarios/${id}/desactivar/`),
+}
+
+// ── Suscripciones (superadmin) ────────────────────────────────────────────────
+
+export const suscripcionesAPI = {
+  list:      () => api.get('/api/admin/suscripciones/'),
+  get:       (id: string) => api.get(`/api/admin/suscripciones/${id}/`),
+  create:    (data: Record<string, unknown>) => api.post('/api/admin/suscripciones/', data),
+  update:    (id: string, data: Record<string, unknown>) => api.put(`/api/admin/suscripciones/${id}/`, data),
+  renovar:   (id: string, data: Record<string, unknown>) => api.post(`/api/admin/suscripciones/${id}/renovar/`, data),
+  suspender: (id: string) => api.post(`/api/admin/suscripciones/${id}/suspender/`),
+  activar:   (id: string) => api.post(`/api/admin/suscripciones/${id}/activar/`),
+  pagos:     (id: string) => api.get(`/api/admin/suscripciones/${id}/pagos/`),
+}
+
+export default api
