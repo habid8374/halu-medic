@@ -108,7 +108,8 @@ export function CupsAutocomplete({ label, value, descripcion, onChange, error, p
           </button>
         )}
         {open && results.length > 0 && (
-          <div className="absolute z-50 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+          <div className="absolute z-50 top-full mt-1 left-0 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-64 overflow-y-auto"
+            style={{ minWidth: '100%', width: 'max-content', maxWidth: '90vw' }}>
             {results.map(item => (
               <button
                 key={item.codigo}
@@ -117,20 +118,20 @@ export function CupsAutocomplete({ label, value, descripcion, onChange, error, p
                 className="w-full text-left px-4 py-2.5 hover:bg-halu-50 flex items-start gap-3 border-b border-slate-50 last:border-0 transition-colors"
               >
                 <span className="font-mono font-semibold text-halu-700 text-xs mt-0.5 flex-shrink-0 w-16">{item.codigo}</span>
-                <div className="min-w-0 flex-1">
+                <div className="flex-1">
                   <p className="text-sm text-slate-800 leading-tight">{item.descripcion}</p>
                   {item.nombre_servicio && (
                     <p className="text-xs text-slate-400 mt-0.5">{item.nombre_servicio}</p>
                   )}
                 </div>
-                {item.codigo === value && <Check className="w-3.5 h-3.5 text-emerald-500 ml-auto flex-shrink-0 mt-0.5" />}
+                {item.codigo === value && <Check className="w-3.5 h-3.5 text-emerald-500 ml-3 flex-shrink-0 mt-0.5" />}
               </button>
             ))}
           </div>
         )}
       </div>
       {selected && descripcion && (
-        <p className="text-xs text-slate-500 pl-1 truncate">{descripcion}</p>
+        <p className="text-xs text-slate-500 pl-1 line-clamp-2">{descripcion}</p>
       )}
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
