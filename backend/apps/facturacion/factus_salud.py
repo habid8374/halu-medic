@@ -72,9 +72,17 @@ class ModalidadPago:
 
 
 # Mapeo tipo doc → ID Factus
+# Códigos de documento DIAN usados por Factus v2
 _DOC_ID = {
-    'CC': '3', 'CE': '5', 'TI': '7', 'RC': '8',
-    'PA': '4', 'NIT': '6', 'MS': '11', 'AS': '12',
+    'CC': '13',  # Cédula de ciudadanía
+    'CE': '22',  # Cédula de extranjería
+    'TI': '12',  # Tarjeta de identidad
+    'RC': '11',  # Registro civil
+    'PA': '41',  # Pasaporte
+    'NIT': '31', # NIT
+    'TE': '21',  # Tarjeta de extranjería
+    'MS': '13',  # Menor sin identificación → CC
+    'AS': '13',  # Adulto sin identificación → CC
 }
 
 
@@ -148,6 +156,7 @@ def _items_desde_consulta(factura_obj) -> list:
             'tax_rate': '0.00',
             'unit_measure_code': '94',
             'standard_code': '1',
+            'taxes': [],
         })
 
     return items
@@ -170,7 +179,7 @@ def construir_payload_ss_cufe(factura_obj) -> dict:
         'reference_code': str(factura_obj.id),
         'observation': factura_obj.observaciones or _leyenda_grafica(),
         'payment_method_code': '10',
-        'payment_details': [{'payment_method_code': '10', 'due_date': consulta.fecha_atencion.strftime('%Y-%m-%d'), 'value': float(factura_obj.total)}],
+        'payment_details': [{'payment_method_code': '10', 'payment_form': '1', 'due_date': consulta.fecha_atencion.strftime('%Y-%m-%d'), 'amount': float(factura_obj.total)}],
 
         # ── Adquirente = EPS ──────────────────────────────────────────────────
         'customer': {
@@ -246,7 +255,7 @@ def construir_payload_ss_sin_aporte(factura_obj) -> dict:
         'reference_code': str(factura_obj.id),
         'observation': factura_obj.observaciones or _leyenda_grafica(),
         'payment_method_code': '10',
-        'payment_details': [{'payment_method_code': '10', 'due_date': consulta.fecha_atencion.strftime('%Y-%m-%d'), 'value': float(factura_obj.total)}],
+        'payment_details': [{'payment_method_code': '10', 'payment_form': '1', 'due_date': consulta.fecha_atencion.strftime('%Y-%m-%d'), 'amount': float(factura_obj.total)}],
 
         'customer': {
             'identification': paciente.numero_identificacion,
