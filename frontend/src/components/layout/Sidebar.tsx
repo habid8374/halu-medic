@@ -7,33 +7,47 @@ import toast from 'react-hot-toast'
 import {
   LayoutDashboard, Users, CalendarDays,
   ClipboardList, Receipt, BarChart3, Settings,
-  LogOut, ChevronRight, Building2, ShieldCheck, FileJson, ListTree, BookOpen, Stethoscope, FileSpreadsheet,
+  LogOut, ChevronRight, ChevronDown, Building2, ShieldCheck,
+  FileJson, ListTree, BookOpen, Stethoscope, FileSpreadsheet,
   Menu, X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
-interface NavItem {
+interface SubItem {
   href: string
+  label: string
+}
+
+interface NavItem {
+  href?: string
   label: string
   icon: React.ElementType
   requiere?: string
   soloSuperadmin?: boolean
+  children?: SubItem[]
 }
 
 const navItems: NavItem[] = [
-  { href: '/dashboard',     label: 'Inicio',        icon: LayoutDashboard },
-  { href: '/pacientes',     label: 'Pacientes',     icon: Users },
-  { href: '/citas',         label: 'Agenda',        icon: CalendarDays,  requiere: 'puede_gestionar_citas' },
-  { href: '/consultas',       label: 'Consultas',       icon: ClipboardList,  requiere: 'puede_ver_clinica' },
-  { href: '/historia-clinica', label: 'Historia Clínica', icon: Stethoscope, requiere: 'puede_ver_clinica' },
-  { href: '/facturacion',   label: 'Facturación',   icon: Receipt,          requiere: 'puede_facturar' },
-  { href: '/facturacion/pgp', label: 'Facturación PGP', icon: FileSpreadsheet, requiere: 'puede_facturar' },
-  { href: '/rips',          label: 'RIPS',          icon: FileJson,         requiere: 'puede_facturar' },
-  { href: '/cups',          label: 'CUPS',          icon: ListTree },
-  { href: '/cie10',         label: 'CIE-10',        icon: BookOpen },
-  { href: '/reportes',      label: 'Reportes',      icon: BarChart3,     requiere: 'es_admin' },
-  { href: '/configuracion', label: 'Configuración', icon: Settings,      requiere: 'es_admin' },
-  { href: '/superadmin',    label: 'Superadmin',    icon: ShieldCheck,   soloSuperadmin: true },
+  { href: '/dashboard',      label: 'Inicio',          icon: LayoutDashboard },
+  { href: '/pacientes',      label: 'Pacientes',        icon: Users },
+  { href: '/citas',          label: 'Agenda',           icon: CalendarDays,   requiere: 'puede_gestionar_citas' },
+  { href: '/consultas',      label: 'Consultas',        icon: ClipboardList,  requiere: 'puede_ver_clinica' },
+  { href: '/historia-clinica', label: 'Historia Clínica', icon: Stethoscope,  requiere: 'puede_ver_clinica' },
+  {
+    label: 'Facturación',
+    icon: Receipt,
+    requiere: 'puede_facturar',
+    children: [
+      { href: '/facturacion',     label: 'Por evento (FEV)' },
+      { href: '/facturacion/pgp', label: 'PGP / Capitado' },
+    ],
+  },
+  { href: '/rips',           label: 'RIPS',             icon: FileJson,       requiere: 'puede_facturar' },
+  { href: '/cups',           label: 'CUPS',             icon: ListTree },
+  { href: '/cie10',          label: 'CIE-10',           icon: BookOpen },
+  { href: '/reportes',       label: 'Reportes',         icon: BarChart3,      requiere: 'es_admin' },
+  { href: '/configuracion',  label: 'Configuración',    icon: Settings,       requiere: 'es_admin' },
+  { href: '/superadmin',     label: 'Superadmin',       icon: ShieldCheck,    soloSuperadmin: true },
 ]
 
 const rolColor: Record<string, string> = {
@@ -51,6 +65,12 @@ export default function Sidebar() {
   const router   = useRouter()
   const [open, setOpen] = useState(false)
 
+  // Submenús abiertos — auto-abre si la ruta activa está dentro
+  const isFacturacionActive = pathname.startsWith('/facturacion')
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
+    Facturación: isFacturacionActive,
+  })
+
   if (!usuario) return null
 
   const handleLogout = async () => {
@@ -59,9 +79,13 @@ export default function Sidebar() {
     router.replace('/login')
   }
 
+  const toggleMenu = (label: string) => {
+    setOpenMenus(prev => ({ ...prev, [label]: !prev[label] }))
+  }
+
   const filteredNav = navItems.filter((item) => {
     if (item.soloSuperadmin) return usuario.permisos.es_superadmin
-    if (item.requiere) return usuario.permisos[item.requiere as keyof typeof usuario.permisos]
+    if (item.requiere) return !!usuario.permisos[item.requiere as keyof typeof usuario.permisos]
     return true
   })
 
@@ -89,11 +113,65 @@ export default function Sidebar() {
       {/* Navegación */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {filteredNav.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + '/')
+          // Item con submenú
+          if (item.children) {
+            const isOpen = openMenus[item.label]
+            const anyChildActive = item.children.some(c => pathname === c.href || pathname.startsWith(c.href + '/'))
+            return (
+              <div key={item.label}>
+                <button
+                  onClick={() => toggleMenu(item.label)}
+                  className={clsx(
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group',
+                    anyChildActive
+                      ? 'bg-halu-50 text-halu-700'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  )}
+                >
+                  <item.icon className={clsx('w-4 h-4 flex-shrink-0 transition-colors',
+                    anyChildActive ? 'text-halu-600' : 'text-slate-400 group-hover:text-slate-600'
+                  )} />
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {isOpen
+                    ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                    : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  }
+                </button>
+                {isOpen && (
+                  <div className="ml-4 mt-0.5 space-y-0.5 border-l-2 border-slate-100 pl-3">
+                    {item.children.map(child => {
+                      const childActive = pathname === child.href || pathname.startsWith(child.href + '/')
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={() => setOpen(false)}
+                          className={clsx(
+                            'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all',
+                            childActive
+                              ? 'bg-halu-50 text-halu-700 font-medium'
+                              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                          )}
+                        >
+                          <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0',
+                            childActive ? 'bg-halu-500' : 'bg-slate-300'
+                          )} />
+                          {child.label}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          // Item normal
+          const active = pathname === item.href || pathname.startsWith(item.href! + '/')
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={item.href!}
               onClick={() => setOpen(false)}
               className={clsx(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group',
