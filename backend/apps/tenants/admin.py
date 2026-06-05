@@ -35,6 +35,12 @@ class ConsultorioAdmin(admin.ModelAdmin):
             'description': 'Credenciales Factus exclusivas de este prestador. '
                            'Cada consultorio se habilita ante la DIAN con su propia cuenta.',
         }),
+        ('Resolución DIAN y numeración de la factura', {
+            'fields': ('resolucion_dian', 'resolucion_fecha', 'factura_prefijo',
+                       'factura_rango_desde', 'factura_rango_hasta', 'factura_leyenda'),
+            'description': 'Datos de la resolución DIAN de facturación electrónica '
+                           'y la leyenda que aparece en la representación gráfica (PDF).',
+        }),
         ('Auditoría', {
             'fields': ('creado_en', 'actualizado_en'),
             'classes': ('collapse',),

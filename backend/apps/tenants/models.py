@@ -46,7 +46,22 @@ class Consultorio(TenantMixin):
     factus_client_secret   = models.CharField(max_length=255, blank=True)
     factus_username        = models.CharField(max_length=150, blank=True, help_text='Email/usuario Factus del consultorio')
     factus_password        = models.CharField(max_length=255, blank=True)
-    factus_rango_numeracion_id = models.IntegerField(null=True, blank=True)
+    factus_rango_numeracion_id = models.IntegerField(null=True, blank=True,
+                                  help_text='ID del rango de numeración en Factus')
+
+    # ── Resolución DIAN y numeración (propias de cada consultorio) ────────────
+    resolucion_dian        = models.CharField(max_length=50, blank=True,
+                              help_text='Número de la resolución DIAN de facturación')
+    resolucion_fecha       = models.DateField(null=True, blank=True,
+                              help_text='Fecha de la resolución DIAN')
+    factura_prefijo        = models.CharField(max_length=10, blank=True,
+                              help_text='Prefijo de la factura (ej: SETP, FE)')
+    factura_rango_desde    = models.BigIntegerField(null=True, blank=True,
+                              help_text='Número inicial autorizado en la resolución')
+    factura_rango_hasta    = models.BigIntegerField(null=True, blank=True,
+                              help_text='Número final autorizado en la resolución')
+    factura_leyenda        = models.TextField(blank=True,
+                              help_text='Leyenda/texto legal que aparece en la representación gráfica (PDF)')
 
     creado_en       = models.DateTimeField(auto_now_add=True)
     actualizado_en  = models.DateTimeField(auto_now=True)

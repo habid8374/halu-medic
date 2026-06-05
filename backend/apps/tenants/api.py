@@ -33,6 +33,14 @@ class ConfiguracionConsultorioSerializer(serializers.Serializer):
     factus_password            = serializers.CharField(required=False, allow_blank=True, write_only=True)
     factus_rango_numeracion_id = serializers.IntegerField(required=False, allow_null=True)
 
+    # Resolución DIAN y numeración de la factura
+    resolucion_dian            = serializers.CharField(required=False, allow_blank=True)
+    resolucion_fecha           = serializers.DateField(required=False, allow_null=True)
+    factura_prefijo            = serializers.CharField(required=False, allow_blank=True)
+    factura_rango_desde        = serializers.IntegerField(required=False, allow_null=True)
+    factura_rango_hasta        = serializers.IntegerField(required=False, allow_null=True)
+    factura_leyenda            = serializers.CharField(required=False, allow_blank=True)
+
 
 class ConfiguracionConsultorioView(APIView):
     """
@@ -46,6 +54,8 @@ class ConfiguracionConsultorioView(APIView):
         'municipio_codigo', 'telefono', 'email',
         'factus_base_url', 'factus_client_id', 'factus_client_secret',
         'factus_username', 'factus_password', 'factus_rango_numeracion_id',
+        'resolucion_dian', 'resolucion_fecha', 'factura_prefijo',
+        'factura_rango_desde', 'factura_rango_hasta', 'factura_leyenda',
     ]
 
     def get(self, request):
@@ -66,6 +76,13 @@ class ConfiguracionConsultorioView(APIView):
             'factus_username':            c.factus_username,
             'factus_rango_numeracion_id': c.factus_rango_numeracion_id,
             'factus_configurado':         c.factus_configurado,
+            # Resolución DIAN y numeración
+            'resolucion_dian':     c.resolucion_dian,
+            'resolucion_fecha':    c.resolucion_fecha,
+            'factura_prefijo':     c.factura_prefijo,
+            'factura_rango_desde': c.factura_rango_desde,
+            'factura_rango_hasta': c.factura_rango_hasta,
+            'factura_leyenda':     c.factura_leyenda,
         })
 
     def put(self, request):

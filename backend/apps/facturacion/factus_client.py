@@ -200,10 +200,16 @@ def construir_payload_consulta(factura_obj) -> dict:
             'standard_code_id': 1,
         })
 
+    _tenant = getattr(connection, 'tenant', None)
+    _rango = factura_obj.rango_numeracion_id or (
+        getattr(_tenant, 'factus_rango_numeracion_id', None) if _tenant else None
+    )
+    _leyenda = getattr(_tenant, 'factura_leyenda', '') if _tenant else ''
+
     payload = {
-        'numbering_range_id': factura_obj.rango_numeracion_id,
+        'numbering_range_id': _rango,
         'reference_code': str(factura_obj.id),
-        'observation': factura_obj.observaciones or '',
+        'observation': factura_obj.observaciones or _leyenda,
         'payment_method_code': '10',  # Efectivo por defecto
         'customer': {
             'identification': consulta.paciente.numero_identificacion,

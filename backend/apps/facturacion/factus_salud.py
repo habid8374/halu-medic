@@ -144,9 +144,9 @@ def construir_payload_ss_cufe(factura_obj) -> dict:
     payload = {
         # ── Identificación del documento ──────────────────────────────────────
         'operation_type_id': OpSalud.SS_CUFE,
-        'numbering_range_id': factura_obj.rango_numeracion_id,
+        'numbering_range_id': _rango_numeracion(factura_obj),
         'reference_code': str(factura_obj.id),
-        'observation': factura_obj.observaciones or '',
+        'observation': factura_obj.observaciones or _leyenda_grafica(),
         'payment_method_code': '10',  # Efectivo (crédito con EPS → código '1')
 
         # ── Adquirente = EPS ──────────────────────────────────────────────────
@@ -219,9 +219,9 @@ def construir_payload_ss_sin_aporte(factura_obj) -> dict:
 
     return {
         'operation_type_id': OpSalud.SS_SIN_APORTE,
-        'numbering_range_id': factura_obj.rango_numeracion_id,
+        'numbering_range_id': _rango_numeracion(factura_obj),
         'reference_code': str(factura_obj.id),
-        'observation': factura_obj.observaciones or '',
+        'observation': factura_obj.observaciones or _leyenda_grafica(),
         'payment_method_code': '10',
 
         'customer': {
@@ -342,3 +342,22 @@ def _codigo_prestador() -> str:
     if tenant and getattr(tenant, 'codigo_prestador', ''):
         return tenant.codigo_prestador
     return getattr(settings, 'CODIGO_PRESTADOR_RIPS', '0000000000')
+
+
+def _rango_numeracion(factura_obj) -> int:
+    """
+    ID del rango de numeración Factus.
+    Usa el de la factura; si no, cae al configurado en el consultorio.
+    """
+    if factura_obj.rango_numeracion_id:
+        return factura_obj.rango_numeracion_id
+    from django.db import connection
+    tenant = getattr(connection, 'tenant', None)
+    return getattr(tenant, 'factus_rango_numeracion_id', None) if tenant else None
+
+
+def _leyenda_grafica() -> str:
+    """Leyenda legal para la representación gráfica — propia de cada consultorio."""
+    from django.db import connection
+    tenant = getattr(connection, 'tenant', None)
+    return getattr(tenant, 'factura_leyenda', '') if tenant else ''
