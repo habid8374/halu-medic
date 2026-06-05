@@ -93,6 +93,37 @@ class CodigoCUPS(models.Model):
         return f'{self.codigo} — {self.descripcion}'
 
 
+class CatalogoMedicamento(models.Model):
+    """
+    Catálogo nacional de medicamentos del INVIMA.
+    Fuente: hoja CUM del Superhomologador MinSalud 2026.
+    El campo `cum` corresponde al expediente INVIMA (código único de medicamento).
+    Vive en el schema público (SHARED_APPS) — idéntico para todos los tenants.
+    """
+    cum                = models.CharField(max_length=20, primary_key=True,
+                                           help_text='Código Único de Medicamento (expediente INVIMA)')
+    principio_activo   = models.CharField(max_length=400)
+    concentracion      = models.CharField(max_length=150, blank=True,
+                                           help_text='Cantidad + unidad de medida + unidad de referencia')
+    forma_farmaceutica = models.CharField(max_length=150, blank=True)
+    registro_sanitario = models.CharField(max_length=60, blank=True,
+                                           help_text='Ej: INVIMA 2022M-0002654-R3')
+    vigente            = models.BooleanField(default=True,
+                                              help_text='False si el registro está vencido')
+
+    class Meta:
+        ordering = ['principio_activo']
+        verbose_name = 'Medicamento (catálogo CUM)'
+        verbose_name_plural = 'Medicamentos (catálogo CUM)'
+        indexes = [
+            models.Index(fields=['principio_activo']),
+            models.Index(fields=['vigente']),
+        ]
+
+    def __str__(self):
+        return f'{self.cum} — {self.principio_activo}'
+
+
 class CodigoCIE10(models.Model):
     """Diagnóstico CIE-10 (Clasificación Internacional de Enfermedades, 10.ª rev.)."""
 
