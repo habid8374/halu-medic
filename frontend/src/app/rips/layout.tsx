@@ -23,6 +23,7 @@ export default function RipsLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen bg-slate-50">
       <Sidebar />
+      <main className="lg:ml-[var(--sidebar-width)] min-h-screen">
         {children}
       </main>
     </div>
