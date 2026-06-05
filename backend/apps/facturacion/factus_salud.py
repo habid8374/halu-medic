@@ -82,9 +82,9 @@ class FactusSaludClient(FactusClient):
     """Extiende FactusClient con métodos para sector salud."""
 
     def crear_factura_salud(self, payload: dict) -> dict:
-        """POST /v1/bills/validate con campos health_* para SS-CUFE."""
+        """POST /v2/bills/validate con campos health_* para SS-CUFE."""
         response = self._client.post(
-            f'{self.base_url}/v1/bills/validate',
+            f'{self.base_url}/v2/bills/validate',
             json=payload,
             headers=self._headers(),
         )
