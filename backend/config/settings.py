@@ -12,6 +12,10 @@ SECRET_KEY = config('SECRET_KEY', default='dev-secret-key-cambiar-en-produccion'
 DEBUG = config('DEBUG', default=True, cast=bool)
 # '.localhost' permite todos los subdominios de tenant (demo.localhost, etc.)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,.localhost,127.0.0.1', cast=Csv())
+# Siempre permitir el dominio de Railway
+_RAILWAY = 'halu-medic-production.up.railway.app'
+if _RAILWAY not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS = list(ALLOWED_HOSTS) + [_RAILWAY]
 
 # ── Multi-tenancy ─────────────────────────────────────────────────────────────
 # Apps compartidas (schema "public") — datos del SaaS
