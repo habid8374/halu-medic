@@ -64,15 +64,7 @@ from apps.citas.models import Cita, Medico, Especialidad, Sala
 
 class CitaSerializer(serializers.ModelSerializer):
     paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
-    medico_nombre   = serializers.SerializerMethodField()
-
-    def get_medico_nombre(self, obj):
-        if obj.medico and obj.medico.usuario:
-            return obj.medico.usuario.get_full_name()
-        return None
-    medico           = serializers.PrimaryKeyRelatedField(
-        queryset=Medico.objects.all(), allow_null=True, required=False
-    )
+    medico_nombre   = serializers.CharField(source='medico.usuario.get_full_name', read_only=True)
     duracion_minutos = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -130,7 +122,7 @@ class CitaViewSet(viewsets.ModelViewSet):
 
 # ── CONSULTAS ─────────────────────────────────────────────────────────────────
 
-from apps.consultas.models import Consulta, Procedimiento, OrdenMedica
+from apps.consultas.models import Consulta, Procedimiento
 from apps.citas.models import Medico as MedicoModel
 
 
@@ -461,15 +453,60 @@ class FacturaViewSet(viewsets.ModelViewSet):
         factura.errores_dian = []
         factura.save(update_fields=['estado', 'errores_dian'])
 
-        from apps.facturacion.tasks import emitir_factura
-        factura.estado = EstadoFactura.ENVIADA
-        factura.save(update_fields=['estado'])
-        task = emitir_factura.delay(str(factura.id))
+        from apps.facturacion.factus_salud import FactusSaludClient, construir_payload_auto
+        from apps.facturacion.factus_client import FactusAPIError
+        from apps.rips.generador import GeneradorRIPS
+        from django.utils import timezone as tz
 
-        return Response({
-            'mensaje': 'Factura reenviada a Factus. Espera el CUFE.',
-            'task_id': task.id,
-        }, status=status.HTTP_202_ACCEPTED)
+        try:
+            gen  = GeneradorRIPS(factura)
+            rips = gen.generar()
+            errs = gen.validar(rips)
+            if errs:
+                factura.estado      = EstadoFactura.ERROR
+                factura.errores_dian = errs
+                factura.save(update_fields=['estado', 'errores_dian'])
+                return Response({'error': 'RIPS inválido', 'detalles': errs}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+            factura.rips_json = rips
+            factura.estado    = EstadoFactura.ENVIADA
+            factura.save(update_fields=['rips_json', 'estado'])
+
+            payload = construir_payload_auto(factura)
+            with FactusSaludClient() as client:
+                resultado = client.crear_factura_salud(payload)
+
+            factura.numero_factus    = resultado.get('number', '')
+            factura.cufe             = resultado.get('cufe', '')
+            factura.qr_url           = resultado.get('qr', '')
+            factura.pdf_base64       = resultado.get('pdf_base_64', '') or resultado.get('qr_image', '')
+            factura.xml_base64       = resultado.get('xml_base_64', '')
+            factura.estado           = EstadoFactura.VALIDADA if not resultado.get('errors') else EstadoFactura.ERROR
+            factura.fecha_validacion = tz.now()
+            factura.errores_dian     = resultado.get('errors', [])
+            factura.save()
+
+            if factura.estado == EstadoFactura.VALIDADA:
+                factura.consulta.estado = 'facturada'
+                factura.consulta.save(update_fields=['estado'])
+
+            return Response({
+                'mensaje': 'Factura reenviada a Factus.',
+                'estado': factura.estado,
+                'numero': factura.numero_factus,
+                'cufe': factura.cufe,
+            }, status=status.HTTP_200_OK)
+
+        except FactusAPIError as e:
+            factura.estado = EstadoFactura.ERROR
+            factura.errores_dian = [str(e)]
+            factura.save(update_fields=['estado', 'errores_dian'])
+            return Response({'error': f'Error Factus: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as e:
+            factura.estado = EstadoFactura.ERROR
+            factura.errores_dian = [str(e)]
+            factura.save(update_fields=['estado', 'errores_dian'])
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ── ÓRDENES MÉDICAS ───────────────────────────────────────────────────────────
 

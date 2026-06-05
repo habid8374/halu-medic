@@ -33,6 +33,7 @@ from apps.usuarios.auth import (
 )
 from apps.facturacion.webhook import FactusWebhookView
 from apps.tenants.api import ConfiguracionConsultorioView
+from apps.suscripciones.api import SuscripcionViewSet
 
 router = DefaultRouter()
 router.register(r'pacientes',             PacienteViewSet,  basename='paciente')
@@ -44,6 +45,7 @@ router.register(r'cups',                  CodigoCUPSViewSet,  basename='cups')
 router.register(r'cie10',                 CodigoCIE10ViewSet, basename='cie10')
 router.register(r'tarifas',              ManualTarifarioViewSet, basename='tarifa')
 router.register(r'ordenes-medicas',      OrdenMedicaViewSet,     basename='orden-medica')
+router.register(r'admin/suscripciones', SuscripcionViewSet,     basename='suscripcion')
 
 urlpatterns = [
     path('api/health/', health, name='health'),

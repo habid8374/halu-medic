@@ -26,8 +26,8 @@ body {
 @layer utilities {
   .animate-fade-in { animation: fadeIn 0.35s ease-out; }
   .animate-slide-up { animation: slideUp 0.35s ease-out; }
-  /* Padding responsivo de página: espacio para el botón hamburguesa en móvil */
-  .page-padding { @apply px-4 pt-14 pb-8 sm:px-6 lg:p-8; }
+  /* pt-14 deja espacio para el botón hamburguesa en móvil (h=44px ~= 11*4) */
+  .page-padding { @apply px-4 pt-14 pb-8 sm:px-6 lg:px-8 lg:pt-8; }
 }
 
 @keyframes fadeIn {
