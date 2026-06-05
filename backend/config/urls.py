@@ -27,6 +27,9 @@ from config.api import (
     IngresoViewSet,
     EgresoViewSet,
     HistoriaClinicaViewSet,
+    CatalogoMedicamentoViewSet,
+    MedicamentoHCViewSet,
+    TarifaMedicamentoViewSet,
 )
 from apps.tarifas.api import ManualTarifarioViewSet
 from apps.usuarios.auth import (
@@ -55,9 +58,12 @@ router.register(r'admin/suscripciones', SuscripcionViewSet,     basename='suscri
 router.register(r'aseguradoras',        AseguradoraViewSet,     basename='aseguradora')
 router.register(r'convenios-eps',       ConvenioEPSViewSet,     basename='convenio-eps')
 router.register(r'facturacion/pgp',     FacturaPGPViewSet,      basename='factura-pgp')
-router.register(r'historia/ingresos',   IngresoViewSet,         basename='ingreso')
-router.register(r'historia/egresos',    EgresoViewSet,          basename='egreso')
-router.register(r'historia/registros',  HistoriaClinicaViewSet, basename='historia')
+router.register(r'historia/ingresos',      IngresoViewSet,              basename='ingreso')
+router.register(r'historia/egresos',       EgresoViewSet,               basename='egreso')
+router.register(r'historia/registros',     HistoriaClinicaViewSet,      basename='historia')
+router.register(r'historia/medicamentos',  MedicamentoHCViewSet,        basename='medicamento-hc')
+router.register(r'catalogos/medicamentos', CatalogoMedicamentoViewSet,  basename='catalogo-medicamento')
+router.register(r'tarifas/medicamentos',   TarifaMedicamentoViewSet,    basename='tarifa-medicamento')
 
 urlpatterns = [
     path('api/health/', health, name='health'),

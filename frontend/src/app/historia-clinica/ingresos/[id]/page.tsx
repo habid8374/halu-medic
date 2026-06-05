@@ -1,12 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { ingresosAPI, historiaAPI, mensajeError } from '@/lib/api'
+import { ingresosAPI, historiaAPI, medicamentosHCAPI, catalogoMedicamentosAPI, mensajeError } from '@/lib/api'
 import { Ingreso, HistoriaClinica } from '@/types'
 import { Button, Card, Spinner } from '@/components/ui'
 import {
   ArrowLeft, UserCheck, UserMinus, PlusCircle, ClipboardList,
-  Heart, Thermometer, Activity, Scale, CheckCircle2
+  Heart, Thermometer, Activity, Scale, CheckCircle2, Pill, Trash2, Search, X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -33,12 +33,79 @@ const TIPO_EGRESO = [
   { value: 'fuga', label: 'Fuga' },
 ]
 
+const VIA_CHOICES = [
+  { value: 'oral', label: 'Oral' }, { value: 'iv', label: 'IV' },
+  { value: 'im', label: 'IM' }, { value: 'sc', label: 'SC' },
+  { value: 'topica', label: 'Tópica' }, { value: 'inhalatoria', label: 'Inhalatoria' },
+  { value: 'sublingual', label: 'Sublingual' }, { value: 'rectal', label: 'Rectal' },
+  { value: 'otra', label: 'Otra' },
+]
+
+interface MedItem {
+  cum: string
+  principio_activo: string
+  concentracion: string
+  forma_farmaceutica: string
+  dosis: string
+  frecuencia: string
+  via_administracion: string
+  cantidad: number
+  dias_tratamiento: number
+  indicaciones: string
+}
+
 function SignoVital({ label, value, unit }: { label: string; value?: number; unit: string }) {
   if (!value) return null
   return (
     <div className="text-center">
       <p className="text-lg font-bold text-slate-900">{value}<span className="text-xs text-slate-400 ml-0.5">{unit}</span></p>
       <p className="text-xs text-slate-500">{label}</p>
+    </div>
+  )
+}
+
+function BuscadorMedicamento({ onSelect }: { onSelect: (med: any) => void }) {
+  const [q, setQ] = useState('')
+  const [resultados, setResultados] = useState<any[]>([])
+  const [buscando, setBuscando] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const buscar = (texto: string) => {
+    setQ(texto)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (texto.length < 2) { setResultados([]); return }
+    timerRef.current = setTimeout(async () => {
+      setBuscando(true)
+      try {
+        const { data } = await catalogoMedicamentosAPI.search(texto)
+        setResultados(Array.isArray(data) ? data : data.results ?? [])
+      } catch { setResultados([]) } finally { setBuscando(false) }
+    }, 300)
+  }
+
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2">
+        {buscando ? <Spinner size="sm" /> : <Search className="w-4 h-4 text-slate-400" />}
+        <input
+          type="text" value={q} onChange={e => buscar(e.target.value)}
+          placeholder="Buscar por nombre o CUM…"
+          className="flex-1 text-sm focus:outline-none"
+        />
+        {q && <button type="button" onClick={() => { setQ(''); setResultados([]) }}><X className="w-4 h-4 text-slate-400" /></button>}
+      </div>
+      {resultados.length > 0 && (
+        <div className="absolute top-full left-0 right-0 z-10 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
+          {resultados.map(r => (
+            <button key={r.cum} type="button"
+              className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-0"
+              onClick={() => { onSelect(r); setQ(''); setResultados([]) }}>
+              <p className="text-sm font-medium text-slate-900">{r.principio_activo}</p>
+              <p className="text-xs text-slate-500">{r.cum}{r.concentracion ? ` · ${r.concentracion}` : ''}{r.forma_farmaceutica ? ` · ${r.forma_farmaceutica}` : ''}</p>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -107,8 +174,26 @@ function ModalNuevaHC({ ingresoId, pacienteId, onClose, onCreated }: {
     diagnostico_principal: '', plan_tratamiento: '', ordenes_medicas: '',
     sv_pa_s: '', sv_pa_d: '', sv_fc: '', sv_fr: '', sv_temp: '', sv_peso: '', sv_talla: '', sv_spo2: '',
   })
+  const [medicamentos, setMedicamentos] = useState<MedItem[]>([])
   const [saving, setSaving] = useState(false)
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const agregarMed = (cum: any) => {
+    setMedicamentos(prev => [...prev, {
+      cum: cum.cum,
+      principio_activo: cum.principio_activo,
+      concentracion: cum.concentracion || '',
+      forma_farmaceutica: cum.forma_farmaceutica || '',
+      dosis: '', frecuencia: '', via_administracion: 'oral',
+      cantidad: 1, dias_tratamiento: 1, indicaciones: '',
+    }])
+  }
+
+  const actualizarMed = (i: number, k: keyof MedItem, v: string | number) => {
+    setMedicamentos(prev => prev.map((m, idx) => idx === i ? { ...m, [k]: v } : m))
+  }
+
+  const eliminarMed = (i: number) => setMedicamentos(prev => prev.filter((_, idx) => idx !== i))
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true)
@@ -122,7 +207,7 @@ function ModalNuevaHC({ ingresoId, pacienteId, onClose, onCreated }: {
     if (form.sv_talla)  sv.talla         = Number(form.sv_talla)
     if (form.sv_spo2)   sv.spo2          = Number(form.sv_spo2)
     try {
-      await historiaAPI.create({
+      const { data: hc } = await historiaAPI.create({
         paciente: pacienteId, ingreso: ingresoId,
         fecha_atencion: form.fecha_atencion, tipo_registro: form.tipo_registro,
         motivo_consulta: form.motivo_consulta, anamnesis: form.anamnesis,
@@ -132,6 +217,12 @@ function ModalNuevaHC({ ingresoId, pacienteId, onClose, onCreated }: {
         plan_tratamiento: form.plan_tratamiento, ordenes_medicas: form.ordenes_medicas,
         signos_vitales: Object.keys(sv).length > 0 ? sv : null,
       })
+      // Guardar medicamentos en paralelo
+      if (medicamentos.length > 0) {
+        await Promise.all(medicamentos.map(m =>
+          medicamentosHCAPI.create({ historia: hc.id, ...m })
+        ))
+      }
       toast.success('Registro guardado')
       onCreated()
     } catch (err) {
@@ -227,6 +318,80 @@ function ModalNuevaHC({ ingresoId, pacienteId, onClose, onCreated }: {
                 value={(form as Record<string, string>)[f.k]} onChange={e => set(f.k, e.target.value)} />
             </div>
           ))}
+
+          {/* Medicamentos */}
+          <div className="border border-slate-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Pill className="w-4 h-4 text-emerald-600" />
+              <p className="text-sm font-semibold text-slate-700">Medicamentos prescritos</p>
+              {medicamentos.length > 0 && (
+                <span className="ml-auto text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
+                  {medicamentos.length}
+                </span>
+              )}
+            </div>
+            <BuscadorMedicamento onSelect={agregarMed} />
+
+            {medicamentos.length > 0 && (
+              <div className="mt-3 space-y-3">
+                {medicamentos.map((m, i) => (
+                  <div key={i} className="bg-slate-50 rounded-xl p-3">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{m.principio_activo}</p>
+                        <p className="text-xs text-slate-500">{m.cum}{m.concentracion ? ` · ${m.concentracion}` : ''}</p>
+                      </div>
+                      <button type="button" onClick={() => eliminarMed(i)}
+                        className="text-red-400 hover:text-red-600 p-1">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-0.5">Dosis</label>
+                        <input type="text" placeholder="Ej: 500 mg"
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={m.dosis} onChange={e => actualizarMed(i, 'dosis', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-0.5">Frecuencia</label>
+                        <input type="text" placeholder="Ej: cada 8 horas"
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={m.frecuencia} onChange={e => actualizarMed(i, 'frecuencia', e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-0.5">Vía</label>
+                        <select className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={m.via_administracion} onChange={e => actualizarMed(i, 'via_administracion', e.target.value)}>
+                          {VIA_CHOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-0.5">Cantidad</label>
+                        <input type="number" min={1}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={m.cantidad} onChange={e => actualizarMed(i, 'cantidad', Number(e.target.value))} />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-0.5">Días tto.</label>
+                        <input type="number" min={1}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={m.dias_tratamiento} onChange={e => actualizarMed(i, 'dias_tratamiento', Number(e.target.value))} />
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <label className="block text-xs text-slate-500 mb-0.5">Indicaciones</label>
+                      <input type="text" placeholder="Indicaciones adicionales"
+                        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={m.indicaciones} onChange={e => actualizarMed(i, 'indicaciones', e.target.value)} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={saving} className="flex-1">
@@ -429,7 +594,7 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
                   </div>
                 )}
                 {hc.ordenes_medicas && (
-                  <div>
+                  <div className="mb-2">
                     <p className="text-xs text-slate-400 font-medium">Órdenes</p>
                     <p className="text-sm text-slate-700">{hc.ordenes_medicas}</p>
                   </div>
@@ -441,6 +606,24 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
                     {hc.signos_vitales.temperatura && <span>T: {hc.signos_vitales.temperatura}°C</span>}
                     {hc.signos_vitales.spo2 && <span>SpO₂: {hc.signos_vitales.spo2}%</span>}
                     {hc.signos_vitales.peso && <span>Peso: {hc.signos_vitales.peso}kg</span>}
+                  </div>
+                )}
+                {(hc as any).medicamentos?.length > 0 && (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <p className="text-xs text-slate-400 font-medium flex items-center gap-1 mb-2">
+                      <Pill className="w-3.5 h-3.5" />Medicamentos ({(hc as any).medicamentos.length})
+                    </p>
+                    <div className="space-y-1">
+                      {(hc as any).medicamentos.map((m: any) => (
+                        <div key={m.id} className="text-xs bg-emerald-50 rounded-lg px-3 py-1.5">
+                          <span className="font-medium text-emerald-800">{m.principio_activo}</span>
+                          {m.dosis && <span className="text-emerald-600"> · {m.dosis}</span>}
+                          {m.frecuencia && <span className="text-slate-500"> · {m.frecuencia}</span>}
+                          {m.via_administracion && <span className="text-slate-400"> · {m.via_administracion}</span>}
+                          {m.dias_tratamiento > 1 && <span className="text-slate-400"> · {m.dias_tratamiento} días</span>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {hc.medico_nombre && <p className="text-xs text-slate-400 mt-2">Dr. {hc.medico_nombre}</p>}

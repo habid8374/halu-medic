@@ -1123,3 +1123,97 @@ class HistoriaClinicaViewSet(viewsets.ModelViewSet):
         if ingreso:
             qs = qs.filter(ingreso=ingreso)
         return qs
+
+
+# ── Catálogo de medicamentos (CUM) ────────────────────────────────────────────
+
+class CatalogoMedicamentoSerializer(serializers.ModelSerializer):
+    class Meta:
+        from apps.catalogos.models import CatalogoMedicamento
+        model  = CatalogoMedicamento
+        fields = ['cum', 'principio_activo', 'concentracion', 'forma_farmaceutica',
+                  'registro_sanitario', 'vigente']
+
+
+class CatalogoMedicamentoViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = CatalogoMedicamentoSerializer
+
+    def get_queryset(self):
+        from apps.catalogos.models import CatalogoMedicamento
+        qs = CatalogoMedicamento.objects.all()
+        search   = self.request.query_params.get('search', '').strip()
+        vigentes = self.request.query_params.get('vigentes')
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(principio_activo__icontains=search) | Q(cum__icontains=search)
+            )
+        if vigentes is not None:
+            qs = qs.filter(vigente=vigentes.lower() == 'true')
+        return qs[:50]
+
+
+# ── Medicamentos en Historia Clínica ─────────────────────────────────────────
+
+class MedicamentoHCSerializer(serializers.ModelSerializer):
+    class Meta:
+        from apps.historia.models import MedicamentoHC
+        model  = MedicamentoHC
+        fields = [
+            'id', 'historia', 'cum', 'principio_activo', 'concentracion',
+            'forma_farmaceutica', 'dosis', 'frecuencia', 'via_administracion',
+            'cantidad', 'dias_tratamiento', 'indicaciones',
+            'genera_factura', 'valor_unitario', 'valor_dispensacion', 'creado_en',
+        ]
+        read_only_fields = ['id', 'creado_en']
+
+
+class MedicamentoHCViewSet(viewsets.ModelViewSet):
+    serializer_class = MedicamentoHCSerializer
+
+    def get_queryset(self):
+        from apps.historia.models import MedicamentoHC
+        qs = MedicamentoHC.objects.select_related('historia').all()
+        historia = self.request.query_params.get('historia')
+        if historia:
+            qs = qs.filter(historia=historia)
+        return qs
+
+
+# ── Tarifas de medicamentos ───────────────────────────────────────────────────
+
+class TarifaMedicamentoSerializer(serializers.ModelSerializer):
+    valor_final = serializers.SerializerMethodField()
+
+    class Meta:
+        from apps.tarifas.models import TarifaMedicamento
+        model  = TarifaMedicamento
+        fields = [
+            'id', 'manual', 'cum', 'principio_activo', 'concentracion',
+            'forma_farmaceutica', 'valor_base', 'valor_dispensacion',
+            'vigente', 'valor_final',
+        ]
+
+    def get_valor_final(self, obj):
+        return float(obj.valor_final)
+
+
+class TarifaMedicamentoViewSet(viewsets.ModelViewSet):
+    serializer_class = TarifaMedicamentoSerializer
+
+    def get_queryset(self):
+        from apps.tarifas.models import TarifaMedicamento
+        qs = TarifaMedicamento.objects.select_related('manual').all()
+        manual  = self.request.query_params.get('manual')
+        search  = self.request.query_params.get('search', '').strip()
+        vigente = self.request.query_params.get('vigente')
+        if manual:
+            qs = qs.filter(manual=manual)
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(principio_activo__icontains=search) | Q(cum__icontains=search)
+            )
+        if vigente is not None:
+            qs = qs.filter(vigente=vigente.lower() == 'true')
+        return qs

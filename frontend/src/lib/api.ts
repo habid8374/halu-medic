@@ -260,6 +260,28 @@ export const historiaAPI = {
   update: (id: string, data: Record<string, unknown>) => api.patch(`/api/historia/registros/${id}/`, data),
 }
 
+// ── Medicamentos Historia Clínica ─────────────────────────────────────────────
+
+export const medicamentosHCAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/historia/medicamentos/', { params }),
+  create: (data: Record<string, unknown>) => api.post('/api/historia/medicamentos/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/historia/medicamentos/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/historia/medicamentos/${id}/`),
+}
+
+export const catalogoMedicamentosAPI = {
+  search: (q: string, vigentes = true) =>
+    api.get('/api/catalogos/medicamentos/', { params: { search: q, vigentes: vigentes ? 'true' : 'false' } }),
+}
+
+export const tarifaMedicamentosAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/tarifas/medicamentos/', { params }),
+  get:    (id: string) => api.get(`/api/tarifas/medicamentos/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/tarifas/medicamentos/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/tarifas/medicamentos/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/tarifas/medicamentos/${id}/`),
+}
+
 // ── Facturación PGP / Capitado ────────────────────────────────────────────────
 
 export const facturasPGPAPI = {

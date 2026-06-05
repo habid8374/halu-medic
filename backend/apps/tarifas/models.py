@@ -135,3 +135,37 @@ class ItemTarifario(models.Model):
         from decimal import Decimal
         factor = 1 + self.manual.porcentaje_ajuste / Decimal('100')
         return round(self.valor_base * factor, 0)
+
+
+class TarifaMedicamento(models.Model):
+    """
+    Tarifa de un medicamento CUM dentro de un manual tarifario.
+    Usada para facturar medicamentos cuando la IPS los dispensa.
+    """
+    id                  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    manual              = models.ForeignKey(ManualTarifario, on_delete=models.CASCADE,
+                                             related_name='medicamentos')
+    cum                 = models.CharField(max_length=20, help_text='Código Único de Medicamento')
+    principio_activo    = models.CharField(max_length=400)
+    concentracion       = models.CharField(max_length=150, blank=True)
+    forma_farmaceutica  = models.CharField(max_length=150, blank=True)
+    valor_base          = models.DecimalField(max_digits=14, decimal_places=2,
+                                               help_text='Valor unitario base del medicamento')
+    valor_dispensacion  = models.DecimalField(max_digits=14, decimal_places=2, default=0,
+                                               help_text='Valor de dispensación (Res.948/2026)')
+    vigente             = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['principio_activo']
+        unique_together = [['manual', 'cum']]
+        verbose_name = 'Tarifa medicamento'
+        verbose_name_plural = 'Tarifas medicamentos'
+
+    def __str__(self):
+        return f'{self.cum} — {self.principio_activo} (${self.valor_base:,.0f})'
+
+    @property
+    def valor_final(self):
+        from decimal import Decimal
+        factor = 1 + self.manual.porcentaje_ajuste / Decimal('100')
+        return round(self.valor_base * factor, 0)

@@ -140,3 +140,54 @@ class HistoriaClinica(models.Model):
 
     def __str__(self):
         return f'HC {self.paciente} — {self.fecha_atencion.date()}'
+
+
+class MedicamentoHC(models.Model):
+    """
+    Medicamento prescrito en una Historia Clínica.
+    El CUM (cum) identifica el medicamento en el RIPS (Res.948/2026).
+    """
+    VIA_CHOICES = [
+        ('oral',         'Oral'),
+        ('iv',           'Intravenosa'),
+        ('im',           'Intramuscular'),
+        ('sc',           'Subcutánea'),
+        ('topica',       'Tópica'),
+        ('inhalatoria',  'Inhalatoria'),
+        ('sublingual',   'Sublingual'),
+        ('rectal',       'Rectal'),
+        ('oftalmica',    'Oftálmica'),
+        ('otica',        'Ótica'),
+        ('nasal',        'Nasal'),
+        ('otra',         'Otra'),
+    ]
+
+    id                  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    historia            = models.ForeignKey(HistoriaClinica, on_delete=models.CASCADE,
+                                             related_name='medicamentos')
+    # Datos del catálogo CUM
+    cum                 = models.CharField(max_length=20, help_text='Código Único de Medicamento (CUM)')
+    principio_activo    = models.CharField(max_length=400)
+    concentracion       = models.CharField(max_length=150, blank=True)
+    forma_farmaceutica  = models.CharField(max_length=150, blank=True)
+    # Prescripción
+    dosis               = models.CharField(max_length=100, blank=True, help_text='Ej: 500 mg')
+    frecuencia          = models.CharField(max_length=100, blank=True, help_text='Ej: cada 8 horas')
+    via_administracion  = models.CharField(max_length=20, choices=VIA_CHOICES, default='oral')
+    cantidad            = models.PositiveIntegerField(default=1)
+    dias_tratamiento    = models.PositiveIntegerField(default=1)
+    indicaciones        = models.TextField(blank=True)
+    # Facturación (si la IPS factura medicamentos)
+    genera_factura      = models.BooleanField(default=False)
+    valor_unitario      = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_dispensacion  = models.DecimalField(max_digits=14, decimal_places=2, default=0,
+                                               help_text='Valor dispensación separado (Res.948)')
+    creado_en           = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['creado_en']
+        verbose_name = 'Medicamento HC'
+        verbose_name_plural = 'Medicamentos HC'
+
+    def __str__(self):
+        return f'{self.cum} — {self.principio_activo} ({self.historia})'
