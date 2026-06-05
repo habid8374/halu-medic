@@ -2,19 +2,21 @@
 Registra el dominio de Railway en el tenant público para que
 TenantMainMiddleware resuelva correctamente las peticiones.
 """
-import os
 from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
     help = 'Asegura que el dominio Railway apunte al tenant público'
 
+    def add_arguments(self, parser):
+        parser.add_argument('--domain', default='', help='Dominio a registrar')
+
     def handle(self, *args, **options):
         from apps.tenants.models import Consultorio, Dominio
 
-        railway_domain = os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')
+        railway_domain = options['domain'].strip()
         if not railway_domain:
-            self.stdout.write('RAILWAY_PUBLIC_DOMAIN no definida, omitiendo.')
+            self.stdout.write('Sin dominio especificado, omitiendo.')
             return
 
         try:

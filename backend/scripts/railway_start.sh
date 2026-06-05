@@ -10,7 +10,9 @@ echo "→ Migraciones schemas tenant..."
 python manage.py migrate_schemas --noinput
 
 echo "→ Registrar dominio Railway en tenant público..."
-python manage.py setup_railway_domain || echo "setup_railway_domain: no crítico"
+python manage.py setup_railway_domain \
+  --domain "${RAILWAY_PUBLIC_DOMAIN:-halu-medic-production.up.railway.app}" \
+  || echo "setup_railway_domain: no crítico"
 
 echo "→ Importar CUPS (si la tabla está vacía)..."
 python manage.py importar_cups || echo "CUPS ya importados o error no crítico"
