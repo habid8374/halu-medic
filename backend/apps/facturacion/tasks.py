@@ -54,9 +54,11 @@ def emitir_factura(self, factura_id: str):
         factura.qr_url           = resultado.get('qr', '')
         factura.pdf_base64       = resultado.get('pdf_base_64', '') or resultado.get('qr_image', '')
         factura.xml_base64       = resultado.get('xml_base_64', '')
-        factura.estado           = EstadoFactura.VALIDADA if not resultado.get('errors') else EstadoFactura.ERROR
+        _errors = resultado.get('errors') or []
+        if isinstance(_errors, dict): _errors = [f'{k}: {v}' for k, v in _errors.items()]
+        factura.estado           = EstadoFactura.VALIDADA if factura.cufe else (EstadoFactura.ERROR if _errors else EstadoFactura.VALIDADA)
         factura.fecha_validacion = timezone.now()
-        factura.errores_dian     = resultado.get('errors', [])
+        factura.errores_dian     = _errors
         factura.save()
 
         # 3. Generar RIPS con el numFactura real (para reportar al MUV MinSalud)
