@@ -31,6 +31,7 @@ from config.api import (
     MedicamentoHCViewSet,
     OrdenHCViewSet,
     TarifaMedicamentoViewSet,
+    ReportesView,
 )
 from apps.tarifas.api import ManualTarifarioViewSet
 from apps.usuarios.auth import (
@@ -94,4 +95,7 @@ urlpatterns = [
     # ── CUPS RIPS plantilla / importación ────────────────────────────────────
     path('api/cups/plantilla/',     views_catalogos.plantilla_cups_rips, name='cups-plantilla'),
     path('api/cups/importar-rips/', views_catalogos.importar_cups_rips,  name='cups-importar-rips'),
+
+    # ── Reportes ──────────────────────────────────────────────────────────────
+    path('api/reportes/', ReportesView.as_view(), name='reportes'),
 ]
