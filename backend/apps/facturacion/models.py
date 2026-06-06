@@ -3,6 +3,7 @@ Modelos del módulo Facturación
 Factura electrónica + integración Factus + tareas Celery
 """
 from django.db import models
+from django.conf import settings
 import uuid
 
 
@@ -172,3 +173,175 @@ class FacturaHelper:
         factura.fecha_validacion = timezone.now()
         from apps.facturacion.models import EstadoFactura
         factura.estado = EstadoFactura.VALIDADA if not resultado.get('errors') else EstadoFactura.ERROR
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  PREFACTURA — Preliquidación / Cuenta de cobro interna
+# ════════════════════════════════════════════════════════════════════════════
+
+class EstadoPrefactura(models.TextChoices):
+    BORRADOR   = 'borrador',   'Borrador — en construcción'
+    EN_REVISION = 'en_revision', 'En revisión por auditor'
+    APROBADA   = 'aprobada',   'Aprobada — lista para facturar'
+    FACTURADA  = 'facturada',  'Facturada — FEV emitida'
+    ANULADA    = 'anulada',    'Anulada'
+
+
+class Prefactura(models.Model):
+    """
+    Preliquidación interna de un episodio (ingreso hospitalario, CX o consulta).
+    Consolida todos los servicios, insumos y medicamentos consumidos para que
+    el auditor/facturador los revise, ajuste y apruebe antes de emitir la FEV.
+
+    Flujo:
+      1. Se crea al abrir el proceso de facturación de un ingreso/episodio.
+      2. El sistema auto-carga ítems desde HC, órdenes, medicamentos, ayudas y CX.
+      3. El facturador agrega manualmente insumos, implantes, material especial.
+      4. El auditor revisa: marca no-facturables, ajusta cantidades, aprueba.
+      5. Con estado=aprobada se genera la Factura (FEV) definitiva.
+    """
+    id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    numero_prefactura = models.PositiveIntegerField(editable=False)
+
+    # Origen del episodio (al menos uno debe estar presente)
+    ingreso         = models.ForeignKey('historia.Ingreso', on_delete=models.SET_NULL,
+                                         null=True, blank=True, related_name='prefacturas')
+    historia        = models.ForeignKey('historia.HistoriaClinica', on_delete=models.SET_NULL,
+                                         null=True, blank=True, related_name='prefacturas')
+    paciente        = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT,
+                                         related_name='prefacturas')
+    convenio        = models.ForeignKey('tarifas.ConvenioEPS', on_delete=models.SET_NULL,
+                                         null=True, blank=True,
+                                         help_text='EPS / convenio al que se factura')
+
+    # Período de prestación del servicio
+    fecha_inicio    = models.DateField(help_text='Inicio del período de atención')
+    fecha_fin       = models.DateField(help_text='Fin del período / fecha de egreso')
+
+    # Totales calculados
+    subtotal_eps    = models.DecimalField(max_digits=14, decimal_places=2, default=0,
+                                           help_text='Total a cargo de la EPS/convenio')
+    subtotal_paciente = models.DecimalField(max_digits=14, decimal_places=2, default=0,
+                                             help_text='Copago / cuota moderadora a cargo del paciente')
+    subtotal_no_facturable = models.DecimalField(max_digits=14, decimal_places=2, default=0,
+                                                  help_text='Valor de ítems excluidos o no facturables')
+    total           = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    estado          = models.CharField(max_length=15, choices=EstadoPrefactura.choices,
+                                        default=EstadoPrefactura.BORRADOR)
+
+    # Factura generada (se llena al aprobar y emitir)
+    factura         = models.OneToOneField(Factura, on_delete=models.SET_NULL,
+                                            null=True, blank=True, related_name='prefactura')
+
+    # Trazabilidad
+    creado_por      = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                         null=True, blank=True, related_name='prefacturas_creadas')
+    revisado_por    = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                         null=True, blank=True, related_name='prefacturas_revisadas')
+    observaciones   = models.TextField(blank=True)
+    creado_en       = models.DateTimeField(auto_now_add=True)
+    actualizado_en  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+        verbose_name = 'Prefactura'
+        verbose_name_plural = 'Prefacturas'
+        indexes = [models.Index(fields=['numero_prefactura'])]
+
+    def save(self, *args, **kwargs):
+        if not self.numero_prefactura:
+            ultimo = Prefactura.objects.order_by('-numero_prefactura').first()
+            self.numero_prefactura = (ultimo.numero_prefactura + 1) if ultimo else 1
+        super().save(*args, **kwargs)
+
+    def recalcular_totales(self):
+        """Recalcula los subtotales desde los ítems."""
+        items = self.items.all()
+        self.subtotal_eps       = sum(i.valor_total for i in items if i.destino == 'eps')
+        self.subtotal_paciente  = sum(i.valor_total for i in items if i.destino == 'paciente')
+        self.subtotal_no_facturable = sum(i.valor_total for i in items if i.destino == 'no_facturable')
+        self.total = self.subtotal_eps + self.subtotal_paciente
+        self.save(update_fields=['subtotal_eps', 'subtotal_paciente',
+                                  'subtotal_no_facturable', 'total'])
+
+    def __str__(self):
+        return f'PRE-{str(self.numero_prefactura).zfill(5)} — {self.paciente}'
+
+
+class ItemPrefactura(models.Model):
+    """
+    Ítem individual dentro de una prefactura.
+    Puede venir auto-generado desde un módulo clínico (procedimiento, medicamento,
+    hospitalización, CX, ayuda diagnóstica) o agregado manualmente por el facturador.
+
+    destino:
+      eps           → se factura a la EPS/convenio (va en la FEV)
+      paciente      → copago / cuota moderadora / no cubierto (FEV al paciente)
+      no_facturable → excluido del cobro (insumo incluido en UVR, sin soporte, duplicado)
+    """
+    TIPO_CHOICES = [
+        ('consulta',         'Consulta / Evolución'),
+        ('hospitalizacion',  'Día de hospitalización'),
+        ('procedimiento',    'Procedimiento quirúrgico / diagnóstico'),
+        ('anestesia',        'Anestesia'),
+        ('medicamento',      'Medicamento'),
+        ('insumo_facturable','Insumo facturable (implante, osteosíntesis, contraste)'),
+        ('insumo_no_incluidoUVR', 'Insumo no incluido en UVR'),
+        ('ayuda_diagnostica','Ayuda diagnóstica'),
+        ('derechos_sala',    'Derechos de sala quirúrgica'),
+        ('hoteleria',        'Hotelería / Habitación'),
+        ('otro',             'Otro'),
+    ]
+    DESTINO_CHOICES = [
+        ('eps',            'A cobrar a EPS/convenio'),
+        ('paciente',       'A cobrar al paciente (copago/cuota)'),
+        ('no_facturable',  'No facturable / excluir'),
+    ]
+
+    id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    prefactura      = models.ForeignKey(Prefactura, on_delete=models.CASCADE,
+                                         related_name='items')
+    tipo            = models.CharField(max_length=25, choices=TIPO_CHOICES)
+    descripcion     = models.CharField(max_length=400, help_text='Nombre del servicio o insumo')
+    cups            = models.CharField(max_length=10, blank=True, help_text='CUPS si aplica')
+    cum             = models.CharField(max_length=20, blank=True, help_text='CUM si es medicamento')
+
+    cantidad        = models.DecimalField(max_digits=10, decimal_places=3, default=1)
+    valor_unitario  = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    descuento       = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_total     = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    destino         = models.CharField(max_length=15, choices=DESTINO_CHOICES, default='eps')
+
+    # Justificación de exclusión
+    motivo_exclusion = models.CharField(max_length=300, blank=True,
+                                         help_text='Por qué no es facturable (incluido en UVR, sin soporte, etc.)')
+
+    # Origen: referencia al objeto clínico que generó este ítem
+    origen_tipo     = models.CharField(max_length=30, blank=True,
+                                        help_text='Ej: OrdenHC, MedicamentoHC, AyudaDiagnostica, ProgramacionCx')
+    origen_id       = models.CharField(max_length=40, blank=True,
+                                        help_text='UUID del objeto origen')
+
+    # ¿Fue agregado manualmente o auto-generado?
+    es_manual       = models.BooleanField(default=False,
+                                           help_text='True si el facturador lo agregó manualmente')
+
+    # CIE-10 del servicio (para RIPS)
+    cie10           = models.CharField(max_length=10, blank=True)
+
+    fecha_servicio  = models.DateField(null=True, blank=True)
+    creado_en       = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['tipo', 'creado_en']
+        verbose_name = 'Ítem de prefactura'
+        verbose_name_plural = 'Ítems de prefactura'
+
+    def save(self, *args, **kwargs):
+        self.valor_total = (self.cantidad * self.valor_unitario) - self.descuento
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.descripcion[:50]}'

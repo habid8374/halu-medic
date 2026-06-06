@@ -2079,3 +2079,284 @@ class CensoIngresoSerializer(serializers.ModelSerializer):
             'dias_estancia', 'notas_count', 'ayudas_count', 'cx_count',
             'tiene_egreso',
         ]
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  PREFACTURA — Preliquidación interna
+# ════════════════════════════════════════════════════════════════════════════
+
+from apps.facturacion.models import Prefactura, ItemPrefactura
+from apps.usuarios.permissions import PuedeFacturar as _PuedeFacturar
+
+
+class ItemPrefacturaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ItemPrefactura
+        fields = [
+            'id', 'prefactura', 'tipo', 'descripcion', 'cups', 'cum',
+            'cantidad', 'valor_unitario', 'descuento', 'valor_total',
+            'destino', 'motivo_exclusion',
+            'origen_tipo', 'origen_id', 'es_manual',
+            'cie10', 'fecha_servicio', 'creado_en',
+        ]
+        read_only_fields = ['valor_total', 'creado_en']
+
+
+class PrefacturaSerializer(serializers.ModelSerializer):
+    items           = ItemPrefacturaSerializer(many=True, read_only=True)
+    paciente_nombre = serializers.CharField(source='paciente.__str__', read_only=True)
+    convenio_info   = serializers.SerializerMethodField()
+    numero_formateado = serializers.SerializerMethodField()
+
+    def get_numero_formateado(self, obj):
+        return f'PRE-{str(obj.numero_prefactura).zfill(5)}'
+
+    def get_convenio_info(self, obj):
+        if not obj.convenio:
+            return None
+        return {
+            'id':   str(obj.convenio.id),
+            'nombre': obj.convenio.nombre if hasattr(obj.convenio, 'nombre') else '',
+            'aseguradora_nombre': obj.convenio.aseguradora.nombre if obj.convenio.aseguradora else '',
+        }
+
+    class Meta:
+        model = Prefactura
+        fields = [
+            'id', 'numero_prefactura', 'numero_formateado',
+            'ingreso', 'historia', 'paciente', 'paciente_nombre',
+            'convenio', 'convenio_info',
+            'fecha_inicio', 'fecha_fin',
+            'subtotal_eps', 'subtotal_paciente', 'subtotal_no_facturable', 'total',
+            'estado', 'factura',
+            'creado_por', 'revisado_por', 'observaciones',
+            'creado_en', 'actualizado_en',
+            'items',
+        ]
+        read_only_fields = [
+            'numero_prefactura', 'subtotal_eps', 'subtotal_paciente',
+            'subtotal_no_facturable', 'total', 'creado_en', 'actualizado_en',
+        ]
+
+
+class PrefacturaViewSet(viewsets.ModelViewSet):
+    """
+    Gestión de prefacturas (preliquidación interna).
+    Requiere permiso puede_facturar.
+    """
+    serializer_class = PrefacturaSerializer
+    permission_classes = [IsAuthenticated, _PuedeFacturar]
+
+    def get_queryset(self):
+        qs = Prefactura.objects.select_related(
+            'paciente', 'convenio', 'convenio__aseguradora', 'factura'
+        ).prefetch_related('items')
+        ingreso  = self.request.query_params.get('ingreso')
+        historia = self.request.query_params.get('historia')
+        paciente = self.request.query_params.get('paciente')
+        estado   = self.request.query_params.get('estado')
+        if ingreso:  qs = qs.filter(ingreso=ingreso)
+        if historia: qs = qs.filter(historia=historia)
+        if paciente: qs = qs.filter(paciente=paciente)
+        if estado:   qs = qs.filter(estado=estado)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(creado_por=self.request.user)
+
+    @action(detail=True, methods=['post'], url_path='autocargar')
+    def autocargar(self, request, pk=None):
+        """
+        POST /api/facturacion/prefacturas/{id}/autocargar/
+        Auto-carga ítems desde todos los módulos clínicos del episodio.
+        Solo agrega ítems que no existen aún (evita duplicados por origen_id).
+        """
+        from apps.historia.models import (
+            Ingreso, HistoriaClinica, OrdenHC, MedicamentoHC,
+            AyudaDiagnostica, ProgramacionCx,
+        )
+        from apps.tarifas.models import ManualTarifario
+
+        pre = self.get_object()
+        if pre.estado not in ('borrador', 'en_revision'):
+            return Response({'error': 'Solo se puede autocargar en estado borrador o en revisión.'}, status=400)
+
+        creados = 0
+        ids_existentes = set(pre.items.values_list('origen_id', flat=True))
+
+        def ya_existe(origen_id):
+            return str(origen_id) in ids_existentes
+
+        def crear_item(**kwargs):
+            nonlocal creados
+            ItemPrefactura.objects.create(prefactura=pre, **kwargs)
+            creados += 1
+
+        # ── 1. Días de hospitalización ────────────────────────────────────────
+        if pre.ingreso:
+            ing = pre.ingreso
+            origen_id_hoteleria = f'hoteleria_{ing.id}'
+            if not ya_existe(origen_id_hoteleria):
+                from django.utils import timezone as tz
+                fecha_inicio = pre.fecha_inicio
+                fecha_fin    = pre.fecha_fin
+                dias = max(1, (fecha_fin - fecha_inicio).days + 1)
+                crear_item(
+                    tipo='hoteleria',
+                    descripcion=f'Hospitalización — {ing.get_tipo_atencion_display()} ({dias} días)',
+                    cups='890301',  # CUPS hospitalización general
+                    cantidad=dias,
+                    valor_unitario=0,  # el facturador ingresa la tarifa
+                    destino='eps',
+                    es_manual=False,
+                    origen_tipo='Ingreso',
+                    origen_id=str(ing.id),
+                    fecha_servicio=fecha_inicio,
+                )
+
+        # ── 2. Órdenes médicas ejecutadas (HC) ────────────────────────────────
+        hc_ids = []
+        if pre.ingreso:
+            hc_ids = list(HistoriaClinica.objects.filter(ingreso=pre.ingreso)
+                          .values_list('id', flat=True))
+        elif pre.historia:
+            hc_ids = [pre.historia_id]
+
+        for hc_id in hc_ids:
+            for orden in OrdenHC.objects.filter(historia=hc_id, estado='ejecutada'):
+                if ya_existe(str(orden.id)):
+                    continue
+                crear_item(
+                    tipo='procedimiento',
+                    descripcion=orden.descripcion_cups or orden.cups or orden.get_tipo_display(),
+                    cups=orden.cups,
+                    cantidad=orden.cantidad,
+                    valor_unitario=float(orden.valor_unitario),
+                    destino='eps',
+                    cie10=orden.cie10_justificacion,
+                    es_manual=False,
+                    origen_tipo='OrdenHC',
+                    origen_id=str(orden.id),
+                )
+
+        # ── 3. Medicamentos prescritos ────────────────────────────────────────
+        for hc_id in hc_ids:
+            for med in MedicamentoHC.objects.filter(historia=hc_id, genera_factura=True):
+                if ya_existe(str(med.id)):
+                    continue
+                crear_item(
+                    tipo='medicamento',
+                    descripcion=f'{med.principio_activo} {med.concentracion}',
+                    cum=med.cum,
+                    cantidad=med.cantidad,
+                    valor_unitario=float(med.valor_unitario),
+                    destino='eps',
+                    es_manual=False,
+                    origen_tipo='MedicamentoHC',
+                    origen_id=str(med.id),
+                )
+
+        # ── 4. Ayudas diagnósticas realizadas ────────────────────────────────
+        ayudas_qs = AyudaDiagnostica.objects.filter(estado='resultado')
+        if pre.ingreso:
+            ayudas_qs = ayudas_qs.filter(ingreso=pre.ingreso)
+        elif pre.historia:
+            ayudas_qs = ayudas_qs.filter(historia=pre.historia)
+        for ayuda in ayudas_qs:
+            if ya_existe(str(ayuda.id)):
+                continue
+            crear_item(
+                tipo='ayuda_diagnostica',
+                descripcion=ayuda.descripcion,
+                cups=ayuda.cups,
+                cantidad=1,
+                valor_unitario=0,
+                destino='eps',
+                es_manual=False,
+                origen_tipo='AyudaDiagnostica',
+                origen_id=str(ayuda.id),
+            )
+
+        # ── 5. Cirugías realizadas ────────────────────────────────────────────
+        if pre.ingreso:
+            for cx in ProgramacionCx.objects.filter(ingreso=pre.ingreso, estado='realizada'):
+                if ya_existe(str(cx.id)):
+                    continue
+                # Derecho de sala
+                crear_item(
+                    tipo='derechos_sala',
+                    descripcion=f'Derechos de sala — {cx.descripcion_cups or cx.cups_principal}',
+                    cups=cx.cups_principal,
+                    cantidad=1,
+                    valor_unitario=0,
+                    destino='eps',
+                    es_manual=False,
+                    origen_tipo='ProgramacionCx',
+                    origen_id=str(cx.id),
+                )
+                # Anestesia
+                if cx.anestesiologo_id:
+                    crear_item(
+                        tipo='anestesia',
+                        descripcion=f'Anestesia {cx.tipo_anestesia} — {cx.descripcion_cups or cx.cups_principal}',
+                        cups='',
+                        cantidad=1,
+                        valor_unitario=0,
+                        destino='eps',
+                        es_manual=False,
+                        origen_tipo='ProgramacionCx_anestesia',
+                        origen_id=f'anest_{cx.id}',
+                    )
+
+        pre.recalcular_totales()
+        return Response({
+            'message': f'{creados} ítems cargados automáticamente.',
+            'prefactura': PrefacturaSerializer(pre).data,
+        })
+
+    @action(detail=True, methods=['post'], url_path='cambiar_estado')
+    def cambiar_estado(self, request, pk=None):
+        """POST /api/facturacion/prefacturas/{id}/cambiar_estado/ — avanza el estado."""
+        pre = self.get_object()
+        nuevo = request.data.get('estado')
+        transiciones_validas = {
+            'borrador':    ['en_revision'],
+            'en_revision': ['aprobada', 'borrador'],
+            'aprobada':    ['facturada', 'borrador'],
+        }
+        if nuevo not in transiciones_validas.get(pre.estado, []):
+            return Response({'error': f'No se puede pasar de "{pre.estado}" a "{nuevo}".'}, status=400)
+        if nuevo == 'en_revision':
+            pre.revisado_por = request.user
+        pre.estado = nuevo
+        pre.recalcular_totales()
+        pre.save(update_fields=['estado', 'revisado_por'])
+        return Response(PrefacturaSerializer(pre).data)
+
+    @action(detail=True, methods=['post'], url_path='recalcular')
+    def recalcular(self, request, pk=None):
+        """POST /api/facturacion/prefacturas/{id}/recalcular/ — recalcula totales."""
+        pre = self.get_object()
+        pre.recalcular_totales()
+        return Response(PrefacturaSerializer(pre).data)
+
+
+class ItemPrefacturaViewSet(viewsets.ModelViewSet):
+    serializer_class = ItemPrefacturaSerializer
+    permission_classes = [IsAuthenticated, _PuedeFacturar]
+
+    def get_queryset(self):
+        qs = ItemPrefactura.objects.all()
+        prefactura = self.request.query_params.get('prefactura')
+        if prefactura:
+            qs = qs.filter(prefactura=prefactura)
+        return qs
+
+    def perform_update(self, serializer):
+        item = serializer.save()
+        item.prefactura.recalcular_totales()
+
+    def perform_destroy(self, instance):
+        pre = instance.prefactura
+        instance.delete()
+        pre.recalcular_totales()

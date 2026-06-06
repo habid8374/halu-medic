@@ -449,3 +449,55 @@ export interface AyudaDiagnostica {
   fecha_solicitud: string
   resultado?: ResultadoAD
 }
+
+// ── Prefactura ────────────────────────────────────────────────────────────────
+export type EstadoPrefactura = 'borrador' | 'en_revision' | 'aprobada' | 'facturada' | 'anulada'
+export type DestinoPrefactura = 'eps' | 'paciente' | 'no_facturable'
+export type TipoItemPrefactura =
+  | 'consulta' | 'procedimiento' | 'cx' | 'anestesia' | 'derecho_sala'
+  | 'hoteleria' | 'medicamento' | 'material' | 'laboratorio' | 'imagen' | 'otro'
+
+export interface ItemPrefactura {
+  id: string
+  prefactura: string
+  tipo: TipoItemPrefactura
+  descripcion: string
+  cups?: string | null
+  cum?: string | null
+  cantidad: number
+  valor_unitario: number
+  descuento: number
+  valor_total: number
+  destino: DestinoPrefactura
+  motivo_exclusion?: string | null
+  origen_tipo?: string | null
+  origen_id?: string | null
+  es_manual: boolean
+  cie10?: string | null
+  fecha_servicio?: string | null
+  creado_en: string
+}
+
+export interface Prefactura {
+  id: string
+  numero: string
+  numero_formateado: string
+  ingreso?: string | null
+  historia?: string | null
+  paciente: string
+  paciente_nombre: string
+  convenio?: string | null
+  convenio_info?: { id: string; nombre: string; tipo_contrato: string } | null
+  estado: EstadoPrefactura
+  subtotal_eps: number
+  subtotal_paciente: number
+  subtotal_no_facturable: number
+  total: number
+  observaciones?: string | null
+  factura?: string | null
+  creado_por?: string | null
+  revisado_por?: string | null
+  creado_en: string
+  actualizado_en: string
+  items: ItemPrefactura[]
+}
