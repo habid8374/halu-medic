@@ -118,17 +118,17 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 animate-slide-up">
+    <form onSubmit={handleSubmit} className="space-y-4 animate-slide-up">
 
-      {/* Identificación */}
+      {/* Identificación + Datos personales — una sola card */}
       <Card>
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex items-center gap-2 mb-4">
           <div className="w-8 h-8 bg-halu-50 rounded-lg flex items-center justify-center">
             <User className="w-4 h-4 text-halu-600" />
           </div>
-          <h3 className="font-semibold text-slate-900 text-sm">Identificación</h3>
+          <h3 className="font-semibold text-slate-900 text-sm">Identificación y datos personales</h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Select
             label="Tipo de documento *"
             value={form.tipo_identificacion}
@@ -146,18 +146,13 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
             error={errors.numero_identificacion}
             placeholder="Ej: 1234567890"
           />
-        </div>
-      </Card>
-
-      {/* Datos personales */}
-      <Card>
-        <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center">
-            <User className="w-4 h-4 text-teal-600" />
-          </div>
-          <h3 className="font-semibold text-slate-900 text-sm">Datos personales</h3>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Fecha de nacimiento *"
+            type="date"
+            value={form.fecha_nacimiento}
+            onChange={set('fecha_nacimiento')}
+            error={errors.fecha_nacimiento}
+          />
           <Input
             label="Primer nombre *"
             value={form.primer_nombre}
@@ -171,6 +166,16 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
             onChange={set('segundo_nombre')}
             placeholder="Opcional"
           />
+          <Select
+            label="Sexo *"
+            value={form.sexo}
+            onChange={set('sexo')}
+            error={errors.sexo}
+          >
+            {SEXOS.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </Select>
           <Input
             label="Primer apellido *"
             value={form.primer_apellido}
@@ -184,35 +189,18 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
             onChange={set('segundo_apellido')}
             placeholder="Opcional"
           />
-          <Input
-            label="Fecha de nacimiento *"
-            type="date"
-            value={form.fecha_nacimiento}
-            onChange={set('fecha_nacimiento')}
-            error={errors.fecha_nacimiento}
-          />
-          <Select
-            label="Sexo *"
-            value={form.sexo}
-            onChange={set('sexo')}
-            error={errors.sexo}
-          >
-            {SEXOS.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </Select>
         </div>
       </Card>
 
-      {/* Contacto */}
+      {/* Contacto y residencia — una sola card */}
       <Card>
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex items-center gap-2 mb-4">
           <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center">
             <Phone className="w-4 h-4 text-amber-600" />
           </div>
-          <h3 className="font-semibold text-slate-900 text-sm">Contacto</h3>
+          <h3 className="font-semibold text-slate-900 text-sm">Contacto y residencia</h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Input
             label="Teléfono"
             value={form.telefono}
@@ -228,7 +216,13 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
             placeholder="Ej: paciente@email.com"
             type="email"
           />
-          <div className="sm:col-span-2">
+          <Input
+            label="Código municipio (DANE)"
+            value={form.municipio_codigo}
+            onChange={set('municipio_codigo')}
+            placeholder="08001 = Barranquilla"
+          />
+          <div className="sm:col-span-2 lg:col-span-3">
             <Input
               label="Dirección"
               value={form.direccion}
@@ -236,24 +230,18 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
               placeholder="Ej: Cra 50 # 80-20, Barranquilla"
             />
           </div>
-          <Input
-            label="Código municipio (DANE)"
-            value={form.municipio_codigo}
-            onChange={set('municipio_codigo')}
-            placeholder="08001 = Barranquilla"
-          />
         </div>
       </Card>
 
       {/* Aseguramiento */}
       <Card>
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex items-center gap-2 mb-4">
           <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
             <Shield className="w-4 h-4 text-emerald-600" />
           </div>
           <h3 className="font-semibold text-slate-900 text-sm">Aseguramiento</h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Select
             label="Régimen de afiliación *"
             value={form.regimen}
@@ -264,38 +252,35 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
               <option key={r.value} value={r.value}>{r.label}</option>
             ))}
           </Select>
-          <Input
-            label="Número de póliza / afiliación"
-            value={form.numero_poliza}
-            onChange={set('numero_poliza')}
-            placeholder="Opcional"
-          />
           <Select
             label="EPS / Aseguradora"
             value={form.aseguradora}
             onChange={set('aseguradora')}
           >
-            <option value="">— Sin aseguradora (particular) —</option>
+            <option value="">— Particular / sin aseguradora —</option>
             {aseguradoras.map(a => (
               <option key={a.id} value={a.id}>
                 {a.nombre}{a.tarifario_nombre ? ` · ${a.tarifario_nombre}` : ''}
               </option>
             ))}
           </Select>
+          <Input
+            label="Número de póliza / afiliación"
+            value={form.numero_poliza}
+            onChange={set('numero_poliza')}
+            placeholder="Opcional"
+          />
         </div>
-
-        {/* Aviso RIPS */}
-        <div className="mt-4 p-3 bg-halu-50 rounded-xl border border-halu-100">
-          <p className="text-xs text-halu-700 font-medium">ℹ️ Importante para RIPS</p>
-          <p className="text-xs text-halu-600 mt-0.5">
-            El régimen determina el tipo de usuario en el RIPS (Res. 948/2026)
-            y el concepto de recaudo en la factura electrónica sector salud.
+        <div className="mt-3 p-3 bg-halu-50 rounded-xl border border-halu-100">
+          <p className="text-xs text-halu-700">
+            <span className="font-medium">RIPS:</span> El régimen determina el tipo de usuario (Res. 948/2026).
+            La EPS seleccionada aplica su tarifario en toda la estancia del paciente.
           </p>
         </div>
       </Card>
 
       {/* Acciones */}
-      <div className="flex items-center justify-end gap-3 pb-6">
+      <div className="flex items-center justify-end gap-3 pb-4">
         <Button
           type="button"
           variant="secondary"

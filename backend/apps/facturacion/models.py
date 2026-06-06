@@ -345,3 +345,78 @@ class ItemPrefactura(models.Model):
 
     def __str__(self):
         return f'{self.get_tipo_display()} — {self.descripcion[:50]}'
+
+
+# ═══════════════════════════════════════════════════════════
+#  NOTA DE AJUSTE RIPS — Res. 948/2026
+# ═══════════════════════════════════════════════════════════
+class NotaAjusteRIPS(models.Model):
+    """
+    Corrección de errores clínicos en un RIPS ya aceptado por el pagador.
+    No modifica valores de facturación (eso corresponde a NC/ND en FEV).
+    Referencia al CUV del RIPS original. Se transmite vía Factus junto
+    con el JSON de RIPS corregido.
+    """
+    MOTIVO_CHOICES = [
+        ('diagnostico',      'Diagnóstico incorrecto (CIE-10)'),
+        ('cups',             'Código de procedimiento incorrecto (CUPS)'),
+        ('datos_paciente',   'Datos demográficos del paciente'),
+        ('fecha_servicio',   'Fecha de servicio incorrecta'),
+        ('tipo_usuario',     'Tipo de usuario / régimen incorrecto'),
+        ('via_ingreso',      'Vía de ingreso incorrecta'),
+        ('causa_externa',    'Causa externa incorrecta'),
+        ('finalidad',        'Finalidad de la consulta incorrecta'),
+        ('otro',             'Otro error clínico'),
+    ]
+    ESTADO_CHOICES = [
+        ('borrador',   'Borrador'),
+        ('enviada',    'Enviada a MinSalud'),
+        ('aceptada',   'Aceptada'),
+        ('rechazada',  'Rechazada'),
+    ]
+
+    id             = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    factura        = models.ForeignKey(
+        'Factura', on_delete=models.CASCADE, related_name='notas_ajuste',
+        help_text='Factura cuyo RIPS se está ajustando'
+    )
+    cuv_original   = models.CharField(max_length=120, blank=True,
+                                       help_text='CUV del RIPS original (obtenido de Factus)')
+    numero_factus_original = models.CharField(max_length=50, blank=True,
+                                               help_text='Número de factura original en Factus')
+
+    motivo_tipo    = models.CharField(max_length=30, choices=MOTIVO_CHOICES)
+    motivo_detalle = models.TextField(
+        help_text='Descripción del error encontrado y la corrección aplicada'
+    )
+
+    # Datos corregidos (snapshot de los campos que cambian)
+    datos_originales  = models.JSONField(default=dict, blank=True,
+                                          help_text='Snapshot de los valores incorrectos')
+    datos_corregidos  = models.JSONField(default=dict, blank=True,
+                                          help_text='Snapshot de los valores corregidos')
+
+    # JSON completo del RIPS de ajuste generado
+    rips_ajuste_json  = models.JSONField(null=True, blank=True,
+                                          help_text='RIPS JSON con datos clínicos corregidos')
+
+    estado         = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='borrador')
+    cuv_ajuste     = models.CharField(max_length=120, blank=True,
+                                       help_text='CUV asignado al RIPS de ajuste por MinSalud')
+    respuesta_factus = models.JSONField(null=True, blank=True,
+                                         help_text='Respuesta completa de la API Factus')
+
+    creado_por     = models.ForeignKey(
+        'usuarios.Usuario', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='notas_ajuste_creadas'
+    )
+    creado_en      = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+        verbose_name        = 'Nota de ajuste RIPS'
+        verbose_name_plural = 'Notas de ajuste RIPS'
+
+    def __str__(self):
+        return f'NA-RIPS · {self.factura} · {self.get_motivo_tipo_display()}'
