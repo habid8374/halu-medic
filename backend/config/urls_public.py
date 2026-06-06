@@ -20,13 +20,16 @@ from apps.usuarios.auth import (
     UsuarioViewSet,
 )
 from apps.suscripciones.api import SuscripcionViewSet
+from apps.tenants.signup import SignupView
+from apps.tenants.api import ConsultorioViewSet
 from config.api import CodigoCUPSViewSet, CodigoCIE10ViewSet
 
 router = DefaultRouter()
-router.register(r'admin/suscripciones', SuscripcionViewSet,  basename='suscripcion')
-router.register(r'usuarios',            UsuarioViewSet,      basename='usuario-public')
-router.register(r'cups',                CodigoCUPSViewSet,   basename='cups-public')
-router.register(r'cie10',               CodigoCIE10ViewSet,  basename='cie10-public')
+router.register(r'admin/suscripciones', SuscripcionViewSet,   basename='suscripcion')
+router.register(r'admin/consultorios',  ConsultorioViewSet,   basename='consultorio')
+router.register(r'usuarios',            UsuarioViewSet,       basename='usuario-public')
+router.register(r'cups',                CodigoCUPSViewSet,    basename='cups-public')
+router.register(r'cie10',               CodigoCIE10ViewSet,   basename='cie10-public')
 
 urlpatterns = [
     path('api/health/', health, name='health'),
@@ -39,6 +42,7 @@ urlpatterns = [
     path('api/auth/me/',                 MiPerfilView.as_view(),          name='me'),
     path('api/auth/recuperar-password/', RecuperarPasswordView.as_view(), name='recuperar_password'),
     path('api/auth/confirmar-password/', ConfirmarPasswordView.as_view(), name='confirmar_password'),
+    path('api/auth/signup/',             SignupView.as_view(),             name='signup'),
 
     # ── Admin SaaS ────────────────────────────────────────────────────────────
     path('api/', include(router.urls)),

@@ -118,7 +118,11 @@ export default function LoginPage() {
           </div>
 
           {/* Footer */}
-          <p className="text-center text-xs text-slate-300 mt-5">
+          <p className="text-center text-xs text-slate-400 mt-4">
+            ¿No tienes cuenta?{' '}
+            <a href="/signup" className="text-teal-400 font-semibold hover:underline">Registra tu consultorio</a>
+          </p>
+          <p className="text-center text-xs text-slate-300 mt-2">
             © 2026 Axentia Technologies · Halu Group
           </p>
         </div>
@@ -223,20 +227,11 @@ export default function LoginPage() {
                 : 'Ingresar'}
             </button>
           </form>
-          <div className="mt-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
-            <p className="text-xs font-medium text-slate-500 mb-2">Roles disponibles</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {[
-                { rol: 'Superadmin',    color: 'bg-purple-100 text-purple-700' },
-                { rol: 'Administrador', color: 'bg-halu-100 text-halu-700' },
-                { rol: 'Médico',        color: 'bg-teal-100 text-teal-700' },
-                { rol: 'Recepcionista', color: 'bg-amber-100 text-amber-700' },
-                { rol: 'Facturador',    color: 'bg-emerald-100 text-emerald-700' },
-                { rol: 'Auditor',       color: 'bg-slate-100 text-slate-600' },
-              ].map(r => (
-                <span key={r.rol} className={`text-xs px-2 py-1 rounded-lg font-medium ${r.color}`}>{r.rol}</span>
-              ))}
-            </div>
+          <div className="mt-6 text-center">
+            <p className="text-sm text-slate-500">
+              ¿No tienes cuenta?{' '}
+              <a href="/signup" className="text-halu-600 font-semibold hover:underline">Registra tu consultorio gratis</a>
+            </p>
           </div>
         </div>
       </div>

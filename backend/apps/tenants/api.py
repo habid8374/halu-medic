@@ -5,13 +5,113 @@ incluyendo sus credenciales Factus propias.
 
 El consultorio activo se obtiene de connection.tenant (django-tenants).
 """
-from rest_framework import serializers
+from rest_framework import serializers, viewsets
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from django.db import connection
 
-from apps.usuarios.permissions import EsAdminOSuperadmin
+from apps.usuarios.permissions import EsAdminOSuperadmin, EsSuperadmin
+from apps.tenants.models import Consultorio, Dominio
+
+
+# ── ViewSet de Consultorios (superadmin) ──────────────────────────────────────
+
+class ConsultorioSerializer(serializers.ModelSerializer):
+    dominio_principal = serializers.SerializerMethodField()
+    suscripcion_estado = serializers.SerializerMethodField()
+    suscripcion_hasta  = serializers.SerializerMethodField()
+    total_medicos      = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Consultorio
+        fields = [
+            'id', 'nombre', 'nit', 'razon_social', 'email', 'telefono',
+            'municipio_codigo', 'plan', 'activo', 'creado_en',
+            'dominio_principal', 'suscripcion_estado', 'suscripcion_hasta',
+            'total_medicos',
+        ]
+
+    def get_dominio_principal(self, obj):
+        d = obj.get_primary_domain()
+        return d.domain if d else ''
+
+    def get_suscripcion_estado(self, obj):
+        try:
+            return obj.suscripcion.estado
+        except Exception:
+            return None
+
+    def get_suscripcion_hasta(self, obj):
+        try:
+            return str(obj.suscripcion.fecha_fin) if obj.suscripcion.fecha_fin else None
+        except Exception:
+            return None
+
+    def get_total_medicos(self, obj):
+        # Cuenta usuarios médicos en el schema del tenant
+        from django_tenants.utils import schema_context
+        from apps.usuarios.models import Usuario, Rol
+        try:
+            with schema_context(obj.schema_name):
+                return Usuario.objects.filter(rol=Rol.MEDICO, is_active=True).count()
+        except Exception:
+            return 0
+
+
+class ConsultorioViewSet(viewsets.ReadOnlyModelViewSet):
+    """Lista y detalle de todos los consultorios — solo superadmin."""
+    serializer_class   = ConsultorioSerializer
+    permission_classes = [IsAuthenticated, EsSuperadmin]
+
+    def get_queryset(self):
+        qs = Consultorio.objects.exclude(schema_name='public').order_by('-creado_en')
+        search = self.request.query_params.get('search', '').strip()
+        plan   = self.request.query_params.get('plan')
+        activo = self.request.query_params.get('activo')
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(Q(nombre__icontains=search) | Q(nit__icontains=search))
+        if plan:
+            qs = qs.filter(plan=plan)
+        if activo is not None:
+            qs = qs.filter(activo=activo.lower() == 'true')
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def desactivar(self, request, pk=None):
+        c = self.get_object()
+        c.activo = False
+        c.save(update_fields=['activo'])
+        return Response({'mensaje': f'{c.nombre} desactivado.'})
+
+    @action(detail=True, methods=['post'])
+    def activar(self, request, pk=None):
+        c = self.get_object()
+        c.activo = True
+        c.save(update_fields=['activo'])
+        return Response({'mensaje': f'{c.nombre} activado.'})
+
+    @action(detail=True, methods=['get'])
+    def estadisticas(self, request, pk=None):
+        """Devuelve conteos básicos del tenant para el superadmin."""
+        c = self.get_object()
+        from django_tenants.utils import schema_context
+        stats = {}
+        try:
+            with schema_context(c.schema_name):
+                from apps.pacientes.models import Paciente
+                from apps.facturacion.models import Factura
+                from apps.usuarios.models import Usuario
+                stats = {
+                    'pacientes':  Paciente.objects.count(),
+                    'facturas':   Factura.objects.count(),
+                    'usuarios':   Usuario.objects.filter(is_active=True).count(),
+                }
+        except Exception:
+            pass
+        return Response(stats)
 
 
 class ConfiguracionConsultorioSerializer(serializers.Serializer):
