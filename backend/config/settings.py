@@ -17,6 +17,15 @@ _RAILWAY = 'halu-medic-production.up.railway.app'
 if _RAILWAY not in ALLOWED_HOSTS:
     ALLOWED_HOSTS = list(ALLOWED_HOSTS) + [_RAILWAY]
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://halu-medic-production.up.railway.app',
+    'https://*.halumedic.co',
+    'https://halu-medic.vercel.app',
+    'https://*.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:8000',
+]
+
 # ── Multi-tenancy ─────────────────────────────────────────────────────────────
 # Apps compartidas (schema "public") — datos del SaaS
 SHARED_APPS = [
