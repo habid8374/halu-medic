@@ -41,8 +41,8 @@ export default function LoginPage() {
         className="lg:hidden fixed inset-0 w-full h-full object-cover -z-10"
         src="/login-bg.mp4"
       />
-      {/* Overlay móvil */}
-      <div className="lg:hidden fixed inset-0 bg-halu-900/70 -z-10" />
+      {/* Overlay móvil — suave para que el video sea legible */}
+      <div className="lg:hidden fixed inset-0 bg-halu-900/40 -z-10" />
 
       {/* Panel izquierdo — video de fondo */}
       <div className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden">
@@ -55,8 +55,8 @@ export default function LoginPage() {
           className="absolute inset-0 w-full h-full object-cover"
           src="/login-bg.mp4"
         />
-        {/* Overlay degradado para legibilidad */}
-        <div className="absolute inset-0 bg-gradient-to-br from-halu-900/90 via-halu-800/80 to-teal-900/75" />
+        {/* Overlay degradado — suave para que se aprecie el video */}
+        <div className="absolute inset-0 bg-gradient-to-br from-halu-900/60 via-halu-800/45 to-teal-900/50" />
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3">
