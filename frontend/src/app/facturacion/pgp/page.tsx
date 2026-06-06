@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth-context'
 import { facturasPGPAPI, mensajeError } from '@/lib/api'
 import { FacturaPGP, EstadoFactura } from '@/types'
 import { PageHeader, Button, Badge, Spinner, EmptyState } from '@/components/ui'
-import { ArrowLeft, PlusCircle, FileText, RefreshCw } from 'lucide-react'
+import { ArrowLeft, PlusCircle, FileText, RefreshCw, Filter } from 'lucide-react'
 import clsx from 'clsx'
 
 const ESTADO_BADGE: Record<EstadoFactura, { label: string; color: string }> = {
@@ -40,17 +40,33 @@ export default function FacturacionPGPPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoFactura | ''>('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+  const [busqAseg, setBusqAseg] = useState('')
 
   const cargar = () => {
     setLoading(true)
-    const params = estadoFiltro ? { estado: estadoFiltro } : undefined
-    facturasPGPAPI.list(params)
-      .then(({ data }) => setFacturas(Array.isArray(data) ? data : data.results ?? []))
+    const params: Record<string, string> = {}
+    if (estadoFiltro) params.estado = estadoFiltro
+    if (fechaDesde)   params.fecha_desde = fechaDesde
+    if (fechaHasta)   params.fecha_hasta = fechaHasta
+    facturasPGPAPI.list(Object.keys(params).length ? params : undefined)
+      .then(({ data }) => {
+        let list: FacturaPGP[] = Array.isArray(data) ? data : data.results ?? []
+        if (busqAseg.trim()) {
+          const q = busqAseg.toLowerCase()
+          list = list.filter(f =>
+            f.convenio_info?.aseguradora_nombre?.toLowerCase().includes(q) ||
+            String(f.convenio_info?.aseguradora_nit ?? '').includes(q)
+          )
+        }
+        setFacturas(list)
+      })
       .catch(err => setError(mensajeError(err)))
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { cargar() }, [estadoFiltro])
+  useEffect(() => { cargar() }, [estadoFiltro, fechaDesde, fechaHasta])
 
   return (
     <div className="page-padding animate-fade-in">
@@ -67,24 +83,62 @@ export default function FacturacionPGPPage() {
       />
 
       {/* Filtros */}
-      <div className="flex gap-2 flex-wrap mb-6">
-        {ESTADOS.map(e => (
-          <button
-            key={e.value}
-            onClick={() => setEstadoFiltro(e.value)}
-            className={clsx(
-              'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
-              estadoFiltro === e.value
-                ? 'bg-slate-900 text-white'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 space-y-3">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+          <Filter className="w-3.5 h-3.5" />Filtrar facturas PGP
+        </p>
+        {/* Aseguradora + estado */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Aseguradora (EPS)</label>
+            <input
+              value={busqAseg}
+              onChange={e => setBusqAseg(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && cargar()}
+              placeholder="Nombre o NIT de la EPS..."
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/30"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Estado</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {ESTADOS.map(e => (
+                <button key={e.value} onClick={() => setEstadoFiltro(e.value)}
+                  className={clsx('px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
+                    estadoFiltro === e.value
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100')}>
+                  {e.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* Rango de fechas */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Período desde</label>
+            <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/30" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Período hasta</label>
+            <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/30" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={cargar}
+              className="flex-1 py-2 rounded-xl bg-halu-600 text-white text-sm font-medium hover:bg-halu-700 transition-all">
+              Buscar
+            </button>
+            {(fechaDesde || fechaHasta || busqAseg || estadoFiltro) && (
+              <button onClick={() => { setFechaDesde(''); setFechaHasta(''); setBusqAseg(''); setEstadoFiltro('') }}
+                className="px-3 py-2 rounded-xl border border-slate-200 text-slate-500 text-sm hover:bg-slate-50 transition-all">
+                Limpiar
+              </button>
             )}
-          >
-            {e.label}
-          </button>
-        ))}
-        <button onClick={cargar} className="ml-auto p-1.5 text-slate-400 hover:text-slate-600">
-          <RefreshCw className="w-4 h-4" />
-        </button>
+          </div>
+        </div>
       </div>
 
       {loading && <div className="flex justify-center py-20"><Spinner size="lg" /></div>}

@@ -317,10 +317,28 @@ class FacturaSerializer(serializers.ModelSerializer):
 class FacturaViewSet(viewsets.ModelViewSet):
     serializer_class = FacturaSerializer
     ordering = ['-creado_en']
-    search_fields = ['numero_factus', 'cufe', 'consulta__paciente__numero_identificacion']
+    search_fields = [
+        'numero_factus', 'cufe',
+        'consulta__paciente__numero_identificacion',
+        'historia__paciente__numero_identificacion',
+        'historia__numero_hc',
+    ]
 
     def get_queryset(self):
-        return Factura.objects.select_related('consulta__paciente', 'convenio')
+        qs = Factura.objects.select_related('consulta__paciente', 'historia__paciente', 'convenio')
+        historia_id = self.request.query_params.get('historia')
+        if historia_id:
+            qs = qs.filter(historia_id=historia_id)
+        convenio = self.request.query_params.get('convenio')
+        if convenio:
+            qs = qs.filter(convenio_id=convenio)
+        fecha_desde = self.request.query_params.get('fecha_desde')
+        if fecha_desde:
+            qs = qs.filter(creado_en__date__gte=fecha_desde)
+        fecha_hasta = self.request.query_params.get('fecha_hasta')
+        if fecha_hasta:
+            qs = qs.filter(creado_en__date__lte=fecha_hasta)
+        return qs
 
     def perform_create(self, serializer):
         """Al crear la factura, calcula totales desde la consulta."""
@@ -332,6 +350,47 @@ class FacturaViewSet(viewsets.ModelViewSet):
             valor_copago=consulta.valor_copago,
             convenio=consulta.convenio,
         )
+
+    @action(detail=False, methods=['get'], url_path='pendientes')
+    def pendientes(self, request):
+        """
+        GET /api/facturacion/facturas/pendientes/
+        Retorna HCs sin factura para poder facturarlas.
+        Filtra por: documento, numero_hc, convenio_id, fecha_desde, fecha_hasta
+        """
+        from django.db.models import Q
+
+        qs = HistoriaClinica.objects.select_related(
+            'paciente', 'ingreso'
+        ).filter(
+            facturas__isnull=True  # sin factura aún
+        )
+
+        doc = request.query_params.get('documento')
+        if doc:
+            qs = qs.filter(paciente__numero_identificacion__icontains=doc)
+
+        num_hc = request.query_params.get('numero_hc')
+        if num_hc:
+            qs = qs.filter(numero_hc=num_hc)
+
+        fecha_desde = request.query_params.get('fecha_desde')
+        if fecha_desde:
+            qs = qs.filter(fecha_atencion__date__gte=fecha_desde)
+
+        fecha_hasta = request.query_params.get('fecha_hasta')
+        if fecha_hasta:
+            qs = qs.filter(fecha_atencion__date__lte=fecha_hasta)
+
+        class HCPendienteSerializer(serializers.ModelSerializer):
+            paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
+            paciente_doc    = serializers.CharField(source='paciente.numero_identificacion', read_only=True)
+            class Meta:
+                model  = HistoriaClinica
+                fields = ['id', 'numero_hc', 'fecha_atencion', 'tipo_registro',
+                          'diagnostico_principal', 'paciente_nombre', 'paciente_doc']
+
+        return Response(HCPendienteSerializer(qs.order_by('-fecha_atencion')[:100], many=True).data)
 
     @action(detail=True, methods=['post'])
     def emitir(self, request, pk=None):
@@ -791,6 +850,18 @@ class FacturaPGPViewSet(viewsets.ModelViewSet):
         estado = self.request.query_params.get('estado')
         if estado:
             qs = qs.filter(estado=estado)
+        convenio = self.request.query_params.get('convenio')
+        if convenio:
+            qs = qs.filter(convenio_id=convenio)
+        aseguradora = self.request.query_params.get('aseguradora')
+        if aseguradora:
+            qs = qs.filter(convenio__aseguradora_id=aseguradora)
+        fecha_desde = self.request.query_params.get('fecha_desde')
+        if fecha_desde:
+            qs = qs.filter(periodo_desde__gte=fecha_desde)
+        fecha_hasta = self.request.query_params.get('fecha_hasta')
+        if fecha_hasta:
+            qs = qs.filter(periodo_hasta__lte=fecha_hasta)
         return qs
 
     @action(detail=True, methods=['post'])
@@ -997,7 +1068,7 @@ class FacturaPGPViewSet(viewsets.ModelViewSet):
 
 # ── HISTORIA CLÍNICA ──────────────────────────────────────────────────────────
 
-from apps.historia.models import Ingreso, Egreso, HistoriaClinica
+from apps.historia.models import Ingreso, Egreso, HistoriaClinica, OrdenHC
 
 
 class IngresoSerializer(serializers.ModelSerializer):
@@ -1177,6 +1248,30 @@ class MedicamentoHCViewSet(viewsets.ModelViewSet):
         historia = self.request.query_params.get('historia')
         if historia:
             qs = qs.filter(historia=historia)
+        return qs
+
+
+class OrdenHCSerializer(serializers.ModelSerializer):
+    tipo_label   = serializers.CharField(source='get_tipo_display', read_only=True)
+    estado_label = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model  = OrdenHC
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en']
+
+
+class OrdenHCViewSet(viewsets.ModelViewSet):
+    serializer_class = OrdenHCSerializer
+
+    def get_queryset(self):
+        qs = OrdenHC.objects.select_related('historia__paciente').all()
+        historia_id = self.request.query_params.get('historia')
+        if historia_id:
+            qs = qs.filter(historia_id=historia_id)
+        estado = self.request.query_params.get('estado')
+        if estado:
+            qs = qs.filter(estado=estado)
         return qs
 
 

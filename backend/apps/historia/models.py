@@ -89,6 +89,7 @@ class HistoriaClinica(models.Model):
     Puede vincularse a un Ingreso (hospitalización) y/o a una Consulta (RDA).
     """
     id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    numero_hc       = models.PositiveIntegerField(editable=False, null=True, blank=True)
     paciente        = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT,
                                          related_name='historias')
     ingreso         = models.ForeignKey(Ingreso, on_delete=models.SET_NULL,
@@ -138,8 +139,14 @@ class HistoriaClinica(models.Model):
             models.Index(fields=['paciente', 'fecha_atencion']),
         ]
 
+    def save(self, *args, **kwargs):
+        if not self.numero_hc:
+            ultimo = HistoriaClinica.objects.order_by('-numero_hc').filter(numero_hc__isnull=False).first()
+            self.numero_hc = (ultimo.numero_hc + 1) if ultimo else 1
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f'HC {self.paciente} — {self.fecha_atencion.date()}'
+        return f'HC-{self.numero_hc or self.id} — {self.paciente}'
 
 
 class MedicamentoHC(models.Model):
@@ -191,3 +198,58 @@ class MedicamentoHC(models.Model):
 
     def __str__(self):
         return f'{self.cum} — {self.principio_activo} ({self.historia})'
+
+
+class OrdenHC(models.Model):
+    """
+    Órdenes médicas emitidas desde la Historia Clínica.
+    Cubre procedimientos CUPS, cirugías, interconsultas, laboratorios e imágenes.
+    """
+    TIPO_CHOICES = [
+        ('procedimiento',       'Procedimiento'),
+        ('cirugia',             'Cirugía'),
+        ('consulta_especializada', 'Consulta especializada'),
+        ('laboratorio',         'Laboratorio'),
+        ('imagen',              'Imagen diagnóstica'),
+        ('interconsulta',       'Interconsulta / Remisión'),
+        ('otro',                'Otro'),
+    ]
+    ESTADO_CHOICES = [
+        ('pendiente',  'Pendiente'),
+        ('ejecutada',  'Ejecutada'),
+        ('cancelada',  'Cancelada'),
+    ]
+
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    historia    = models.ForeignKey(HistoriaClinica, on_delete=models.CASCADE,
+                                     related_name='ordenes')
+    tipo        = models.CharField(max_length=25, choices=TIPO_CHOICES, default='procedimiento')
+    estado      = models.CharField(max_length=12, choices=ESTADO_CHOICES, default='pendiente')
+
+    # Identificación del servicio (CUPS obligatorio excepto para laboratorio libre)
+    cups             = models.CharField(max_length=10, blank=True, help_text='Código CUPS')
+    descripcion_cups = models.CharField(max_length=300, blank=True)
+
+    # Diagnóstico que justifica la orden (CIE-10)
+    cie10_justificacion    = models.CharField(max_length=10, blank=True)
+    desc_cie10             = models.CharField(max_length=300, blank=True)
+
+    cantidad          = models.PositiveIntegerField(default=1)
+    urgente           = models.BooleanField(default=False)
+    indicacion        = models.TextField(blank=True, help_text='Indicación clínica / justificación')
+    observaciones     = models.TextField(blank=True)
+    vigencia_dias     = models.PositiveSmallIntegerField(default=30)
+
+    # Facturación
+    genera_factura    = models.BooleanField(default=False)
+    valor_unitario    = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    creado_en         = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['creado_en']
+        verbose_name = 'Orden HC'
+        verbose_name_plural = 'Órdenes HC'
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.cups or self.descripcion_cups}'

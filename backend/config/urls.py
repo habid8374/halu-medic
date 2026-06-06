@@ -29,6 +29,7 @@ from config.api import (
     HistoriaClinicaViewSet,
     CatalogoMedicamentoViewSet,
     MedicamentoHCViewSet,
+    OrdenHCViewSet,
     TarifaMedicamentoViewSet,
 )
 from apps.tarifas.api import ManualTarifarioViewSet
@@ -62,6 +63,7 @@ router.register(r'historia/ingresos',      IngresoViewSet,              basename
 router.register(r'historia/egresos',       EgresoViewSet,               basename='egreso')
 router.register(r'historia/registros',     HistoriaClinicaViewSet,      basename='historia')
 router.register(r'historia/medicamentos',  MedicamentoHCViewSet,        basename='medicamento-hc')
+router.register(r'historia/ordenes',       OrdenHCViewSet,              basename='orden-hc')
 router.register(r'catalogos/medicamentos', CatalogoMedicamentoViewSet,  basename='catalogo-medicamento')
 router.register(r'tarifas/medicamentos',   TarifaMedicamentoViewSet,    basename='tarifa-medicamento')
 

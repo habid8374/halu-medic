@@ -16,8 +16,12 @@ class EstadoFactura(models.TextChoices):
 
 class Factura(models.Model):
     id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    consulta    = models.OneToOneField('consultas.Consulta', on_delete=models.PROTECT,
-                                        related_name='factura')
+    consulta    = models.ForeignKey('consultas.Consulta', on_delete=models.PROTECT,
+                                     null=True, blank=True,
+                                     related_name='facturas')
+    historia    = models.ForeignKey('historia.HistoriaClinica', on_delete=models.SET_NULL,
+                                     null=True, blank=True, related_name='facturas',
+                                     help_text='HC origen si se factura directamente desde HC')
     convenio    = models.ForeignKey('tarifas.ConvenioEPS', on_delete=models.SET_NULL,
                                      null=True, blank=True)
 

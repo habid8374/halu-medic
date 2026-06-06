@@ -147,6 +147,8 @@ export const facturasAPI = {
   pdf:         (id: string) => api.get(`/api/facturacion/facturas/${id}/pdf/`),
   xml:         (id: string) => api.get(`/api/facturacion/facturas/${id}/xml/`),
   rips:        (id: string) => api.get(`/api/facturacion/facturas/${id}/rips/`),
+  pendientes:  (params?: Record<string, unknown>) => api.get('/api/facturacion/facturas/pendientes/', { params }),
+  crearDesdeHC: (historiaId: string) => api.post('/api/facturacion/facturas/', { historia: historiaId }),
 }
 
 // ── CUPS (homologador nacional, solo lectura) ──────────────────────────────────
@@ -268,6 +270,13 @@ export const medicamentosHCAPI = {
   create: (data: Record<string, unknown>) => api.post('/api/historia/medicamentos/', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/api/historia/medicamentos/${id}/`, data),
   delete: (id: string) => api.delete(`/api/historia/medicamentos/${id}/`),
+}
+
+export const ordenesHCAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/historia/ordenes/', { params }),
+  create: (data: Record<string, unknown>) => api.post('/api/historia/ordenes/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/historia/ordenes/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/historia/ordenes/${id}/`),
 }
 
 export const catalogoMedicamentosAPI = {

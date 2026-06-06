@@ -1,12 +1,14 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { ingresosAPI, historiaAPI, medicamentosHCAPI, catalogoMedicamentosAPI, cie10API, mensajeError } from '@/lib/api'
+import { ingresosAPI, historiaAPI, medicamentosHCAPI, catalogoMedicamentosAPI, cie10API, ordenesHCAPI, mensajeError } from '@/lib/api'
 import { Ingreso, HistoriaClinica } from '@/types'
 import { Button, Card, Spinner } from '@/components/ui'
+import { CupsAutocomplete } from '@/components/ui/CupsAutocomplete'
 import {
   ArrowLeft, UserCheck, UserMinus, PlusCircle, ClipboardList,
-  Heart, Thermometer, Activity, Scale, CheckCircle2, Pill, Trash2, Search, X
+  Heart, Thermometer, Activity, Scale, CheckCircle2, Pill, Trash2, Search, X,
+  FlaskConical, Stethoscope, Scissors, FileText, AlertCircle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -53,6 +55,28 @@ interface MedItem {
   dias_tratamiento: number
   indicaciones: string
 }
+
+interface OrdenItem {
+  tipo: string
+  cups: string
+  descripcion_cups: string
+  cie10_justificacion: string
+  desc_cie10: string
+  cantidad: number
+  urgente: boolean
+  indicacion: string
+  genera_factura: boolean
+  valor_unitario: number
+}
+
+const TIPOS_ORDEN = [
+  { value: 'procedimiento',        label: 'Procedimiento',          icon: '🔬' },
+  { value: 'cirugia',              label: 'Cirugía',                icon: '🏥' },
+  { value: 'consulta_especializada', label: 'Consulta especializada', icon: '👨‍⚕️' },
+  { value: 'laboratorio',          label: 'Laboratorio',            icon: '🧪' },
+  { value: 'imagen',               label: 'Imagen diagnóstica',     icon: '📷' },
+  { value: 'interconsulta',        label: 'Interconsulta',          icon: '🔄' },
+]
 
 function SignoVital({ label, value, unit }: { label: string; value?: number; unit: string }) {
   if (!value) return null
@@ -245,8 +269,14 @@ function ModalNuevaHC({ ingresoId, pacienteId, onClose, onCreated }: {
     sv_pa_s: '', sv_pa_d: '', sv_fc: '', sv_fr: '', sv_temp: '', sv_peso: '', sv_talla: '', sv_spo2: '',
   })
   const [medicamentos, setMedicamentos] = useState<MedItem[]>([])
+  const [ordenes, setOrdenes] = useState<OrdenItem[]>([])
   const [dx1nombre, setDx1nombre] = useState('')
   const [saving, setSaving] = useState(false)
+  const [nuevaOrden, setNuevaOrden] = useState<OrdenItem>({
+    tipo: 'procedimiento', cups: '', descripcion_cups: '',
+    cie10_justificacion: '', desc_cie10: '', cantidad: 1,
+    urgente: false, indicacion: '', genera_factura: false, valor_unitario: 0,
+  })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const agregarMed = (cum: any) => {
@@ -288,12 +318,11 @@ function ModalNuevaHC({ ingresoId, pacienteId, onClose, onCreated }: {
         plan_tratamiento: form.plan_tratamiento, ordenes_medicas: form.ordenes_medicas,
         signos_vitales: Object.keys(sv).length > 0 ? sv : null,
       })
-      // Guardar medicamentos en paralelo
-      if (medicamentos.length > 0) {
-        await Promise.all(medicamentos.map(m =>
-          medicamentosHCAPI.create({ historia: hc.id, ...m })
-        ))
-      }
+      // Guardar medicamentos y órdenes en paralelo
+      await Promise.all([
+        ...medicamentos.map(m => medicamentosHCAPI.create({ historia: hc.id, ...m })),
+        ...ordenes.map(o => ordenesHCAPI.create({ historia: hc.id, ...o })),
+      ])
       toast.success('Registro guardado')
       onCreated()
     } catch (err) {
@@ -382,16 +411,130 @@ function ModalNuevaHC({ ingresoId, pacienteId, onClose, onCreated }: {
             />
           </div>
 
-          {[
-            { k: 'plan_tratamiento', label: 'Plan de tratamiento' },
-            { k: 'ordenes_medicas', label: 'Órdenes médicas' },
-          ].map(f => (
-            <div key={f.k}>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{f.label}</label>
-              <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                value={(form as Record<string, string>)[f.k]} onChange={e => set(f.k, e.target.value)} />
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Plan de tratamiento</label>
+            <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              value={form.plan_tratamiento} onChange={e => set('plan_tratamiento', e.target.value)} />
+          </div>
+
+          {/* ── Órdenes médicas estructuradas ── */}
+          <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/30">
+            <div className="flex items-center gap-2 mb-3">
+              <ClipboardList className="w-4 h-4 text-blue-600" />
+              <p className="text-sm font-semibold text-slate-700">Órdenes médicas</p>
+              {ordenes.length > 0 && (
+                <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{ordenes.length}</span>
+              )}
             </div>
-          ))}
+
+            {/* Selector de tipo */}
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {TIPOS_ORDEN.map(t => (
+                <button key={t.value} type="button"
+                  onClick={() => setNuevaOrden(o => ({ ...o, tipo: t.value }))}
+                  className={clsx('text-xs px-2.5 py-1 rounded-full border transition-all',
+                    nuevaOrden.tipo === t.value
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300')}>
+                  {t.icon} {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* CUPS con autocomplete */}
+            <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2">
+              <CupsAutocomplete
+                label="CUPS (código del servicio)"
+                value={nuevaOrden.cups}
+                descripcion={nuevaOrden.descripcion_cups}
+                onChange={(cod, desc) => setNuevaOrden(o => ({ ...o, cups: cod, descripcion_cups: desc }))}
+                placeholder="Buscar por código o nombre..."
+              />
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-0.5">CIE-10 justificación</label>
+                  <input type="text" maxLength={10}
+                    placeholder="Ej: J06.9"
+                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={nuevaOrden.cie10_justificacion}
+                    onChange={e => setNuevaOrden(o => ({ ...o, cie10_justificacion: e.target.value.toUpperCase() }))} />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-0.5">Cantidad</label>
+                  <input type="number" min={1}
+                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={nuevaOrden.cantidad}
+                    onChange={e => setNuevaOrden(o => ({ ...o, cantidad: Number(e.target.value) }))} />
+                </div>
+                <div className="flex flex-col justify-end">
+                  <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                    <input type="checkbox" checked={nuevaOrden.urgente}
+                      onChange={e => setNuevaOrden(o => ({ ...o, urgente: e.target.checked }))}
+                      className="accent-red-500" />
+                    Urgente
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer mt-1">
+                    <input type="checkbox" checked={nuevaOrden.genera_factura}
+                      onChange={e => setNuevaOrden(o => ({ ...o, genera_factura: e.target.checked }))}
+                      className="accent-blue-500" />
+                    Facturar
+                  </label>
+                </div>
+              </div>
+              {nuevaOrden.genera_factura && (
+                <div>
+                  <label className="block text-xs text-slate-500 mb-0.5">Valor unitario $</label>
+                  <input type="number" min={0}
+                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={nuevaOrden.valor_unitario}
+                    onChange={e => setNuevaOrden(o => ({ ...o, valor_unitario: Number(e.target.value) }))} />
+                </div>
+              )}
+              <div>
+                <label className="block text-xs text-slate-500 mb-0.5">Indicación clínica</label>
+                <input type="text" placeholder="Justificación médica..."
+                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={nuevaOrden.indicacion}
+                  onChange={e => setNuevaOrden(o => ({ ...o, indicacion: e.target.value }))} />
+              </div>
+              <button type="button"
+                disabled={!nuevaOrden.cups && !nuevaOrden.descripcion_cups}
+                onClick={() => {
+                  if (!nuevaOrden.cups && !nuevaOrden.descripcion_cups) return
+                  setOrdenes(prev => [...prev, { ...nuevaOrden }])
+                  setNuevaOrden(o => ({ ...o, cups: '', descripcion_cups: '', cie10_justificacion: '', indicacion: '', cantidad: 1, urgente: false, genera_factura: false, valor_unitario: 0 }))
+                }}
+                className="w-full py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-all">
+                + Agregar orden
+              </button>
+            </div>
+
+            {/* Lista de órdenes agregadas */}
+            {ordenes.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {ordenes.map((o, i) => (
+                  <div key={i} className="flex items-start gap-2 bg-white rounded-lg border border-slate-200 px-3 py-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+                          {TIPOS_ORDEN.find(t => t.value === o.tipo)?.icon} {TIPOS_ORDEN.find(t => t.value === o.tipo)?.label}
+                        </span>
+                        {o.cups && <span className="text-xs font-mono text-slate-600">{o.cups}</span>}
+                        {o.urgente && <span className="text-xs text-red-600 font-semibold">🚨 Urgente</span>}
+                        {o.genera_factura && <span className="text-xs text-emerald-600">💰 Facturar</span>}
+                      </div>
+                      <p className="text-xs text-slate-700 mt-0.5">{o.descripcion_cups}</p>
+                      {o.cie10_justificacion && <p className="text-xs text-slate-400">DX: {o.cie10_justificacion}</p>}
+                    </div>
+                    <button type="button" onClick={() => setOrdenes(prev => prev.filter((_, idx) => idx !== i))}
+                      className="text-red-400 hover:text-red-600 flex-shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Medicamentos */}
           <div className="border border-slate-200 rounded-xl p-4">
@@ -630,17 +773,22 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
               </div>
               <div className="flex-1 bg-white border border-slate-200 rounded-xl p-4 mb-1">
                 <div className="flex items-start justify-between mb-2">
-                  <div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {(hc as any).numero_hc && (
+                      <span className="text-xs font-mono font-bold text-halu-700 bg-halu-50 border border-halu-200 px-2 py-0.5 rounded-full">
+                        HC-{String((hc as any).numero_hc).padStart(5, '0')}
+                      </span>
+                    )}
                     <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', TIPO_REGISTRO_COLOR[hc.tipo_registro] ?? 'bg-slate-100 text-slate-600')}>
                       {TIPO_REGISTRO_LABEL[hc.tipo_registro] || hc.tipo_registro}
                     </span>
                     {hc.diagnostico_principal && (
-                      <span className="ml-2 text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">
+                      <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">
                         Dx: {hc.diagnostico_principal}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400">{fmtFecha(hc.fecha_atencion)}</p>
+                  <p className="text-xs text-slate-400 flex-shrink-0 ml-2">{fmtFecha(hc.fecha_atencion)}</p>
                 </div>
 
                 {hc.motivo_consulta && (
@@ -667,10 +815,31 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
                     <p className="text-sm text-slate-700">{hc.plan_tratamiento}</p>
                   </div>
                 )}
-                {hc.ordenes_medicas && (
-                  <div className="mb-2">
-                    <p className="text-xs text-slate-400 font-medium">Órdenes</p>
-                    <p className="text-sm text-slate-700">{hc.ordenes_medicas}</p>
+                {(hc as any).ordenes?.length > 0 && (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <p className="text-xs text-slate-400 font-medium flex items-center gap-1 mb-2">
+                      <ClipboardList className="w-3.5 h-3.5" />Órdenes médicas ({(hc as any).ordenes.length})
+                    </p>
+                    <div className="space-y-1">
+                      {(hc as any).ordenes.map((o: any) => (
+                        <div key={o.id} className={clsx(
+                          'text-xs rounded-lg px-3 py-1.5 flex items-center gap-2',
+                          o.urgente ? 'bg-red-50 text-red-800' : 'bg-blue-50 text-blue-800'
+                        )}>
+                          <span className="font-semibold">{TIPOS_ORDEN.find(t => t.value === o.tipo)?.icon}</span>
+                          {o.cups && <span className="font-mono font-bold">{o.cups}</span>}
+                          <span className="flex-1">{o.descripcion_cups}</span>
+                          {o.cantidad > 1 && <span className="text-slate-500">×{o.cantidad}</span>}
+                          {o.urgente && <span className="text-red-600 font-bold">URGENTE</span>}
+                          {o.genera_factura && <span className="text-emerald-600">💰</span>}
+                          <span className={clsx('ml-auto px-1.5 py-0.5 rounded-full text-xs',
+                            o.estado === 'ejecutada' ? 'bg-green-100 text-green-700' :
+                            o.estado === 'cancelada' ? 'bg-slate-100 text-slate-500' :
+                            'bg-amber-100 text-amber-700'
+                          )}>{o.estado}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {hc.signos_vitales && (
