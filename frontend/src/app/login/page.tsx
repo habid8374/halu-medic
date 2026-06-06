@@ -35,17 +35,27 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Panel izquierdo — branding */}
-      <div className="hidden lg:flex lg:w-[52%] bg-gradient-to-br from-halu-900 via-halu-800 to-halu-700 flex-col justify-between p-12 relative overflow-hidden">
-        {/* Círculos decorativos */}
-        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-white/5" />
-        <div className="absolute top-1/3 -right-16 w-64 h-64 rounded-full bg-teal-500/10" />
-        <div className="absolute bottom-12 left-1/4 w-48 h-48 rounded-full bg-halu-600/30" />
+      {/* Panel izquierdo — video de fondo */}
+      <div className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden">
+        {/* Video de fondo */}
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+          src="/login-bg.mp4"
+        />
+        {/* Overlay degradado para legibilidad */}
+        <div className="absolute inset-0 bg-gradient-to-br from-halu-900/90 via-halu-800/80 to-teal-900/75" />
 
         {/* Logo */}
-        <div className="relative z-10">
+        <div className="relative z-10 flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Halu Medic" width={160} height={45} className="object-contain brightness-0 invert opacity-90" />
+          <img src="/logo-icon.png" alt="" className="h-10 w-10 object-contain" />
+          <span className="text-2xl font-extrabold tracking-tight" style={{ fontFamily: "'Nunito', sans-serif" }}>
+            <span style={{ color: '#e0efff' }}>Halu</span><span style={{ color: '#5eead4' }}>Medic</span>
+          </span>
         </div>
 
         {/* Contenido central */}
@@ -73,9 +83,9 @@ export default function LoginPage() {
               { label: 'Res. 948/2026', value: '✓' },
               { label: 'DIAN + RIPS', value: '✓' },
             ].map((s) => (
-              <div key={s.label} className="bg-white/8 rounded-xl p-4 border border-white/10 backdrop-blur-sm">
+              <div key={s.label} className="bg-white/10 rounded-xl p-4 border border-white/15 backdrop-blur-sm">
                 <div className="text-2xl font-bold text-white">{s.value}</div>
-                <div className="text-xs text-slate-400 mt-1">{s.label}</div>
+                <div className="text-xs text-slate-300 mt-1">{s.label}</div>
               </div>
             ))}
           </div>
@@ -83,7 +93,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="relative z-10">
-          <p className="text-slate-500 text-sm">
+          <p className="text-slate-400 text-sm">
             © 2026 Axentia Technologies S.A.S. · Halu Group
           </p>
         </div>
