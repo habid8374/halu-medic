@@ -1744,6 +1744,8 @@ from apps.catalogos.models import Especialidad
 from apps.historia.models import (
     NotaMedica, ProgramacionCx, DescripcionQuirurgica,
     AyudaDiagnostica, ResultadoAD,
+    Triage, ListaVerificacionQx, RegistroAnestesia,
+    ConsentimientoInformado, NotaEnfermeria,
 )
 from django.contrib.auth import get_user_model as _get_user
 
@@ -2558,3 +2560,218 @@ class NotaDocumentoViewSet(viewsets.ModelViewSet):
 
         nota.save()
         return Response(NotaDocumentoSerializer(nota).data)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TRIAGE
+# ═══════════════════════════════════════════════════════════════════════════════
+class TriageSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.SerializerMethodField()
+    nivel_display   = serializers.SerializerMethodField()
+    estado_display  = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Triage
+        fields = '__all__'
+        read_only_fields = ['id', 'hora_clasificacion', 'creado_en', 'actualizado_en']
+
+    def get_paciente_nombre(self, obj):
+        try:
+            return f'{obj.paciente.primer_nombre} {obj.paciente.primer_apellido}'
+        except Exception:
+            return ''
+
+    def get_nivel_display(self, obj):
+        return obj.get_nivel_display()
+
+    def get_estado_display(self, obj):
+        return obj.get_estado_display()
+
+
+class TriageViewSet(viewsets.ModelViewSet):
+    serializer_class = TriageSerializer
+    ordering = ['-hora_clasificacion']
+
+    def get_queryset(self):
+        qs = Triage.objects.select_related('paciente', 'clasificado_por', 'ingreso')
+        nivel  = self.request.query_params.get('nivel')
+        estado = self.request.query_params.get('estado')
+        fecha  = self.request.query_params.get('fecha')
+        if nivel:
+            qs = qs.filter(nivel=nivel)
+        if estado:
+            qs = qs.filter(estado=estado)
+        if fecha:
+            qs = qs.filter(hora_clasificacion__date=fecha)
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def atender(self, request, pk=None):
+        from django.utils import timezone
+        t = self.get_object()
+        t.estado = 'en_atencion'
+        t.hora_atencion = timezone.now()
+        t.save()
+        return Response(self.get_serializer(t).data)
+
+    @action(detail=True, methods=['post'])
+    def cambiar_estado(self, request, pk=None):
+        t = self.get_object()
+        nuevo = request.data.get('estado')
+        if nuevo not in dict(Triage.ESTADO_CHOICES):
+            return Response({'error': 'Estado inválido'}, status=400)
+        t.estado = nuevo
+        t.save()
+        return Response(self.get_serializer(t).data)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LISTA DE VERIFICACIÓN QUIRÚRGICA
+# ═══════════════════════════════════════════════════════════════════════════════
+class ListaVerificacionQxSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ListaVerificacionQx
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en', 'actualizado_en']
+
+
+class ListaVerificacionQxViewSet(viewsets.ModelViewSet):
+    serializer_class = ListaVerificacionQxSerializer
+    queryset = ListaVerificacionQx.objects.all()
+
+    @action(detail=True, methods=['post'])
+    def completar(self, request, pk=None):
+        lista = self.get_object()
+        lista.completada = True
+        lista.save()
+        return Response(self.get_serializer(lista).data)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REGISTRO DE ANESTESIA
+# ═══════════════════════════════════════════════════════════════════════════════
+class RegistroAnestesiaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RegistroAnestesia
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en', 'actualizado_en']
+
+    def update(self, instance, validated_data):
+        from django.utils import timezone
+        if validated_data.get('firmado') and not instance.firmado:
+            validated_data['firmado_en'] = timezone.now()
+        return super().update(instance, validated_data)
+
+
+class RegistroAnestesiaViewSet(viewsets.ModelViewSet):
+    serializer_class = RegistroAnestesiaSerializer
+    queryset = RegistroAnestesia.objects.all()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONSENTIMIENTO INFORMADO
+# ═══════════════════════════════════════════════════════════════════════════════
+class ConsentimientoSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.SerializerMethodField()
+    tipo_display    = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ConsentimientoInformado
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en', 'fecha_firma']
+
+    def get_paciente_nombre(self, obj):
+        try:
+            return f'{obj.paciente.primer_nombre} {obj.paciente.primer_apellido}'
+        except Exception:
+            return ''
+
+    def get_tipo_display(self, obj):
+        return obj.get_tipo_display()
+
+
+class ConsentimientoViewSet(viewsets.ModelViewSet):
+    serializer_class = ConsentimientoSerializer
+    ordering = ['-creado_en']
+
+    def get_queryset(self):
+        qs = ConsentimientoInformado.objects.select_related('paciente', 'ingreso', 'medico')
+        paciente = self.request.query_params.get('paciente')
+        ingreso  = self.request.query_params.get('ingreso')
+        estado   = self.request.query_params.get('estado')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def firmar(self, request, pk=None):
+        from django.utils import timezone
+        ci = self.get_object()
+        ci.estado = 'firmado'
+        ci.fecha_firma = timezone.now()
+        ci.nombre_paciente_firmante = request.data.get('nombre_firmante', '')
+        ci.nombre_acompanante = request.data.get('nombre_acompanante', '')
+        ci.parentesco_acompanante = request.data.get('parentesco', '')
+        ci.medico = request.user
+        ci.save()
+        return Response(self.get_serializer(ci).data)
+
+    @action(detail=True, methods=['post'])
+    def rechazar(self, request, pk=None):
+        ci = self.get_object()
+        ci.estado = 'rechazado'
+        ci.motivo_rechazo = request.data.get('motivo', '')
+        ci.save()
+        return Response(self.get_serializer(ci).data)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NOTA DE ENFERMERÍA
+# ═══════════════════════════════════════════════════════════════════════════════
+class NotaEnfermeriaSerializer(serializers.ModelSerializer):
+    turno_display = serializers.SerializerMethodField()
+    enfermero_nombre = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NotaEnfermeria
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en', 'firmada_en']
+
+    def get_turno_display(self, obj):
+        return obj.get_turno_display()
+
+    def get_enfermero_nombre(self, obj):
+        if obj.enfermero:
+            return obj.enfermero.get_full_name() or obj.enfermero.username
+        return ''
+
+    def update(self, instance, validated_data):
+        from django.utils import timezone
+        if validated_data.get('firmada') and not instance.firmada:
+            validated_data['firmada_en'] = timezone.now()
+        return super().update(instance, validated_data)
+
+
+class NotaEnfermeriaViewSet(viewsets.ModelViewSet):
+    serializer_class = NotaEnfermeriaSerializer
+    ordering = ['-fecha_hora']
+
+    def get_queryset(self):
+        qs = NotaEnfermeria.objects.select_related('ingreso', 'enfermero')
+        ingreso = self.request.query_params.get('ingreso')
+        turno   = self.request.query_params.get('turno')
+        fecha   = self.request.query_params.get('fecha')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if turno:
+            qs = qs.filter(turno=turno)
+        if fecha:
+            qs = qs.filter(fecha_hora__date=fecha)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(enfermero=self.request.user)

@@ -578,3 +578,333 @@ class ResultadoAD(models.Model):
 
     def __str__(self):
         return f'Resultado: {self.ayuda}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TRIAGE  (Res. 5596/2015 — Clasificación en 5 niveles)
+# ═══════════════════════════════════════════════════════════════════════════════
+class Triage(models.Model):
+    NIVEL_CHOICES = [
+        (1, 'Nivel I — Reanimación (rojo)'),
+        (2, 'Nivel II — Emergencia (naranja)'),
+        (3, 'Nivel III — Urgencia (amarillo)'),
+        (4, 'Nivel IV — Menos urgente (verde)'),
+        (5, 'Nivel V — Sin urgencia (azul)'),
+    ]
+    ESTADO_CHOICES = [
+        ('espera',      'En espera'),
+        ('en_atencion', 'En atención'),
+        ('atendido',    'Atendido'),
+        ('referido',    'Referido'),
+        ('abandono',    'Abandono'),
+    ]
+
+    id                  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    paciente            = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT,
+                                             related_name='triages')
+    ingreso             = models.ForeignKey(Ingreso, on_delete=models.SET_NULL,
+                                             null=True, blank=True, related_name='triages')
+
+    nivel               = models.PositiveSmallIntegerField(choices=NIVEL_CHOICES)
+    motivo_consulta     = models.TextField(help_text='Motivo de consulta en palabras del paciente')
+    hora_clasificacion  = models.DateTimeField(auto_now_add=True)
+    clasificado_por     = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                             null=True, blank=True, related_name='triages_clasificados')
+
+    # Signos vitales iniciales
+    tension_arterial    = models.CharField(max_length=15, blank=True, help_text='ej: 120/80')
+    frecuencia_cardiaca = models.PositiveSmallIntegerField(null=True, blank=True, help_text='lpm')
+    frecuencia_resp     = models.PositiveSmallIntegerField(null=True, blank=True, help_text='rpm')
+    temperatura         = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True, help_text='°C')
+    spo2                = models.PositiveSmallIntegerField(null=True, blank=True, help_text='% saturación O2')
+    glasgow             = models.PositiveSmallIntegerField(null=True, blank=True, help_text='3-15')
+    dolor_escala        = models.PositiveSmallIntegerField(null=True, blank=True, help_text='0-10 EVA')
+    peso_kg             = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+
+    # Mecanismo / antecedentes urgentes
+    mecanismo_trauma    = models.CharField(max_length=200, blank=True)
+    alergias            = models.TextField(blank=True)
+    medicamentos_actuales = models.TextField(blank=True)
+
+    estado              = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='espera')
+    observaciones       = models.TextField(blank=True)
+    hora_atencion       = models.DateTimeField(null=True, blank=True,
+                                               help_text='Hora en que inició la atención médica')
+
+    creado_en           = models.DateTimeField(auto_now_add=True)
+    actualizado_en      = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['hora_clasificacion']
+        verbose_name = 'Triage'
+        verbose_name_plural = 'Triages'
+        indexes = [
+            models.Index(fields=['nivel', 'estado']),
+            models.Index(fields=['hora_clasificacion']),
+        ]
+
+    def __str__(self):
+        return f'Triage N{self.nivel} — {self.paciente} — {self.hora_clasificacion:%Y-%m-%d %H:%M}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LISTA DE VERIFICACIÓN QUIRÚRGICA  (OPS/OMS — 3 Pausas)
+# ═══════════════════════════════════════════════════════════════════════════════
+class ListaVerificacionQx(models.Model):
+    """
+    Protocolo de cirugía segura OPS/OMS — tres pausas obligatorias.
+    Res. MinSalud Circular 045/2012 y Programa Nacional de Seguridad del Paciente.
+    """
+    id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    programacion    = models.OneToOneField(ProgramacionCx, on_delete=models.CASCADE,
+                                            related_name='lista_verificacion')
+
+    # ── PAUSA 1: ENTRADA (antes de inducción anestésica) ─────────────────────
+    entrada_identidad          = models.BooleanField(default=False, help_text='Paciente confirmó identidad, procedimiento y sitio')
+    entrada_sitio_marcado      = models.BooleanField(default=False, help_text='Sitio quirúrgico marcado')
+    entrada_anestesia_revisada = models.BooleanField(default=False, help_text='Revisión de seguridad anestésica completa')
+    entrada_oximetro           = models.BooleanField(default=False, help_text='Oxímetro de pulso funcionando')
+    entrada_alergias           = models.BooleanField(default=False, help_text='Alergias conocidas verificadas')
+    entrada_via_aerea          = models.BooleanField(default=False, help_text='Vía aérea/riesgo de aspiración evaluado')
+    entrada_sangrado           = models.BooleanField(default=False, help_text='Riesgo de pérdida sanguínea > 500 ml evaluado')
+    entrada_consentimiento     = models.BooleanField(default=False, help_text='Consentimiento informado firmado')
+    entrada_ayuno              = models.BooleanField(default=False, help_text='Ayuno verificado')
+    entrada_notas_entrada      = models.TextField(blank=True)
+    entrada_responsable        = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                                    null=True, blank=True, related_name='entradas_qx')
+    entrada_hora               = models.DateTimeField(null=True, blank=True)
+
+    # ── PAUSA 2: ACTO QUIRÚRGICO (antes de incisión) ─────────────────────────
+    acto_presentacion_equipo   = models.BooleanField(default=False, help_text='Todos los miembros se presentaron por nombre y función')
+    acto_confirmacion_paciente = models.BooleanField(default=False, help_text='Identidad, sitio y procedimiento confirmados')
+    acto_profilaxis_antibiotica= models.BooleanField(default=False, help_text='Profilaxis antibiótica administrada en últimos 60 min')
+    acto_estudios_imagen       = models.BooleanField(default=False, help_text='Imágenes diagnósticas necesarias visibles')
+    acto_implantes             = models.BooleanField(default=False, help_text='Implantes/equipos especiales disponibles')
+    acto_pasos_criticos        = models.TextField(blank=True, help_text='Pasos críticos o inesperados anticipados por cirujano')
+    acto_preocupaciones_anest  = models.TextField(blank=True, help_text='Preocupaciones específicas del anestesiólogo')
+    acto_preocupaciones_enf    = models.TextField(blank=True, help_text='Preocupaciones del equipo de enfermería')
+    acto_responsable           = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                                    null=True, blank=True, related_name='actos_qx')
+    acto_hora                  = models.DateTimeField(null=True, blank=True)
+
+    # ── PAUSA 3: SALIDA (antes de que el paciente salga del quirófano) ────────
+    salida_nombre_procedimiento= models.BooleanField(default=False, help_text='Nombre del procedimiento registrado')
+    salida_conteo_instrumentos = models.BooleanField(default=False, help_text='Conteo de compresas e instrumentos completo')
+    salida_especimenes         = models.BooleanField(default=False, help_text='Especímenes etiquetados correctamente')
+    salida_equipos_problemas   = models.BooleanField(default=False, help_text='Problemas con equipos registrados')
+    salida_recuperacion        = models.TextField(blank=True, help_text='Instrucciones de recuperación y manejo postoperatorio')
+    salida_responsable         = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                                    null=True, blank=True, related_name='salidas_qx')
+    salida_hora                = models.DateTimeField(null=True, blank=True)
+
+    completada      = models.BooleanField(default=False)
+    creado_en       = models.DateTimeField(auto_now_add=True)
+    actualizado_en  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Lista de verificación quirúrgica'
+        verbose_name_plural = 'Listas de verificación quirúrgica'
+
+    def __str__(self):
+        return f'LVQx — {self.programacion}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REGISTRO DE ANESTESIA
+# ═══════════════════════════════════════════════════════════════════════════════
+class RegistroAnestesia(models.Model):
+    TIPO_CHOICES = [
+        ('general',    'General'),
+        ('regional',   'Regional'),
+        ('local',      'Local'),
+        ('sedacion',   'Sedación'),
+        ('mixta',      'Mixta'),
+        ('espinal',    'Espinal/Raquídea'),
+        ('epidural',   'Epidural'),
+        ('peridural',  'Peridural'),
+    ]
+    ASA_CHOICES = [(str(i), f'ASA {i}') for i in range(1, 7)]
+
+    id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    programacion     = models.OneToOneField(ProgramacionCx, on_delete=models.CASCADE,
+                                             related_name='registro_anestesia')
+    anestesiologo    = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                          null=True, blank=True, related_name='registros_anestesia')
+
+    tipo_anestesia   = models.CharField(max_length=15, choices=TIPO_CHOICES, default='general')
+    clasificacion_asa= models.CharField(max_length=2, choices=ASA_CHOICES, default='1',
+                                         help_text='Clasificación ASA del paciente')
+
+    # Tiempos
+    hora_inicio_anestesia = models.DateTimeField(null=True, blank=True)
+    hora_inicio_cirugia   = models.DateTimeField(null=True, blank=True)
+    hora_fin_cirugia      = models.DateTimeField(null=True, blank=True)
+    hora_fin_anestesia    = models.DateTimeField(null=True, blank=True)
+
+    # Medicamentos e insumos
+    induccion            = models.JSONField(default=list, blank=True,
+                                             help_text='[{medicamento, dosis, via}]')
+    mantenimiento        = models.JSONField(default=list, blank=True,
+                                             help_text='[{medicamento, dosis, concentracion}]')
+    reversión           = models.JSONField(default=list, blank=True)
+    fluidos              = models.JSONField(default=list, blank=True,
+                                            help_text='[{tipo, volumen_ml}] SSN, Lactato Ringer, etc.')
+
+    # Signos vitales intraoperatorios (serie temporal)
+    signos_vitales_intra = models.JSONField(default=list, blank=True,
+                                             help_text='[{hora, ta, fc, spo2, etco2, temp}]')
+
+    # Balance
+    sangrado_ml          = models.PositiveIntegerField(null=True, blank=True)
+    diuresis_ml          = models.PositiveIntegerField(null=True, blank=True)
+    transfusiones        = models.TextField(blank=True)
+
+    # Complicaciones y observaciones
+    complicaciones       = models.TextField(blank=True)
+    observaciones        = models.TextField(blank=True)
+    condicion_egreso_qx  = models.CharField(max_length=200, blank=True,
+                                             help_text='Condición al salir del quirófano')
+
+    firmado              = models.BooleanField(default=False)
+    firmado_en           = models.DateTimeField(null=True, blank=True)
+    creado_en            = models.DateTimeField(auto_now_add=True)
+    actualizado_en       = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Registro de anestesia'
+        verbose_name_plural = 'Registros de anestesia'
+
+    def __str__(self):
+        return f'Anestesia — {self.programacion}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONSENTIMIENTO INFORMADO
+# ═══════════════════════════════════════════════════════════════════════════════
+class ConsentimientoInformado(models.Model):
+    TIPO_CHOICES = [
+        ('general',          'Consentimiento general de hospitalización'),
+        ('cirugia',          'Consentimiento quirúrgico'),
+        ('anestesia',        'Consentimiento anestésico'),
+        ('procedimiento',    'Procedimiento invasivo/diagnóstico'),
+        ('transfusion',      'Transfusión de hemoderivados'),
+        ('quimioterapia',    'Quimioterapia'),
+        ('investigacion',    'Participación en investigación'),
+        ('imagen',           'Uso de imágenes/datos clínicos'),
+        ('telemedicina',     'Teleconsulta/Telemedicina'),
+        ('otro',             'Otro'),
+    ]
+    ESTADO_CHOICES = [
+        ('pendiente',  'Pendiente de firma'),
+        ('firmado',    'Firmado'),
+        ('rechazado',  'Rechazado por paciente'),
+        ('anulado',    'Anulado'),
+    ]
+
+    id                       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    paciente                 = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT,
+                                                  related_name='consentimientos')
+    ingreso                  = models.ForeignKey(Ingreso, on_delete=models.SET_NULL,
+                                                  null=True, blank=True,
+                                                  related_name='consentimientos')
+    programacion_cx          = models.ForeignKey(ProgramacionCx, on_delete=models.SET_NULL,
+                                                  null=True, blank=True,
+                                                  related_name='consentimientos')
+
+    tipo                     = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    procedimiento            = models.CharField(max_length=300, blank=True,
+                                                 help_text='Nombre del procedimiento o intervención')
+    cups_procedimiento       = models.CharField(max_length=10, blank=True)
+
+    # Contenido
+    texto_completo           = models.TextField(help_text='Texto completo del consentimiento informado')
+    riesgos_informados       = models.TextField(blank=True)
+    alternativas_informadas  = models.TextField(blank=True)
+
+    # Firmantes
+    medico                   = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                                  null=True, blank=True,
+                                                  related_name='consentimientos_firmados')
+    nombre_paciente_firmante = models.CharField(max_length=200, blank=True)
+    nombre_acompanante       = models.CharField(max_length=200, blank=True,
+                                                 help_text='Si firma representante legal/familiar')
+    parentesco_acompanante   = models.CharField(max_length=100, blank=True)
+    motivo_representante     = models.CharField(max_length=200, blank=True,
+                                                 help_text='Por qué firma el representante en vez del paciente')
+
+    estado                   = models.CharField(max_length=15, choices=ESTADO_CHOICES,
+                                                 default='pendiente')
+    motivo_rechazo           = models.TextField(blank=True)
+
+    fecha_firma              = models.DateTimeField(null=True, blank=True)
+    creado_en                = models.DateTimeField(auto_now_add=True)
+    creado_por               = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                                  null=True, blank=True,
+                                                  related_name='consentimientos_creados')
+
+    class Meta:
+        ordering = ['-creado_en']
+        verbose_name = 'Consentimiento informado'
+        verbose_name_plural = 'Consentimientos informados'
+
+    def __str__(self):
+        return f'CI {self.get_tipo_display()} — {self.paciente}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NOTA DE ENFERMERÍA (extendida — balance hídrico, medicamentos, turno)
+# ═══════════════════════════════════════════════════════════════════════════════
+class NotaEnfermeria(models.Model):
+    TURNO_CHOICES = [
+        ('manana',  'Mañana (6am-2pm)'),
+        ('tarde',   'Tarde (2pm-10pm)'),
+        ('noche',   'Noche (10pm-6am)'),
+    ]
+
+    id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ingreso          = models.ForeignKey(Ingreso, on_delete=models.CASCADE,
+                                          related_name='notas_enfermeria')
+    enfermero        = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                          null=True, blank=True, related_name='notas_enfermeria')
+    turno            = models.CharField(max_length=10, choices=TURNO_CHOICES)
+    fecha_hora       = models.DateTimeField()
+
+    # Signos vitales del turno
+    tension_arterial = models.CharField(max_length=15, blank=True)
+    frecuencia_cardiaca = models.PositiveSmallIntegerField(null=True, blank=True)
+    frecuencia_resp  = models.PositiveSmallIntegerField(null=True, blank=True)
+    temperatura      = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    spo2             = models.PositiveSmallIntegerField(null=True, blank=True)
+    glasgow          = models.PositiveSmallIntegerField(null=True, blank=True)
+    dolor_escala     = models.PositiveSmallIntegerField(null=True, blank=True)
+    peso_kg          = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+
+    # Balance hídrico
+    entradas_ml      = models.JSONField(default=list, blank=True,
+                                         help_text='[{tipo, volumen_ml}] líquidos administrados')
+    salidas_ml       = models.JSONField(default=list, blank=True,
+                                         help_text='[{tipo, volumen_ml}] diuresis, drenajes, etc.')
+    balance_hidrico  = models.IntegerField(null=True, blank=True,
+                                            help_text='Total entradas - salidas en ml')
+
+    # Medicamentos administrados (MAR)
+    medicamentos_administrados = models.JSONField(default=list, blank=True,
+                                                   help_text='[{medicamento, dosis, via, hora, enfermero}]')
+
+    # Cuidados y procedimientos de enfermería
+    curaciones       = models.TextField(blank=True, help_text='Curaciones realizadas, estado de heridas')
+    sondas_catéteres = models.TextField(blank=True, help_text='Estado de sondas, catéteres, drenajes')
+    movilizacion     = models.TextField(blank=True, help_text='Cambios de posición, movilización')
+    observaciones    = models.TextField(blank=True)
+
+    firmada          = models.BooleanField(default=False)
+    firmada_en       = models.DateTimeField(null=True, blank=True)
+    creado_en        = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_hora']
+        verbose_name = 'Nota de enfermería'
+        verbose_name_plural = 'Notas de enfermería'
+
+    def __str__(self):
+        return f'Enf/{self.get_turno_display()} — {self.ingreso} — {self.fecha_hora:%Y-%m-%d %H:%M}'

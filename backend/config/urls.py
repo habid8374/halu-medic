@@ -45,6 +45,12 @@ from config.api import (
     NotaAjusteRIPSViewSet,
     # Nota Crédito / Débito
     NotaDocumentoViewSet,
+    # Nuevos módulos clínicos
+    TriageViewSet,
+    ListaVerificacionQxViewSet,
+    RegistroAnestesiaViewSet,
+    ConsentimientoViewSet,
+    NotaEnfermeriaViewSet,
 )
 from apps.tarifas.api import ManualTarifarioViewSet
 from apps.usuarios.auth import (
@@ -90,6 +96,12 @@ router.register(r'facturacion/prefacturas',  PrefacturaViewSet,            basen
 router.register(r'facturacion/items',        ItemPrefacturaViewSet,        basename='item-prefactura')
 router.register(r'rips/notas-ajuste',        NotaAjusteRIPSViewSet,        basename='nota-ajuste-rips')
 router.register(r'facturacion/notas',        NotaDocumentoViewSet,         basename='nota-documento')
+# ── Módulos clínicos extendidos ───────────────────────────────────────────────
+router.register(r'salud/triage',             TriageViewSet,                basename='triage')
+router.register(r'salud/verificacion-qx',    ListaVerificacionQxViewSet,   basename='verificacion-qx')
+router.register(r'salud/anestesia',          RegistroAnestesiaViewSet,     basename='anestesia')
+router.register(r'salud/consentimientos',    ConsentimientoViewSet,        basename='consentimiento')
+router.register(r'salud/enfermeria',         NotaEnfermeriaViewSet,        basename='nota-enfermeria')
 
 urlpatterns = [
     path('api/health/', health, name='health'),

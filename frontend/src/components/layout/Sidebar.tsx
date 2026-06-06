@@ -39,9 +39,12 @@ const navItems: NavItem[] = [
     children: [
       { href: '/consultas',      label: 'Consultas' },
       { href: '/historia-clinica', label: 'Historia Clínica' },
-      { href: '/salud/censo',    label: 'Censo de pacientes' },
-      { href: '/salud/cx',       label: 'Programación CX' },
-      { href: '/salud/ayudas',   label: 'Ayudas diagnósticas' },
+      { href: '/salud/triage',     label: 'Triage / Urgencias' },
+      { href: '/salud/censo',      label: 'Censo de pacientes' },
+      { href: '/salud/cx',         label: 'Programación CX' },
+      { href: '/salud/ayudas',     label: 'Ayudas diagnósticas' },
+      { href: '/salud/enfermeria', label: 'Enfermería' },
+      { href: '/salud/consentimientos', label: 'Consentimientos' },
     ],
   },
   {

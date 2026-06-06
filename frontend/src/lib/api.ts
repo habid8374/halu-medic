@@ -387,3 +387,47 @@ export const itemPrefacturaAPI = {
   update: (id: string, data: Record<string, unknown>) => api.patch(`/facturacion/items/${id}/`, data),
   delete: (id: string) => api.delete(`/facturacion/items/${id}/`),
 }
+
+// ── Triage ────────────────────────────────────────────────────────────────────
+export const triageAPI = {
+  list:          (params?: Record<string, unknown>) => api.get('/api/salud/triage/', { params }),
+  get:           (id: string) => api.get(`/api/salud/triage/${id}/`),
+  create:        (data: Record<string, unknown>) => api.post('/api/salud/triage/', data),
+  update:        (id: string, data: Record<string, unknown>) => api.patch(`/api/salud/triage/${id}/`, data),
+  atender:       (id: string) => api.post(`/api/salud/triage/${id}/atender/`),
+  cambiarEstado: (id: string, estado: string) => api.post(`/api/salud/triage/${id}/cambiar_estado/`, { estado }),
+}
+
+// ── Lista Verificación Quirúrgica ─────────────────────────────────────────────
+export const verificacionQxAPI = {
+  get:      (id: string) => api.get(`/api/salud/verificacion-qx/${id}/`),
+  getByPx:  (programacionId: string) => api.get('/api/salud/verificacion-qx/', { params: { programacion: programacionId } }),
+  create:   (data: Record<string, unknown>) => api.post('/api/salud/verificacion-qx/', data),
+  update:   (id: string, data: Record<string, unknown>) => api.patch(`/api/salud/verificacion-qx/${id}/`, data),
+  completar:(id: string) => api.post(`/api/salud/verificacion-qx/${id}/completar/`),
+}
+
+// ── Registro de Anestesia ─────────────────────────────────────────────────────
+export const anestesiaAPI = {
+  get:    (id: string) => api.get(`/api/salud/anestesia/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/salud/anestesia/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/salud/anestesia/${id}/`, data),
+}
+
+// ── Consentimientos Informados ────────────────────────────────────────────────
+export const consentimientosAPI = {
+  list:    (params?: Record<string, unknown>) => api.get('/api/salud/consentimientos/', { params }),
+  get:     (id: string) => api.get(`/api/salud/consentimientos/${id}/`),
+  create:  (data: Record<string, unknown>) => api.post('/api/salud/consentimientos/', data),
+  update:  (id: string, data: Record<string, unknown>) => api.patch(`/api/salud/consentimientos/${id}/`, data),
+  firmar:  (id: string, data: Record<string, unknown>) => api.post(`/api/salud/consentimientos/${id}/firmar/`, data),
+  rechazar:(id: string, motivo: string) => api.post(`/api/salud/consentimientos/${id}/rechazar/`, { motivo }),
+}
+
+// ── Notas de Enfermería ───────────────────────────────────────────────────────
+export const enfermeriaAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/salud/enfermeria/', { params }),
+  get:    (id: string) => api.get(`/api/salud/enfermeria/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/salud/enfermeria/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/salud/enfermeria/${id}/`, data),
+}
