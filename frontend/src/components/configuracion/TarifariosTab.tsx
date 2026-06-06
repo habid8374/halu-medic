@@ -347,35 +347,34 @@ export function TarifariosTab() {
                     <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                       <Pencil className="w-3 h-3" />Agregar ítem manual
                     </p>
-                    <div className="grid grid-cols-12 gap-2 items-end">
-                      <div className="col-span-4">
-                        <CupsAutocomplete
-                          label="CUPS"
-                          value={nuevoCups}
-                          descripcion={nuevoCupsDesc}
-                          onChange={(cod, desc) => { setNuevoCups(cod); setNuevoCupsDesc(desc) }}
-                          placeholder="Código..."
-                        />
-                      </div>
-                      <div className="col-span-5">
-                        <Input label="Descripción" value={nuevoCupsDesc}
-                          onChange={e => setNuevoCupsDesc(e.target.value)}
-                          placeholder="Se autocompleta..." />
-                      </div>
-                      <div className="col-span-2">
+                    {/* Fila 1: CUPS + Descripción */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <CupsAutocomplete
+                        label="CUPS"
+                        value={nuevoCups}
+                        descripcion={nuevoCupsDesc}
+                        onChange={(cod, desc) => { setNuevoCups(cod); setNuevoCupsDesc(desc) }}
+                        placeholder="Código..."
+                      />
+                      <Input label="Descripción" value={nuevoCupsDesc}
+                        onChange={e => setNuevoCupsDesc(e.target.value)}
+                        placeholder="Se autocompleta..." />
+                    </div>
+                    {/* Fila 2: Valor + Botón */}
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1">
                         <Input label="Valor base $" type="number" value={nuevoValor}
                           onChange={e => setNuevoValor(e.target.value)}
                           placeholder="85000" />
                       </div>
-                      <div className="col-span-1">
-                        <Button
-                          className="w-full py-2.5"
-                          onClick={() => agregarItem(manual.id)}
-                          disabled={!nuevoCups || !nuevoValor}
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
+                      <Button
+                        className="py-2.5 px-4 flex-shrink-0"
+                        onClick={() => agregarItem(manual.id)}
+                        disabled={!nuevoCups || !nuevoValor}
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span className="hidden sm:inline">Agregar</span>
+                      </Button>
                     </div>
                   </div>
                 </div>

@@ -32,7 +32,7 @@ export default function LoginPage() {
           MÓVIL
       ══════════════════════════════════════════════════ */}
 
-      {/* Video hero — 42% de la pantalla, sin barras negras */}
+      {/* Video hero — sin logo encima porque el video ya lo muestra */}
       <div className="lg:hidden relative flex-shrink-0" style={{ height: '42vh' }}>
         <video
           autoPlay loop muted playsInline
@@ -40,19 +40,7 @@ export default function LoginPage() {
           src="/login-bg.mp4"
         />
         {/* Gradiente inferior para transición suave hacia el blanco */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-white/60" />
-        {/* Logo centrado */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-icon.png" alt="" className="h-16 w-16 object-contain drop-shadow-2xl" />
-          <span
-            className="text-3xl font-black drop-shadow-lg"
-            style={{ fontFamily: "'Nunito', sans-serif", textShadow: '0 2px 16px rgba(0,0,0,0.7)' }}
-          >
-            <span className="text-white">Halu</span>
-            <span style={{ color: '#5eead4' }}>Medic</span>
-          </span>
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-white/70" />
       </div>
 
       {/* Formulario móvil — ocupa el resto exacto de la pantalla */}
