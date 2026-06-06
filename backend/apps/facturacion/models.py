@@ -48,6 +48,17 @@ class Factura(models.Model):
     total                = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     valor_copago         = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
+    MEDIO_PAGO_CHOICES = [
+        ('credito',       'Crédito (EPS/entidad)'),
+        ('efectivo',      'Efectivo'),
+        ('tarjeta',       'Tarjeta débito/crédito'),
+        ('transferencia', 'Transferencia bancaria'),
+        ('otro',          'Otro'),
+    ]
+    medio_pago           = models.CharField(max_length=20, choices=MEDIO_PAGO_CHOICES,
+                                             default='credito',
+                                             help_text='Forma de pago; para particulares usar efectivo/tarjeta/transferencia')
+
     estado               = models.CharField(max_length=20, choices=EstadoFactura.choices,
                                              default=EstadoFactura.BORRADOR)
     observaciones        = models.TextField(blank=True)

@@ -147,7 +147,12 @@ class ConfiguracionConsultorioView(APIView):
     GET  /api/consultorio/configuracion/  → datos del consultorio actual
     PUT  /api/consultorio/configuracion/  → actualizar datos y credenciales Factus
     """
-    permission_classes = [IsAuthenticated, EsAdminOSuperadmin]
+    # GET: cualquier usuario autenticado puede ver datos básicos del consultorio
+    # PUT: solo admins pueden modificar
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), EsAdminOSuperadmin()]
 
     CAMPOS_EDITABLES = [
         'nombre', 'razon_social', 'nit', 'codigo_prestador', 'direccion',

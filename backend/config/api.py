@@ -253,7 +253,7 @@ class FacturaSerializer(serializers.ModelSerializer):
             'convenio', 'numero_factus', 'cufe', 'qr_url',
             'subtotal', 'descuento', 'iva', 'total', 'valor_copago',
             'estado', 'errores_dian', 'tiene_rips', 'cuv',
-            'fecha_validacion', 'creado_en',
+            'fecha_validacion', 'creado_en', 'medio_pago',
         ]
         read_only_fields = [
             'id', 'numero_factus', 'cufe', 'qr_url', 'pdf_base64',

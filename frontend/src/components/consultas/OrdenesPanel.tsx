@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { ordenesMedicasAPI, mensajeError } from '@/lib/api'
 import { Button, Card } from '@/components/ui'
+import { Cie10Autocomplete } from '@/components/ui/Cie10Autocomplete'
 import { Plus, Trash2, FlaskConical, Scan, ArrowRightLeft, Pill, Scissors, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -227,9 +228,12 @@ export function OrdenesPanel({ consultaId, ordenes: init = [] }: Props) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">CIE-10 relacionado</label>
-              <input value={nueva.cie10} onChange={setNuevaField('cie10')} placeholder="Ej: J06.9"
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white font-mono focus:outline-none focus:ring-2 focus:ring-halu-500/20" />
+              <Cie10Autocomplete
+                label="CIE-10 relacionado"
+                value={nueva.cie10}
+                onChange={(codigo) => setNueva(n => ({ ...n, cie10: codigo }))}
+                placeholder="Código CIE-10 o diagnóstico..."
+              />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 block mb-1">Vigencia (días)</label>

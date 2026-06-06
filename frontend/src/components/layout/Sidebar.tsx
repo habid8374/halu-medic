@@ -1,8 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
+import { configuracionAPI } from '@/lib/api'
 import toast from 'react-hot-toast'
 import {
   LayoutDashboard, Users, CalendarDays,
@@ -31,16 +32,16 @@ const navItems: NavItem[] = [
   { href: '/dashboard',      label: 'Inicio',          icon: LayoutDashboard },
   { href: '/pacientes',      label: 'Pacientes',        icon: Users },
   { href: '/citas',          label: 'Agenda',           icon: CalendarDays,   requiere: 'puede_gestionar_citas' },
-  { href: '/consultas',      label: 'Consultas',        icon: ClipboardList,  requiere: 'puede_ver_clinica' },
-  { href: '/historia-clinica', label: 'Historia Clínica', icon: Stethoscope,  requiere: 'puede_ver_clinica' },
   {
     label: 'Salud',
     icon: HeartPulse,
     requiere: 'puede_ver_clinica',
     children: [
-      { href: '/salud/censo',  label: 'Censo de pacientes' },
-      { href: '/salud/cx',     label: 'Programación CX' },
-      { href: '/salud/ayudas', label: 'Ayudas diagnósticas' },
+      { href: '/consultas',      label: 'Consultas' },
+      { href: '/historia-clinica', label: 'Historia Clínica' },
+      { href: '/salud/censo',    label: 'Censo de pacientes' },
+      { href: '/salud/cx',       label: 'Programación CX' },
+      { href: '/salud/ayudas',   label: 'Ayudas diagnósticas' },
     ],
   },
   {
@@ -75,11 +76,24 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router   = useRouter()
   const [open, setOpen] = useState(false)
+  const [consultorioNombre, setConsultorioNombre] = useState('')
+  const [consultorioDominio, setConsultorioDominio] = useState('')
+
+  useEffect(() => {
+    configuracionAPI.get()
+      .then(({ data }) => {
+        setConsultorioNombre(data.nombre || '')
+        setConsultorioDominio(data.dominio || '')
+      })
+      .catch(() => {/* silencioso */})
+  }, [])
 
   // Submenús abiertos — auto-abre si la ruta activa está dentro
   const isFacturacionActive = pathname.startsWith('/facturacion')
+  const isSaludActive = pathname.startsWith('/salud') || pathname.startsWith('/historia-clinica') || pathname.startsWith('/consultas')
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     Facturación: isFacturacionActive,
+    Salud: isSaludActive,
   })
 
   if (!usuario) return null
@@ -119,8 +133,8 @@ export default function Sidebar() {
           <Building2 className="w-3.5 h-3.5 text-halu-600" />
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-700 truncate">Consultorio Demo</p>
-          <p className="text-xs text-slate-400">demo.halumedic.co</p>
+          <p className="text-xs font-medium text-slate-700 truncate">{consultorioNombre || 'Mi Consultorio'}</p>
+          {consultorioDominio && <p className="text-xs text-slate-400">{consultorioDominio}</p>}
         </div>
       </div>
 

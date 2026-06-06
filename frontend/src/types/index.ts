@@ -186,6 +186,7 @@ export interface Factura {
   cuv?: string
   fecha_validacion?: string
   creado_en: string
+  medio_pago?: string
 }
 
 // ── Facturación PGP / Capitado ────────────────────────────────────────────────

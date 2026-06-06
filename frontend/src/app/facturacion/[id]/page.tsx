@@ -303,13 +303,41 @@ tbody tr:nth-child(even) td{background:#f8fafc}
             </div>
           )}
 
+          {/* Forma de pago — editable para particulares */}
+          {!tieneEPS && factura.estado === 'borrador' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <p className="text-xs text-amber-700 font-semibold mb-2">Medio de pago (paciente particular)</p>
+              <select
+                defaultValue={factura.medio_pago || 'efectivo'}
+                onChange={async (e) => {
+                  try {
+                    await facturasAPI.update(factura.id, { medio_pago: e.target.value })
+                    await refrescar()
+                    toast.success('Medio de pago actualizado')
+                  } catch { toast.error('Error al actualizar') }
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-amber-300 bg-white text-sm focus:outline-none"
+              >
+                <option value="efectivo">Efectivo</option>
+                <option value="tarjeta">Tarjeta débito/crédito</option>
+                <option value="transferencia">Transferencia bancaria</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+          )}
+
           {/* Fila metadata */}
           <div className="grid grid-cols-4 gap-2 border-t pt-3 text-xs">
             {[
               { label: 'Cobertura', value: `${REGIMEN[info.regimen||'P']||'Particular'} (${COB_COD[info.regimen||'P']||'05'})` },
               { label: 'Modalidad pago', value: 'Por evento (01)' },
               { label: 'Tipo operación', value: tipoOperacionLabel(factura) },
-              { label: 'Forma de pago', value: 'Crédito 30 días' },
+              {
+                label: 'Forma de pago',
+                value: tieneEPS
+                  ? 'Crédito 30 días'
+                  : { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', otro: 'Otro', credito: 'Crédito' }[factura.medio_pago || 'efectivo'] || 'Efectivo',
+              },
             ].map(col => (
               <div key={col.label}>
                 <p className="text-slate-400">{col.label}</p>

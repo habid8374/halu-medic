@@ -147,8 +147,9 @@ export const facturasAPI = {
   pdf:         (id: string) => api.get(`/api/facturacion/facturas/${id}/pdf/`),
   xml:         (id: string) => api.get(`/api/facturacion/facturas/${id}/xml/`),
   rips:        (id: string) => api.get(`/api/facturacion/facturas/${id}/rips/`),
-  pendientes:  (params?: Record<string, unknown>) => api.get('/api/facturacion/facturas/pendientes/', { params }),
+  pendientes:   (params?: Record<string, unknown>) => api.get('/api/facturacion/facturas/pendientes/', { params }),
   crearDesdeHC: (historiaId: string) => api.post('/api/facturacion/facturas/', { historia: historiaId }),
+  update:       (id: string, data: Record<string, unknown>) => api.patch(`/api/facturacion/facturas/${id}/`, data),
 }
 
 // ── CUPS (homologador nacional, solo lectura) ──────────────────────────────────
