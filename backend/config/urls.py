@@ -43,6 +43,8 @@ from config.api import (
     ItemPrefacturaViewSet,
     # Nota de Ajuste RIPS
     NotaAjusteRIPSViewSet,
+    # Nota Crédito / Débito
+    NotaDocumentoViewSet,
 )
 from apps.tarifas.api import ManualTarifarioViewSet
 from apps.usuarios.auth import (
@@ -87,6 +89,7 @@ router.register(r'salud/ayudas',             AyudaDiagnosticaViewSet,      basen
 router.register(r'facturacion/prefacturas',  PrefacturaViewSet,            basename='prefactura')
 router.register(r'facturacion/items',        ItemPrefacturaViewSet,        basename='item-prefactura')
 router.register(r'rips/notas-ajuste',        NotaAjusteRIPSViewSet,        basename='nota-ajuste-rips')
+router.register(r'facturacion/notas',        NotaDocumentoViewSet,         basename='nota-documento')
 
 urlpatterns = [
     path('api/health/', health, name='health'),

@@ -53,6 +53,19 @@ export default function FacturacionPage() {
         </Link>
       </div>
 
+      {/* Acceso rápido Nota Crédito / Débito */}
+      <div className="mb-4">
+        <Link href="/facturacion/notas">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between hover:bg-red-100 transition-colors cursor-pointer">
+            <div>
+              <p className="text-sm font-semibold text-red-800">Notas crédito / débito</p>
+              <p className="text-xs text-red-600 mt-0.5">NC: reducen valor · ND: aumentan valor · Referencia CUFE original · DIAN via Factus</p>
+            </div>
+            <span className="text-red-500 text-xs font-medium">Ver notas →</span>
+          </div>
+        </Link>
+      </div>
+
       {/* Acceso rápido Prefactura */}
       <div className="mb-4">
         <Link href="/facturacion/prefacturas">
