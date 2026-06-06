@@ -6,7 +6,7 @@ import { PageHeader, Badge, Button } from '@/components/ui'
 import toast from 'react-hot-toast'
 import {
   Building2, CheckCircle, AlertCircle, Clock, XCircle,
-  CreditCard, RefreshCw, Ban, Play, ChevronDown, ChevronUp, Plus, X,
+  CreditCard, RefreshCw, Ban, Play, ChevronDown, ChevronUp, Plus, X, ExternalLink,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -124,11 +124,20 @@ export default function SuperadminPage() {
     <div className="page-padding animate-fade-in">
       <PageHeader title="Superadmin — Axentia" description="Gestión de consultorios y suscripciones SaaS"
         action={
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button onClick={() => setModalNuevo(true)}>
               <Plus className="w-4 h-4" />Nuevo Consultorio
             </Button>
-            <Button variant="secondary" onClick={cargar}><RefreshCw className="w-4 h-4" />Actualizar</Button>
+            <a
+              href={`${process.env.NEXT_PUBLIC_API_URL || 'https://halu-medic-production.up.railway.app'}/admin/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-all shadow-sm"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Django Admin
+            </a>
+            <Button variant="secondary" onClick={cargar}><RefreshCw className="w-4 h-4" /></Button>
           </div>
         } />
 
