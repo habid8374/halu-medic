@@ -26,6 +26,10 @@ interface UsuarioItem {
   rol_label: string
   activo_tenant: boolean
   date_joined: string
+  tarjeta_profesional?: string
+  numero_rethus?: string
+  especialidad_principal?: number | null
+  especialidad_nombre?: string
 }
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -60,6 +64,8 @@ const FORM_VACIO = {
   first_name: '', last_name: '', username: '', cedula: '',
   email: '', telefono: '', rol: 'medico' as Rol,
   password: '', password2: '',
+  tarjeta_profesional: '', numero_rethus: '',
+  especialidad_principal: '' as string | number,
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
@@ -132,6 +138,9 @@ export default function UsuariosPage() {
       username: u.username, cedula: u.cedula,
       email: u.email, telefono: u.telefono,
       rol: u.rol, password: '', password2: '',
+      tarjeta_profesional: u.tarjeta_profesional ?? '',
+      numero_rethus: u.numero_rethus ?? '',
+      especialidad_principal: u.especialidad_principal ?? '',
     })
     setModalEditar(u)
   }
@@ -143,6 +152,9 @@ export default function UsuariosPage() {
       const payload: Record<string, unknown> = {
         first_name: form.first_name, last_name: form.last_name,
         email: form.email, telefono: form.telefono, rol: form.rol,
+        tarjeta_profesional: form.tarjeta_profesional,
+        numero_rethus: form.numero_rethus,
+        ...(form.especialidad_principal ? { especialidad_principal: form.especialidad_principal } : {}),
       }
       await usuariosAPI.update(modalEditar.id, payload)
       toast.success('Usuario actualizado')
@@ -273,6 +285,8 @@ export default function UsuariosPage() {
                       <div className="space-y-0.5">
                         {u.email && <p className="text-xs text-slate-500 flex items-center gap-1"><Mail className="w-3 h-3" />{u.email}</p>}
                         {u.telefono && <p className="text-xs text-slate-500 flex items-center gap-1"><Phone className="w-3 h-3" />{u.telefono}</p>}
+                        {u.tarjeta_profesional && <p className="text-xs text-blue-600 flex items-center gap-1">TP {u.tarjeta_profesional}</p>}
+                        {u.especialidad_nombre && <p className="text-xs text-teal-600">{u.especialidad_nombre}</p>}
                       </div>
                     </td>
                     <td className="px-5 py-4">
@@ -475,6 +489,29 @@ function ModalUsuario({
                 className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/30" />
             </div>
           </div>
+
+          {/* Datos profesionales (solo para médicos) */}
+          {(form.rol === 'medico' || form.rol === 'admin') && (
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+                Datos profesionales (anti-glosas)
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Tarjeta Profesional</label>
+                  <input value={String(form.tarjeta_profesional ?? '')} onChange={set('tarjeta_profesional')}
+                    placeholder="Número TP (CMC)"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/30" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Registro ReTHUS</label>
+                  <input value={String(form.numero_rethus ?? '')} onChange={set('numero_rethus')}
+                    placeholder="Número ReTHUS"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/30" />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Rol */}
           <div>

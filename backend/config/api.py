@@ -1737,3 +1737,345 @@ class ReportesView(_APIView):
             'resumen': {'total': len(rows), 'con_cuv': con_cuv, 'sin_cuv': sin_cuv},
             'filas': rows,
         }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  MÓDULO SALUD — Especialidades, Notas Médicas, Programación CX,
+#                 Descripción Quirúrgica, Ayudas Diagnósticas
+# ════════════════════════════════════════════════════════════════════════════
+
+from apps.catalogos.models import Especialidad
+from apps.historia.models import (
+    NotaMedica, ProgramacionCx, DescripcionQuirurgica,
+    AyudaDiagnostica, ResultadoAD,
+)
+from django.contrib.auth import get_user_model as _get_user
+
+_User = _get_user()
+
+
+# ── Especialidad ─────────────────────────────────────────────────────────────
+
+class EspecialidadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Especialidad
+        fields = ['id', 'codigo', 'nombre', 'activa']
+
+
+class EspecialidadViewSet(viewsets.ModelViewSet):
+    serializer_class = EspecialidadSerializer
+    queryset = Especialidad.objects.filter(activa=True)
+
+
+# ── Usuario médico (datos profesionales) ─────────────────────────────────────
+
+class MedicoProfesionalSerializer(serializers.ModelSerializer):
+    """Serializer reducido para mostrar el médico en registros clínicos."""
+    nombre_completo    = serializers.CharField(source='get_full_name', read_only=True)
+    especialidad_nombre = serializers.CharField(
+        source='especialidad_principal.nombre', read_only=True, default='')
+
+    class Meta:
+        model = _User
+        fields = [
+            'id', 'nombre_completo', 'email',
+            'tarjeta_profesional', 'numero_rethus',
+            'especialidad_principal', 'especialidad_nombre',
+            'rol',
+        ]
+
+
+# ── Notas Médicas ─────────────────────────────────────────────────────────────
+
+class NotaMedicaSerializer(serializers.ModelSerializer):
+    medico_info = MedicoProfesionalSerializer(source='medico', read_only=True)
+
+    class Meta:
+        model = NotaMedica
+        fields = [
+            'id', 'ingreso', 'historia', 'tipo', 'medico', 'medico_info',
+            'especialidad_nota', 'tarjeta_prof_nota', 'servicio',
+            'fecha_hora', 'subjetivo', 'objetivo', 'analisis', 'plan',
+            'resumen_hospitalizacion', 'diagnostico_egreso',
+            'desc_diagnostico_egreso', 'condicion_al_egreso',
+            'recomendaciones_egreso',
+            'firmada', 'firmada_en', 'creado_en',
+        ]
+        read_only_fields = ['firmada_en', 'creado_en']
+
+    def validate(self, attrs):
+        # Una vez firmada no se puede editar
+        instance = self.instance
+        if instance and instance.firmada and not attrs.get('firmada') == instance.firmada:
+            raise serializers.ValidationError(
+                'Una nota firmada no puede modificarse. Agregue una nota aclaratoria.')
+        if instance and instance.firmada:
+            raise serializers.ValidationError(
+                'Esta nota ya está firmada y es inmutable.')
+        return attrs
+
+
+class NotaMedicaViewSet(viewsets.ModelViewSet):
+    serializer_class = NotaMedicaSerializer
+
+    def get_queryset(self):
+        qs = NotaMedica.objects.select_related('medico', 'medico__especialidad_principal')
+        ingreso = self.request.query_params.get('ingreso')
+        historia = self.request.query_params.get('historia')
+        tipo = self.request.query_params.get('tipo')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if historia:
+            qs = qs.filter(historia=historia)
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def firmar(self, request, pk=None):
+        nota = self.get_object()
+        if nota.firmada:
+            return Response({'error': 'Ya está firmada.'}, status=400)
+        medico = request.user
+        # Snapshot anti-glosa: captura TP y especialidad al momento de la firma
+        nota.firmada = True
+        nota.firmada_en = timezone.now()
+        nota.medico = medico
+        nota.tarjeta_prof_nota = medico.tarjeta_profesional
+        nota.especialidad_nota = medico.especialidad_principal.nombre if medico.especialidad_principal else ''
+        nota.save()
+        return Response(NotaMedicaSerializer(nota).data)
+
+
+# ── Programación CX ───────────────────────────────────────────────────────────
+
+class ProgramacionCxSerializer(serializers.ModelSerializer):
+    cirujano_info     = MedicoProfesionalSerializer(source='cirujano', read_only=True)
+    anestesiologo_info = MedicoProfesionalSerializer(source='anestesiologo', read_only=True)
+    paciente_nombre   = serializers.CharField(source='paciente.__str__', read_only=True)
+
+    class Meta:
+        model = ProgramacionCx
+        fields = [
+            'id', 'numero_cx', 'ingreso', 'paciente', 'paciente_nombre',
+            'cups_principal', 'descripcion_cups', 'diagnostico_preop',
+            'desc_diagnostico_preop', 'tipo_cirugia',
+            'cirujano', 'cirujano_info', 'anestesiologo', 'anestesiologo_info',
+            'fecha_programada', 'duracion_estimada_min', 'quirofano',
+            'tipo_anestesia', 'numero_autorizacion', 'requiere_autorizacion',
+            'estado', 'observaciones_preop', 'creado_en',
+        ]
+        read_only_fields = ['numero_cx', 'creado_en']
+
+
+class ProgramacionCxViewSet(viewsets.ModelViewSet):
+    serializer_class = ProgramacionCxSerializer
+
+    def get_queryset(self):
+        qs = ProgramacionCx.objects.select_related(
+            'paciente', 'cirujano', 'anestesiologo',
+            'cirujano__especialidad_principal',
+            'anestesiologo__especialidad_principal',
+        )
+        ingreso = self.request.query_params.get('ingreso')
+        paciente = self.request.query_params.get('paciente')
+        estado = self.request.query_params.get('estado')
+        fecha = self.request.query_params.get('fecha')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if estado:
+            qs = qs.filter(estado=estado)
+        if fecha:
+            qs = qs.filter(fecha_programada__date=fecha)
+        return qs
+
+
+# ── Descripción Quirúrgica ───────────────────────────────────────────────────
+
+class DescripcionQuirurgicaSerializer(serializers.ModelSerializer):
+    cirujano_info = MedicoProfesionalSerializer(source='cirujano', read_only=True)
+    anestesiologo_info = MedicoProfesionalSerializer(source='anestesiologo', read_only=True)
+    numero_formateado = serializers.SerializerMethodField()
+
+    def get_numero_formateado(self, obj):
+        return f'DQX-{str(obj.numero_dqx).zfill(5)}'
+
+    class Meta:
+        model = DescripcionQuirurgica
+        fields = [
+            'id', 'numero_dqx', 'numero_formateado', 'programacion', 'ingreso',
+            'diagnostico_preoperatorio', 'desc_diag_preop',
+            'diagnostico_postoperatorio', 'desc_diag_postop',
+            'cups_principal', 'descripcion_procedimiento', 'tipo_anestesia',
+            'cirujano', 'cirujano_info', 'cirujano_nombre', 'cirujano_tp',
+            'cirujano_especialidad',
+            'anestesiologo', 'anestesiologo_info', 'anestesiologo_nombre',
+            'primer_ayudante', 'segundo_ayudante',
+            'instrumentadora', 'enfermera_circulante',
+            'fecha_hora_inicio', 'fecha_hora_fin', 'quirofano',
+            'descripcion_tecnica', 'hallazgos', 'especimenes', 'implantes',
+            'complicaciones', 'sangrado_estimado_ml', 'liquidos_administrados',
+            'plan_postoperatorio',
+            'firmada', 'firmada_en', 'creado_en',
+        ]
+        read_only_fields = ['numero_dqx', 'firmada_en', 'creado_en']
+
+    def validate(self, attrs):
+        instance = self.instance
+        if instance and instance.firmada:
+            raise serializers.ValidationError('Una descripción quirúrgica firmada es inmutable.')
+        return attrs
+
+
+class DescripcionQuirurgicaViewSet(viewsets.ModelViewSet):
+    serializer_class = DescripcionQuirurgicaSerializer
+
+    def get_queryset(self):
+        qs = DescripcionQuirurgica.objects.select_related(
+            'cirujano', 'anestesiologo', 'ingreso',
+            'cirujano__especialidad_principal',
+        )
+        ingreso = self.request.query_params.get('ingreso')
+        programacion = self.request.query_params.get('programacion')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if programacion:
+            qs = qs.filter(programacion=programacion)
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def firmar(self, request, pk=None):
+        dqx = self.get_object()
+        if dqx.firmada:
+            return Response({'error': 'Ya está firmada.'}, status=400)
+        medico = request.user
+        dqx.firmada = True
+        dqx.firmada_en = timezone.now()
+        # Snapshot anti-glosa
+        if dqx.cirujano:
+            dqx.cirujano_nombre    = dqx.cirujano.get_full_name()
+            dqx.cirujano_tp        = dqx.cirujano.tarjeta_profesional
+            dqx.cirujano_especialidad = (
+                dqx.cirujano.especialidad_principal.nombre
+                if dqx.cirujano.especialidad_principal else ''
+            )
+        dqx.save()
+        return Response(DescripcionQuirurgicaSerializer(dqx).data)
+
+
+# ── Ayudas Diagnósticas ───────────────────────────────────────────────────────
+
+class ResultadoADSerializer(serializers.ModelSerializer):
+    archivo_url = serializers.SerializerMethodField()
+
+    def get_archivo_url(self, obj):
+        if obj.archivo:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.archivo.url) if request else obj.archivo.url
+        return None
+
+    class Meta:
+        model = ResultadoAD
+        fields = [
+            'id', 'ayuda', 'medico_interpreta', 'fecha_resultado',
+            'resultado_texto', 'interpretacion', 'conclusion',
+            'archivo', 'archivo_url', 'creado_en',
+        ]
+        read_only_fields = ['creado_en']
+        extra_kwargs = {'archivo': {'write_only': True}}
+
+
+class AyudaDiagnosticaSerializer(serializers.ModelSerializer):
+    resultado = ResultadoADSerializer(read_only=True)
+    medico_solicitante_nombre = serializers.CharField(
+        source='medico_solicitante.get_full_name', read_only=True, default='')
+
+    class Meta:
+        model = AyudaDiagnostica
+        fields = [
+            'id', 'ingreso', 'historia', 'tipo', 'cups', 'descripcion',
+            'indicacion_clinica', 'urgente',
+            'medico_solicitante', 'medico_solicitante_nombre',
+            'estado', 'fecha_solicitud', 'resultado',
+        ]
+        read_only_fields = ['fecha_solicitud']
+
+
+class AyudaDiagnosticaViewSet(viewsets.ModelViewSet):
+    serializer_class = AyudaDiagnosticaSerializer
+
+    def get_queryset(self):
+        qs = AyudaDiagnostica.objects.select_related(
+            'medico_solicitante', 'resultado'
+        ).prefetch_related()
+        ingreso = self.request.query_params.get('ingreso')
+        historia = self.request.query_params.get('historia')
+        tipo = self.request.query_params.get('tipo')
+        estado = self.request.query_params.get('estado')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if historia:
+            qs = qs.filter(historia=historia)
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+    @action(detail=True, methods=['post'], url_path='resultado',
+            parser_classes=[__import__('rest_framework.parsers', fromlist=['MultiPartParser']).MultiPartParser,
+                            __import__('rest_framework.parsers', fromlist=['FormParser']).FormParser,
+                            __import__('rest_framework.parsers', fromlist=['JSONParser']).JSONParser])
+    def cargar_resultado(self, request, pk=None):
+        ayuda = self.get_object()
+        data = request.data.copy()
+        data['ayuda'] = str(ayuda.id)
+        # Update or create resultado
+        try:
+            resultado = ayuda.resultado
+            ser = ResultadoADSerializer(resultado, data=data, partial=True,
+                                         context={'request': request})
+        except ResultadoAD.DoesNotExist:
+            ser = ResultadoADSerializer(data=data, context={'request': request})
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        ayuda.estado = 'resultado'
+        ayuda.save(update_fields=['estado'])
+        return Response(AyudaDiagnosticaSerializer(ayuda, context={'request': request}).data)
+
+
+# ── Censo (vista de ingresos activos) ─────────────────────────────────────────
+
+class CensoIngresoSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.CharField(source='paciente.__str__', read_only=True)
+    paciente_doc    = serializers.CharField(
+        source='paciente.numero_identificacion', read_only=True)
+    paciente_id     = serializers.UUIDField(source='paciente.id', read_only=True)
+    dias_estancia   = serializers.SerializerMethodField()
+    notas_count     = serializers.IntegerField(
+        source='notas_medicas.count', read_only=True)
+    ayudas_count    = serializers.IntegerField(
+        source='ayudas_diagnosticas.count', read_only=True)
+    cx_count        = serializers.IntegerField(
+        source='programaciones_cx.count', read_only=True)
+    tiene_egreso    = serializers.SerializerMethodField()
+
+    def get_dias_estancia(self, obj):
+        from django.utils import timezone as tz
+        delta = tz.now() - obj.fecha_ingreso
+        return delta.days
+
+    def get_tiene_egreso(self, obj):
+        return hasattr(obj, 'egreso')
+
+    class Meta:
+        from apps.historia.models import Ingreso as _Ingreso
+        model = _Ingreso
+        fields = [
+            'id', 'numero_ingreso', 'paciente_id', 'paciente_nombre', 'paciente_doc',
+            'fecha_ingreso', 'tipo_atencion', 'motivo_ingreso', 'activo',
+            'dias_estancia', 'notas_count', 'ayudas_count', 'cx_count',
+            'tiene_egreso',
+        ]

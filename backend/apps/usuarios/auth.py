@@ -234,14 +234,23 @@ class ConfirmarPasswordView(APIView):
 # ── Gestión de usuarios del consultorio ──────────────────────────────────────
 
 class UsuarioSerializer(serializers.ModelSerializer):
-    rol_label       = serializers.CharField(source='get_rol_display', read_only=True)
-    nombre_completo = serializers.CharField(source='get_full_name', read_only=True)
+    rol_label               = serializers.CharField(source='get_rol_display', read_only=True)
+    nombre_completo         = serializers.CharField(source='get_full_name', read_only=True)
+    especialidad_nombre     = serializers.CharField(
+        source='especialidad_principal.nombre', read_only=True, default='')
+    especialidades_nombres  = serializers.SerializerMethodField()
+
+    def get_especialidades_nombres(self, obj):
+        return list(obj.especialidades.values_list('nombre', flat=True))
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'cedula', 'first_name', 'last_name', 'nombre_completo',
             'email', 'telefono', 'rol', 'rol_label',
+            'tarjeta_profesional', 'numero_rethus',
+            'especialidad_principal', 'especialidad_nombre',
+            'especialidades', 'especialidades_nombres',
             'activo_tenant', 'date_joined',
         ]
         read_only_fields = ['id', 'date_joined']
@@ -256,6 +265,7 @@ class CrearUsuarioSerializer(serializers.ModelSerializer):
         fields = [
             'username', 'cedula', 'first_name', 'last_name', 'email',
             'telefono', 'rol', 'password', 'password2',
+            'tarjeta_profesional', 'numero_rethus', 'especialidad_principal',
         ]
 
     def validate(self, data):
@@ -358,3 +368,23 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         usuario.activo_tenant = True
         usuario.save(update_fields=['activo_tenant'])
         return Response({'mensaje': f'Usuario {usuario.get_full_name()} activado.'})
+
+    @action(detail=False, methods=['get'], url_path='medicos',
+            permission_classes=[IsAuthenticated])
+    def medicos(self, request):
+        """GET /api/usuarios/medicos/ — lista médicos activos para selects clínicos."""
+        qs = User.objects.filter(
+            rol__in=['medico', 'admin', 'superadmin'],
+            activo_tenant=True,
+        ).select_related('especialidad_principal').order_by('first_name', 'last_name')
+        data = [
+            {
+                'id':                   str(u.id),
+                'nombre_completo':      u.get_full_name(),
+                'tarjeta_profesional':  u.tarjeta_profesional,
+                'numero_rethus':        u.numero_rethus,
+                'especialidad':         u.especialidad_principal.nombre if u.especialidad_principal else '',
+            }
+            for u in qs
+        ]
+        return Response(data)

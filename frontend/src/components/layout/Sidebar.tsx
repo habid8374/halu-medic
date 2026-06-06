@@ -9,7 +9,7 @@ import {
   ClipboardList, Receipt, BarChart3, Settings,
   LogOut, ChevronRight, ChevronDown, Building2, ShieldCheck,
   FileJson, ListTree, BookOpen, Stethoscope, FileSpreadsheet,
-  Menu, X, UserCog,
+  Menu, X, UserCog, HeartPulse, BedDouble, Microscope, Scissors,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -33,6 +33,16 @@ const navItems: NavItem[] = [
   { href: '/citas',          label: 'Agenda',           icon: CalendarDays,   requiere: 'puede_gestionar_citas' },
   { href: '/consultas',      label: 'Consultas',        icon: ClipboardList,  requiere: 'puede_ver_clinica' },
   { href: '/historia-clinica', label: 'Historia Clínica', icon: Stethoscope,  requiere: 'puede_ver_clinica' },
+  {
+    label: 'Salud',
+    icon: HeartPulse,
+    requiere: 'puede_ver_clinica',
+    children: [
+      { href: '/salud/censo',  label: 'Censo de pacientes' },
+      { href: '/salud/cx',     label: 'Programación CX' },
+      { href: '/salud/ayudas', label: 'Ayudas diagnósticas' },
+    ],
+  },
   {
     label: 'Facturación',
     icon: Receipt,

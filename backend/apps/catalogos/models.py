@@ -160,3 +160,21 @@ class CodigoCIE10(models.Model):
 
     def __str__(self):
         return f'{self.codigo} — {self.nombre}'
+
+
+class Especialidad(models.Model):
+    """
+    Catálogo nacional de especialidades médicas (ReTHUS / Minsalud).
+    Vive en el schema público — compartido por todos los tenants.
+    """
+    codigo = models.CharField(max_length=10, unique=True, help_text='Código ReTHUS')
+    nombre = models.CharField(max_length=200)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Especialidad'
+        verbose_name_plural = 'Especialidades'
+
+    def __str__(self):
+        return f'{self.codigo} — {self.nombre}'

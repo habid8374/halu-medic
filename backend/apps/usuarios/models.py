@@ -38,6 +38,34 @@ class Usuario(AbstractUser):
     avatar   = models.ImageField(upload_to='avatares/', null=True, blank=True)
     activo_tenant = models.BooleanField(default=True, help_text='Activo en este consultorio')
 
+    # ── Datos profesionales (médicos y personal clínico) ─────────────────────
+    tarjeta_profesional = models.CharField(
+        max_length=20, blank=True,
+        help_text='Número de tarjeta profesional (Colegio Médico Colombiano)',
+    )
+    numero_rethus = models.CharField(
+        max_length=30, blank=True,
+        help_text='Número de registro ReTHUS (Ley 1164/2007)',
+    )
+    especialidad_principal = models.ForeignKey(
+        'catalogos.Especialidad',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='medicos_principal',
+        help_text='Especialidad principal del profesional',
+    )
+    especialidades = models.ManyToManyField(
+        'catalogos.Especialidad',
+        blank=True,
+        related_name='medicos',
+        help_text='Especialidades adicionales',
+    )
+    firma_imagen = models.ImageField(
+        upload_to='firmas/',
+        null=True, blank=True,
+        help_text='Imagen de la firma del profesional (PNG/JPG)',
+    )
+
     # Campos obligatorios para AbstractUser
     REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'rol']
 
