@@ -228,6 +228,7 @@ export const usuariosAPI = {
   update:           (id: string, data: Record<string, unknown>) => api.put(`/api/usuarios/${id}/`, data),
   cambiarPassword:  (id: string, data: Record<string, unknown>) => api.post(`/api/usuarios/${id}/cambiar_password/`, data),
   desactivar:       (id: string) => api.post(`/api/usuarios/${id}/desactivar/`),
+  activar:          (id: string) => api.post(`/api/usuarios/${id}/activar/`),
 }
 
 // ── Suscripciones (superadmin) ────────────────────────────────────────────────

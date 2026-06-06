@@ -283,7 +283,7 @@ class CrearUsuarioSerializer(serializers.ModelSerializer):
 
 
 class CambiarPasswordSerializer(serializers.Serializer):
-    password_actual = serializers.CharField(write_only=True)
+    password_actual = serializers.CharField(write_only=True, required=False, allow_blank=True)
     password_nuevo  = serializers.CharField(write_only=True, validators=[validate_password])
     password_nuevo2 = serializers.CharField(write_only=True)
 
@@ -350,3 +350,11 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         usuario.activo_tenant = False
         usuario.save(update_fields=['activo_tenant'])
         return Response({'mensaje': f'Usuario {usuario.get_full_name()} desactivado.'})
+
+    @action(detail=True, methods=['post'], url_path='activar')
+    def activar(self, request, pk=None):
+        """POST /api/usuarios/{id}/activar/ — reactiva acceso al tenant."""
+        usuario = self.get_object()
+        usuario.activo_tenant = True
+        usuario.save(update_fields=['activo_tenant'])
+        return Response({'mensaje': f'Usuario {usuario.get_full_name()} activado.'})
