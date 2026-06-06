@@ -11,6 +11,7 @@ import {
   LogOut, ChevronRight, ChevronDown, Building2, ShieldCheck,
   FileJson, ListTree, BookOpen, Stethoscope, FileSpreadsheet,
   Menu, X, UserCog, HeartPulse, BedDouble, Microscope, Scissors,
+  Pill, FlaskConical,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -45,8 +46,16 @@ const navItems: NavItem[] = [
       { href: '/salud/ayudas',     label: 'Ayudas diagnósticas' },
       { href: '/salud/enfermeria', label: 'Enfermería' },
       { href: '/salud/consentimientos', label: 'Consentimientos' },
+      { href: '/salud/referencias', label: 'Referencia / Contrarreferencia' },
+      { href: '/salud/rehabilitacion', label: 'Rehabilitación' },
+      { href: '/salud/odontologia', label: 'Odontología' },
+      { href: '/salud/telemedicina', label: 'Telemedicina' },
+      { href: '/salud/uci', label: 'UCI / Cuidados intensivos' },
+      { href: '/salud/banco-sangre', label: 'Banco de sangre' },
     ],
   },
+  { href: '/farmacia',    label: 'Farmacia',     icon: Pill,         requiere: 'puede_ver_clinica' },
+  { href: '/laboratorio', label: 'Laboratorio',  icon: FlaskConical, requiere: 'puede_ver_clinica' },
   {
     label: 'Facturación',
     icon: Receipt,
