@@ -1347,23 +1347,21 @@ from apps.usuarios.permissions import EsAdminOSuperadmin as _EsAdmin
 class ReportesView(_APIView):
     """
     GET /api/reportes/?tipo=...&fecha_desde=...&fecha_hasta=...
-    Genera reportes agregados para el consultorio activo.
-
-    tipos disponibles:
-      resumen_general      → KPIs del período
-      hc_facturacion       → HC del período con estado de facturación
-      facturacion_periodo  → Facturas emitidas en el período
-      pendientes_facturar  → HC sin factura (ordenados por antigüedad)
-      por_aseguradora      → Totales facturados por EPS
-      glosas_errores       → Facturas con estado error/anulada
-      top_diagnosticos     → CIE-10 más frecuentes
-      top_procedimientos   → CUPS más frecuentes (órdenes HC)
-      rips_estado          → HC con/sin CUV en RIPS
+    Todos los métodos retornan estructura {tipo, periodo, items, ...KPIs}
+    compatible con el frontend de reportes.
     """
     permission_classes = [IsAuthenticated, _EsAdmin]
 
+    # alias cortos → nombre interno
+    _ALIAS = {
+        'resumen':    'resumen_general',
+        'pendientes': 'pendientes_facturar',
+        'glosas':     'glosas_errores',
+    }
+
     def get(self, request):
         tipo        = request.query_params.get('tipo', 'resumen_general')
+        tipo        = self._ALIAS.get(tipo, tipo)
         fecha_desde = request.query_params.get('fecha_desde', '')
         fecha_hasta = request.query_params.get('fecha_hasta', '')
 
@@ -1399,51 +1397,35 @@ class ReportesView(_APIView):
         from apps.historia.models import HistoriaClinica
         from apps.facturacion.models import Factura, EstadoFactura
         from apps.pacientes.models import Paciente
-        from django.db.models import Sum, Count, Q
+        from django.db.models import Sum
 
-        hc_qs = self._rango(HistoriaClinica.objects.all(), 'fecha_atencion', fd, fh)
+        hc_qs  = self._rango(HistoriaClinica.objects.all(), 'fecha_atencion', fd, fh)
         fev_qs = self._rango(Factura.objects.all(), 'creado_en', fd, fh)
 
-        total_hc       = hc_qs.count()
-        hc_facturadas  = hc_qs.filter(facturas__isnull=False).distinct().count()
-        hc_pendientes  = total_hc - hc_facturadas
-
-        fev_totales    = fev_qs.count()
-        fev_validadas  = fev_qs.filter(estado=EstadoFactura.VALIDADA).count()
-        fev_error      = fev_qs.filter(estado=EstadoFactura.ERROR).count()
-        fev_anuladas   = fev_qs.filter(estado=EstadoFactura.ANULADA).count()
-
-        total_facturado = fev_qs.filter(
-            estado=EstadoFactura.VALIDADA
-        ).aggregate(t=Sum('total'))['t'] or 0
-
-        total_pacientes = Paciente.objects.count()
+        total_hc      = hc_qs.count()
+        hc_facturadas = hc_qs.filter(facturas__isnull=False).distinct().count()
+        hc_pendientes = total_hc - hc_facturadas
+        fev_validadas = fev_qs.filter(estado=EstadoFactura.VALIDADA).count()
+        fev_error     = fev_qs.filter(estado=EstadoFactura.ERROR).count()
+        total_facturado = fev_qs.filter(estado=EstadoFactura.VALIDADA).aggregate(t=Sum('total'))['t'] or 0
 
         return {
-            'tipo': 'resumen_general',
+            'tipo': 'resumen',
             'periodo': {'desde': fd, 'hasta': fh},
-            'hc': {
-                'total': total_hc,
-                'facturadas': hc_facturadas,
-                'pendientes': hc_pendientes,
-                'pct_facturadas': round(hc_facturadas / total_hc * 100, 1) if total_hc else 0,
-            },
-            'facturacion': {
-                'total_fev': fev_totales,
-                'validadas': fev_validadas,
-                'error': fev_error,
-                'anuladas': fev_anuladas,
-                'total_facturado': float(total_facturado),
-            },
-            'total_pacientes': total_pacientes,
+            'total_hc':           total_hc,
+            'hc_facturadas':      hc_facturadas,
+            'hc_pendientes':      hc_pendientes,
+            'total_facturado':    float(total_facturado),
+            'facturas_validadas': fev_validadas,
+            'facturas_error':     fev_error,
+            'total_pacientes':    Paciente.objects.count(),
+            'pacientes_unicos':   Paciente.objects.count(),
         }
 
     # ── 2. HC con estado de facturación ───────────────────────────────────────
 
     def _hc_facturacion(self, fd, fh):
         from apps.historia.models import HistoriaClinica
-        from django.db.models import Prefetch
-        from apps.facturacion.models import Factura
 
         qs = self._rango(
             HistoriaClinica.objects.select_related('paciente')
@@ -1451,95 +1433,92 @@ class ReportesView(_APIView):
             'fecha_atencion', fd, fh
         ).order_by('-fecha_atencion')[:500]
 
-        rows = []
+        items = []
         for hc in qs:
             facturas = list(hc.facturas.all())
             if facturas:
                 f = facturas[0]
                 estado_factura = f.estado
-                numero_fev     = f.numero_factus or '—'
+                numero_factura = f.numero_factus or '—'
+                valor_factura  = float(f.total)
                 factura_id     = str(f.id)
             else:
                 estado_factura = 'sin_factura'
-                numero_fev     = '—'
+                numero_factura = '—'
+                valor_factura  = 0.0
                 factura_id     = None
 
-            rows.append({
-                'hc_id':              str(hc.id),
-                'numero_hc':          f'HC-{str(hc.numero_hc).zfill(5)}' if hc.numero_hc else '—',
-                'fecha_atencion':     hc.fecha_atencion.strftime('%Y-%m-%d %H:%M') if hc.fecha_atencion else '',
-                'tipo_registro':      hc.get_tipo_registro_display() if hasattr(hc, 'get_tipo_registro_display') else hc.tipo_registro,
-                'paciente_nombre':    hc.paciente.nombre_completo if hasattr(hc.paciente, 'nombre_completo') else str(hc.paciente),
-                'paciente_doc':       hc.paciente.numero_identificacion,
-                'diagnostico':        hc.diagnostico_principal or '—',
-                'estado_factura':     estado_factura,
-                'numero_fev':         numero_fev,
-                'factura_id':         factura_id,
+            items.append({
+                'hc_id':         str(hc.id),
+                'numero_hc':     f'HC-{str(hc.numero_hc).zfill(5)}' if hc.numero_hc else '—',
+                'fecha_atencion': hc.fecha_atencion.strftime('%Y-%m-%d') if hc.fecha_atencion else '',
+                'tipo_registro':  hc.get_tipo_registro_display() if hasattr(hc, 'get_tipo_registro_display') else hc.tipo_registro,
+                'paciente':      str(hc.paciente),
+                'documento':     hc.paciente.numero_identificacion,
+                'diagnostico':   hc.diagnostico_principal or '—',
+                'estado_factura': estado_factura,
+                'numero_factura': numero_factura,
+                'valor_factura':  valor_factura,
+                'factura_id':    factura_id,
             })
 
-        facturadas  = sum(1 for r in rows if r['estado_factura'] not in ('sin_factura',))
-        pendientes  = len(rows) - facturadas
-
+        facturadas = sum(1 for r in items if r['estado_factura'] != 'sin_factura')
         return {
             'tipo': 'hc_facturacion',
             'periodo': {'desde': fd, 'hasta': fh},
-            'resumen': {'total': len(rows), 'facturadas': facturadas, 'pendientes': pendientes},
-            'filas': rows,
+            'count': len(items),
+            'facturadas': facturadas,
+            'pendientes': len(items) - facturadas,
+            'items': items,
         }
 
     # ── 3. Facturas del período ───────────────────────────────────────────────
 
     def _facturacion_periodo(self, fd, fh):
         from apps.facturacion.models import Factura, EstadoFactura
-        from django.db.models import Sum
 
         qs = self._rango(
-            Factura.objects.select_related('historia__paciente', 'consulta__paciente', 'convenio__aseguradora'),
+            Factura.objects.select_related(
+                'historia__paciente', 'consulta__paciente', 'convenio__aseguradora'
+            ),
             'creado_en', fd, fh
         ).order_by('-creado_en')[:500]
 
-        rows = []
+        items = []
         for f in qs:
             if f.historia:
-                pax_nombre = str(f.historia.paciente)
-                pax_doc    = f.historia.paciente.numero_identificacion
-                num_hc     = f'HC-{str(f.historia.numero_hc).zfill(5)}' if f.historia.numero_hc else '—'
+                pax    = str(f.historia.paciente)
+                num_hc = f'HC-{str(f.historia.numero_hc).zfill(5)}' if f.historia.numero_hc else '—'
             elif f.consulta:
-                pax_nombre = str(f.consulta.paciente)
-                pax_doc    = f.consulta.paciente.numero_identificacion
-                num_hc     = '—'
+                pax    = str(f.consulta.paciente)
+                num_hc = '—'
             else:
-                pax_nombre = '—'; pax_doc = '—'; num_hc = '—'
+                pax = '—'; num_hc = '—'
 
-            rows.append({
-                'factura_id':    str(f.id),
-                'numero_fev':    f.numero_factus or '—',
-                'numero_hc':     num_hc,
-                'fecha':         f.creado_en.strftime('%Y-%m-%d') if f.creado_en else '',
-                'paciente':      pax_nombre,
-                'documento':     pax_doc,
-                'aseguradora':   f.convenio.aseguradora.nombre if f.convenio and f.convenio.aseguradora else 'Particular',
-                'total':         float(f.total),
-                'copago':        float(f.valor_copago),
-                'estado':        f.estado,
-                'cufe':          f.cufe[:20] + '...' if f.cufe else '—',
-                'tiene_cuv':     bool(f.cuv),
+            items.append({
+                'factura_id':  str(f.id),
+                'numero_factus': f.numero_factus or '—',
+                'numero_hc':   num_hc,
+                'fecha':       f.creado_en.strftime('%Y-%m-%d') if f.creado_en else '',
+                'paciente':    pax,
+                'aseguradora': f.convenio.aseguradora.nombre if f.convenio and f.convenio.aseguradora else 'Particular',
+                'estado':      f.estado,
+                'total':       float(f.total),
+                'copago':      float(f.valor_copago),
+                'cufe':        (f.cufe[:20] + '…') if f.cufe else '—',
+                'tiene_cuv':   bool(f.cuv),
             })
 
-        totales = {
-            'total_cop':     sum(r['total']  for r in rows if r['estado'] == 'validada'),
-            'total_copagos': sum(r['copago'] for r in rows if r['estado'] == 'validada'),
-            'count':         len(rows),
-            'validadas':     sum(1 for r in rows if r['estado'] == 'validada'),
-            'error':         sum(1 for r in rows if r['estado'] == 'error'),
-            'anuladas':      sum(1 for r in rows if r['estado'] == 'anulada'),
-        }
-
+        validadas = [r for r in items if r['estado'] == 'validada']
         return {
-            'tipo': 'facturacion_periodo',
-            'periodo': {'desde': fd, 'hasta': fh},
-            'totales': totales,
-            'filas': rows,
+            'tipo':     'facturacion_periodo',
+            'periodo':  {'desde': fd, 'hasta': fh},
+            'count':    len(items),
+            'total':    sum(r['total'] for r in validadas),
+            'validadas': len(validadas),
+            'error':    sum(1 for r in items if r['estado'] == 'error'),
+            'anuladas': sum(1 for r in items if r['estado'] == 'anulada'),
+            'items':    items,
         }
 
     # ── 4. HC sin factura ─────────────────────────────────────────────────────
@@ -1547,44 +1526,43 @@ class ReportesView(_APIView):
     def _pendientes_facturar(self, fd, fh):
         from apps.historia.models import HistoriaClinica
         from django.utils import timezone
-        from datetime import timedelta
 
         qs = self._rango(
-            HistoriaClinica.objects.select_related('paciente')
+            HistoriaClinica.objects.select_related('paciente', 'paciente__aseguradora')
             .filter(facturas__isnull=True),
             'fecha_atencion', fd, fh
         ).order_by('fecha_atencion')[:500]
 
         hoy = timezone.now().date()
-        rows = []
+        items = []
         for hc in qs:
             fecha = hc.fecha_atencion.date() if hc.fecha_atencion else None
             dias  = (hoy - fecha).days if fecha else None
-            rows.append({
-                'hc_id':         str(hc.id),
-                'numero_hc':     f'HC-{str(hc.numero_hc).zfill(5)}' if hc.numero_hc else '—',
-                'fecha_atencion': str(fecha) if fecha else '',
-                'dias_pendiente': dias,
-                'alerta':        'critico' if dias and dias > 30 else ('advertencia' if dias and dias > 15 else 'normal'),
-                'paciente':      str(hc.paciente),
-                'documento':     hc.paciente.numero_identificacion,
-                'tipo':          hc.tipo_registro,
-                'diagnostico':   hc.diagnostico_principal or '—',
+            items.append({
+                'hc_id':              str(hc.id),
+                'numero_hc':          f'HC-{str(hc.numero_hc).zfill(5)}' if hc.numero_hc else '—',
+                'fecha_atencion':     str(fecha) if fecha else '',
+                'dias_pendiente':     dias,
+                'alerta':             'critico' if dias and dias > 30 else ('advertencia' if dias and dias > 15 else 'normal'),
+                'paciente':           str(hc.paciente),
+                'documento':          hc.paciente.numero_identificacion,
+                'tipo':               hc.tipo_registro,
+                'diagnostico_principal': hc.diagnostico_principal or '—',
+                'aseguradora':        hc.paciente.aseguradora.nombre if hc.paciente.aseguradora else 'Particular',
             })
 
         return {
-            'tipo': 'pendientes_facturar',
-            'periodo': {'desde': fd, 'hasta': fh},
-            'total': len(rows),
-            'criticos': sum(1 for r in rows if r['alerta'] == 'critico'),
-            'filas': rows,
+            'tipo':     'pendientes_facturar',
+            'periodo':  {'desde': fd, 'hasta': fh},
+            'count':    len(items),
+            'criticos': sum(1 for r in items if r['alerta'] == 'critico'),
+            'items':    items,
         }
 
     # ── 5. Facturación por aseguradora ────────────────────────────────────────
 
     def _por_aseguradora(self, fd, fh):
         from apps.facturacion.models import Factura, EstadoFactura
-        from django.db.models import Sum, Count
 
         qs = self._rango(
             Factura.objects.filter(estado=EstadoFactura.VALIDADA)
@@ -1595,20 +1573,24 @@ class ReportesView(_APIView):
         resumen: dict = {}
         for f in qs:
             nombre = f.convenio.aseguradora.nombre if f.convenio and f.convenio.aseguradora else 'Particular'
-            nit    = f.convenio.aseguradora.nit if f.convenio and f.convenio.aseguradora else '—'
-            key    = nombre
-            if key not in resumen:
-                resumen[key] = {'aseguradora': nombre, 'nit': nit, 'facturas': 0, 'total': 0.0, 'copagos': 0.0}
-            resumen[key]['facturas'] += 1
-            resumen[key]['total']    += float(f.total)
-            resumen[key]['copagos']  += float(f.valor_copago)
+            nit    = f.convenio.aseguradora.nit    if f.convenio and f.convenio.aseguradora else '—'
+            if nombre not in resumen:
+                resumen[nombre] = {
+                    'aseguradora': nombre, 'nit': nit,
+                    'facturas': 0, 'total': 0.0, 'copagos': 0.0,
+                    'validadas': 0, 'pendientes': 0, 'glosas': 0,
+                }
+            resumen[nombre]['facturas']  += 1
+            resumen[nombre]['total']     += float(f.total)
+            resumen[nombre]['copagos']   += float(f.valor_copago)
+            resumen[nombre]['validadas'] += 1
 
-        filas = sorted(resumen.values(), key=lambda x: x['total'], reverse=True)
+        items = sorted(resumen.values(), key=lambda x: x['total'], reverse=True)
         return {
-            'tipo': 'por_aseguradora',
-            'periodo': {'desde': fd, 'hasta': fh},
-            'total_general': sum(r['total'] for r in filas),
-            'filas': filas,
+            'tipo':          'por_aseguradora',
+            'periodo':       {'desde': fd, 'hasta': fh},
+            'total_general': sum(r['total'] for r in items),
+            'items':         items,
         }
 
     # ── 6. Glosas y errores ───────────────────────────────────────────────────
@@ -1617,39 +1599,41 @@ class ReportesView(_APIView):
         from apps.facturacion.models import Factura, EstadoFactura
 
         qs = self._rango(
-            Factura.objects.select_related('historia__paciente', 'consulta__paciente')
-            .filter(estado__in=[EstadoFactura.ERROR, EstadoFactura.ANULADA]),
+            Factura.objects.select_related(
+                'historia__paciente', 'consulta__paciente', 'convenio__aseguradora'
+            ).filter(estado__in=[EstadoFactura.ERROR, EstadoFactura.ANULADA]),
             'creado_en', fd, fh
         ).order_by('-creado_en')[:200]
 
-        rows = []
+        items = []
         for f in qs:
             if f.historia:
-                pax = str(f.historia.paciente)
+                pax    = str(f.historia.paciente)
                 num_hc = f'HC-{str(f.historia.numero_hc).zfill(5)}' if f.historia.numero_hc else '—'
             elif f.consulta:
-                pax = str(f.consulta.paciente)
+                pax    = str(f.consulta.paciente)
                 num_hc = '—'
             else:
                 pax = '—'; num_hc = '—'
 
-            rows.append({
-                'factura_id':   str(f.id),
-                'numero_fev':   f.numero_factus or '—',
-                'numero_hc':    num_hc,
-                'paciente':     pax,
-                'fecha':        f.creado_en.strftime('%Y-%m-%d') if f.creado_en else '',
-                'estado':       f.estado,
-                'total':        float(f.total),
-                'errores_dian': f.errores_dian or [],
-                'observaciones': f.observaciones,
+            errores = f.errores_dian or []
+            items.append({
+                'factura_id':    str(f.id),
+                'numero_factura': f.numero_factus or '—',
+                'numero_hc':     num_hc,
+                'paciente':      pax,
+                'aseguradora':   f.convenio.aseguradora.nombre if f.convenio and f.convenio.aseguradora else 'Particular',
+                'fecha':         f.creado_en.strftime('%Y-%m-%d') if f.creado_en else '',
+                'estado':        f.estado,
+                'total':         float(f.total),
+                'error_detalle': '; '.join(errores) if isinstance(errores, list) else str(errores or f.observaciones or '—'),
             })
 
         return {
-            'tipo': 'glosas_errores',
-            'periodo': {'desde': fd, 'hasta': fh},
-            'total': len(rows),
-            'filas': rows,
+            'tipo':         'glosas_errores',
+            'periodo':      {'desde': fd, 'hasta': fh},
+            'total_glosas': len(items),
+            'items':        items,
         }
 
     # ── 7. Top diagnósticos CIE-10 ────────────────────────────────────────────
@@ -1659,18 +1643,23 @@ class ReportesView(_APIView):
         from django.db.models import Count
 
         qs = self._rango(
-            HistoriaClinica.objects.exclude(diagnostico_principal=''),
+            HistoriaClinica.objects.exclude(diagnostico_principal__in=['', None]),
             'fecha_atencion', fd, fh
         )
 
         top = (qs.values('diagnostico_principal')
-               .annotate(total=Count('id'))
+               .annotate(total=Count('id'), facturadas=Count('facturas'))
                .order_by('-total')[:20])
 
         return {
-            'tipo': 'top_diagnosticos',
+            'tipo':    'top_diagnosticos',
             'periodo': {'desde': fd, 'hasta': fh},
-            'filas': [{'cie10': r['diagnostico_principal'], 'total': r['total']} for r in top],
+            'items': [{
+                'cie10':       r['diagnostico_principal'],
+                'descripcion': '',
+                'total':       r['total'],
+                'facturadas':  r['facturadas'],
+            } for r in top],
         }
 
     # ── 8. Top procedimientos CUPS ────────────────────────────────────────────
@@ -1680,18 +1669,25 @@ class ReportesView(_APIView):
         from django.db.models import Count
 
         qs = self._rango(
-            OrdenHC.objects.exclude(cups=''),
+            OrdenHC.objects.exclude(cups__in=['', None]),
             'creado_en', fd, fh
         )
 
         top = (qs.values('cups', 'descripcion_cups', 'tipo')
-               .annotate(total=Count('id'))
+               .annotate(total=Count('id'),
+                         ejecutadas=Count('id', filter=__import__('django.db.models', fromlist=['Q']).Q(estado='ejecutada')))
                .order_by('-total')[:20])
 
         return {
-            'tipo': 'top_procedimientos',
+            'tipo':    'top_procedimientos',
             'periodo': {'desde': fd, 'hasta': fh},
-            'filas': list(top),
+            'items': [{
+                'cups':       r['cups'],
+                'descripcion': r['descripcion_cups'] or r['cups'],
+                'tipo':       r['tipo'],
+                'total':      r['total'],
+                'ejecutadas': r['ejecutadas'],
+            } for r in top],
         }
 
     # ── 9. Estado RIPS / CUV ─────────────────────────────────────────────────
@@ -1701,41 +1697,41 @@ class ReportesView(_APIView):
 
         qs = self._rango(
             Factura.objects.filter(estado=EstadoFactura.VALIDADA)
-            .select_related('historia__paciente', 'consulta__paciente'),
+            .select_related('historia__paciente', 'consulta__paciente', 'convenio__aseguradora'),
             'creado_en', fd, fh
         ).order_by('-creado_en')[:500]
 
-        rows = []
+        items = []
         for f in qs:
             if f.historia:
-                pax = str(f.historia.paciente)
+                pax    = str(f.historia.paciente)
                 num_hc = f'HC-{str(f.historia.numero_hc).zfill(5)}' if f.historia.numero_hc else '—'
             elif f.consulta:
-                pax = str(f.consulta.paciente)
+                pax    = str(f.consulta.paciente)
                 num_hc = '—'
             else:
                 pax = '—'; num_hc = '—'
 
-            rows.append({
-                'factura_id':  str(f.id),
-                'numero_fev':  f.numero_factus or '—',
-                'numero_hc':   num_hc,
-                'paciente':    pax,
-                'fecha':       f.creado_en.strftime('%Y-%m-%d') if f.creado_en else '',
-                'total':       float(f.total),
-                'tiene_rips':  bool(f.rips_json),
-                'cuv':         f.cuv or None,
-                'rips_enviado_muv': f.rips_enviado_muv,
+            items.append({
+                'factura_id':    str(f.id),
+                'numero_factura': f.numero_factus or '—',
+                'numero_hc':     num_hc,
+                'paciente':      pax,
+                'fecha':         f.creado_en.strftime('%Y-%m-%d') if f.creado_en else '',
+                'total':         float(f.total),
+                'cuv':           f.cuv or '—',
+                'cucon':         f.convenio.cucon if f.convenio else '—',
+                'estado_rips':   'Con CUV' if f.cuv else 'Sin CUV',
+                'tiene_rips':    bool(f.rips_json),
             })
 
-        con_cuv    = sum(1 for r in rows if r['cuv'])
-        sin_cuv    = len(rows) - con_cuv
-
+        con_cuv = sum(1 for r in items if r['cuv'] != '—')
         return {
-            'tipo': 'rips_estado',
-            'periodo': {'desde': fd, 'hasta': fh},
-            'resumen': {'total': len(rows), 'con_cuv': con_cuv, 'sin_cuv': sin_cuv},
-            'filas': rows,
+            'tipo':          'rips_estado',
+            'periodo':       {'desde': fd, 'hasta': fh},
+            'cuv_validados': con_cuv,
+            'cuv_pendientes': len(items) - con_cuv,
+            'items':         items,
         }
 
 
@@ -2458,3 +2454,107 @@ class NotaAjusteRIPSViewSet(viewsets.ModelViewSet):
         nota.respuesta_factus = request.data.get('respuesta_factus')
         nota.save(update_fields=['estado', 'cuv_ajuste', 'respuesta_factus'])
         return Response(NotaAjusteRIPSSerializer(nota).data)
+
+
+# ═══════════════════════════════════════════════════════════
+#  NOTA CRÉDITO / DÉBITO
+# ═══════════════════════════════════════════════════════════
+from apps.facturacion.models import NotaDocumento
+
+class NotaDocumentoSerializer(serializers.ModelSerializer):
+    factura_numero   = serializers.CharField(source='factura_referencia.numero_factus', read_only=True, default='')
+    factura_cufe     = serializers.CharField(source='factura_referencia.cufe', read_only=True, default='')
+    tipo_label       = serializers.CharField(source='get_tipo_display', read_only=True)
+    estado_label     = serializers.CharField(source='get_estado_display', read_only=True)
+    creado_por_nombre = serializers.CharField(source='creado_por.nombre', read_only=True, default='')
+
+    class Meta:
+        model  = NotaDocumento
+        fields = [
+            'id', 'tipo', 'tipo_label',
+            'factura_referencia', 'factura_numero', 'factura_cufe',
+            'concepto', 'descripcion_concepto',
+            'subtotal', 'valor_descuento', 'total',
+            'numero_factus', 'cufe', 'estado', 'estado_label',
+            'errores_dian', 'respuesta_factus', 'observaciones',
+            'creado_por', 'creado_por_nombre', 'creado_en', 'actualizado_en',
+        ]
+        read_only_fields = ['numero_factus', 'cufe', 'errores_dian', 'respuesta_factus', 'creado_en', 'actualizado_en']
+
+
+class NotaDocumentoViewSet(viewsets.ModelViewSet):
+    serializer_class   = NotaDocumentoSerializer
+    permission_classes = [IsAuthenticated, _PuedeFacturar]
+
+    def get_queryset(self):
+        qs = NotaDocumento.objects.select_related('factura_referencia', 'creado_por').all()
+        factura = self.request.query_params.get('factura')
+        tipo    = self.request.query_params.get('tipo')
+        estado  = self.request.query_params.get('estado')
+        if factura: qs = qs.filter(factura_referencia=factura)
+        if tipo:    qs = qs.filter(tipo=tipo)
+        if estado:  qs = qs.filter(estado=estado)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(creado_por=self.request.user)
+
+    @action(detail=True, methods=['post'], url_path='enviar')
+    def enviar(self, request, pk=None):
+        """
+        POST /api/facturacion/notas/{id}/enviar/
+        Llama a Factus para transmitir la NC/ND a la DIAN.
+        En esta versión guarda la respuesta cruda; integración Factus pendiente.
+        """
+        nota = self.get_object()
+        if nota.estado not in ('borrador',):
+            return Response({'error': 'Solo se pueden enviar notas en borrador.'}, status=400)
+
+        # Construir payload para Factus
+        factura = nota.factura_referencia
+        payload = {
+            'reference_id': str(nota.id),
+            'document':     nota.tipo,
+            'concept':      nota.concepto,
+            'description':  nota.descripcion_concepto,
+            'original_cufe': factura.cufe or '',
+            'original_number': factura.numero_factus or '',
+            'subtotal':     str(nota.subtotal),
+            'total':        str(nota.total),
+        }
+
+        # Intentar llamar a Factus si está configurado
+        try:
+            from apps.tenants.models import ConfiguracionConsultorio
+            config = ConfiguracionConsultorio.objects.first()
+            if config and config.factus_api_key:
+                import requests as _req
+                endpoint = 'credit-notes' if nota.tipo == 'NC' else 'debit-notes'
+                resp = _req.post(
+                    f'https://api.factus.com.co/v1/{endpoint}',
+                    json=payload,
+                    headers={
+                        'Authorization': f'Bearer {config.factus_api_key}',
+                        'Content-Type': 'application/json',
+                    },
+                    timeout=30,
+                )
+                respdata = resp.json()
+                if resp.ok and not respdata.get('errors'):
+                    nota.numero_factus    = respdata.get('number', '')
+                    nota.cufe             = respdata.get('cufe', '')
+                    nota.estado           = 'validada'
+                    nota.respuesta_factus = respdata
+                else:
+                    nota.estado           = 'rechazada'
+                    nota.errores_dian     = respdata.get('errors', [respdata])
+                    nota.respuesta_factus = respdata
+            else:
+                nota.estado = 'enviada'
+                nota.respuesta_factus = payload
+        except Exception as exc:
+            nota.estado = 'enviada'
+            nota.observaciones = f'Enviada manualmente. Error Factus: {exc}'
+
+        nota.save()
+        return Response(NotaDocumentoSerializer(nota).data)

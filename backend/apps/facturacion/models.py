@@ -420,3 +420,88 @@ class NotaAjusteRIPS(models.Model):
 
     def __str__(self):
         return f'NA-RIPS · {self.factura} · {self.get_motivo_tipo_display()}'
+
+
+# ═══════════════════════════════════════════════════════════
+#  NOTA CRÉDITO / DÉBITO — FEV Sector Salud
+# ═══════════════════════════════════════════════════════════
+class NotaDocumento(models.Model):
+    """
+    Nota Crédito (NC) o Nota Débito (ND) referenciando una FEV original.
+    NC: reduce o anula el valor de una factura (devolución, descuento, anulación).
+    ND: aumenta el valor de una factura (cargos adicionales, intereses).
+    Se transmite a la DIAN vía Factus. Ambas llevan RIPS de ajuste en salud.
+    """
+    TIPO_CHOICES = [
+        ('NC', 'Nota crédito'),
+        ('ND', 'Nota débito'),
+    ]
+    CONCEPTO_NC = [
+        ('1', 'Devolución parcial de bienes / no aceptación de servicios'),
+        ('2', 'Anulación de factura electrónica'),
+        ('3', 'Rebaja o descuento parcial'),
+        ('4', 'Ajuste de precio'),
+        ('5', 'Otros'),
+    ]
+    CONCEPTO_ND = [
+        ('1', 'Intereses'),
+        ('2', 'Gastos por cobrar'),
+        ('3', 'Cambio del valor'),
+        ('4', 'Otros'),
+    ]
+    ESTADO_CHOICES = [
+        ('borrador',  'Borrador'),
+        ('enviada',   'Enviada a DIAN'),
+        ('validada',  'Validada DIAN'),
+        ('rechazada', 'Rechazada'),
+        ('anulada',   'Anulada'),
+    ]
+
+    id                   = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tipo                 = models.CharField(max_length=2, choices=TIPO_CHOICES)
+    factura_referencia   = models.ForeignKey(
+        'Factura', on_delete=models.PROTECT, related_name='notas_documento',
+        help_text='FEV original que se está ajustando'
+    )
+    concepto             = models.CharField(
+        max_length=2,
+        help_text='Código del concepto según tipo (NC: 1-5, ND: 1-4)'
+    )
+    descripcion_concepto = models.TextField(
+        help_text='Descripción del motivo de la nota crédito/débito'
+    )
+
+    # Valores
+    subtotal             = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_descuento      = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total                = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    # Respuesta DIAN vía Factus
+    numero_factus        = models.CharField(max_length=50, blank=True,
+                                             help_text='Número asignado por Factus (ej: NC-001)')
+    cufe                 = models.CharField(max_length=200, blank=True,
+                                             help_text='CUFE de la nota (generado por DIAN)')
+    estado               = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='borrador')
+    errores_dian         = models.JSONField(null=True, blank=True)
+    respuesta_factus     = models.JSONField(null=True, blank=True)
+    observaciones        = models.TextField(blank=True)
+
+    creado_por           = models.ForeignKey(
+        'usuarios.Usuario', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='notas_documento_creadas'
+    )
+    creado_en            = models.DateTimeField(auto_now_add=True)
+    actualizado_en       = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering            = ['-creado_en']
+        verbose_name        = 'Nota crédito / débito'
+        verbose_name_plural = 'Notas crédito / débito'
+
+    def __str__(self):
+        return f'{self.tipo} · {self.numero_factus or self.id} → {self.factura_referencia}'
+
+    @property
+    def concepto_label(self):
+        opciones = dict(self.CONCEPTO_NC if self.tipo == 'NC' else self.CONCEPTO_ND)
+        return opciones.get(self.concepto, self.concepto)
