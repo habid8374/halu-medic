@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
-import { configuracionAPI } from '@/lib/api'
+import { consultorioAPI } from '@/lib/api'
 import toast from 'react-hot-toast'
 import {
   LayoutDashboard, Users, CalendarDays,
@@ -80,7 +80,7 @@ export default function Sidebar() {
   const [consultorioDominio, setConsultorioDominio] = useState('')
 
   useEffect(() => {
-    configuracionAPI.get()
+    consultorioAPI.get()
       .then(({ data }) => {
         setConsultorioNombre(data.nombre || '')
         setConsultorioDominio(data.dominio || '')
