@@ -51,6 +51,25 @@ from config.api import (
     RegistroAnestesiaViewSet,
     ConsentimientoViewSet,
     NotaEnfermeriaViewSet,
+    # Referencia / Rehabilitación / Odontología / Telemedicina / UCI / Sangre
+    ReferenciaPacienteViewSet,
+    PlanRehabilitacionViewSet,
+    SesionRehabilitacionViewSet,
+    HistoriaOdontologicaViewSet,
+    ProcedimientoOdontologicoViewSet,
+    SesionTelemedicinaSViewSet,
+    CamaUCIViewSet,
+    AdmisionUCIViewSet,
+    MonitoreoUCIViewSet,
+    UnidadHemoderivadoViewSet,
+    SolicitudHemoderivadoViewSet,
+    # Farmacia
+    MedicamentoFarmaciaViewSet,
+    LoteInventarioViewSet,
+    DispensacionMedicamentoViewSet,
+    # Laboratorio
+    SolicitudLaboratorioViewSet,
+    ResultadoLaboratorioViewSet,
 )
 from apps.tarifas.api import ManualTarifarioViewSet
 from apps.usuarios.auth import (
@@ -102,6 +121,25 @@ router.register(r'salud/verificacion-qx',    ListaVerificacionQxViewSet,   basen
 router.register(r'salud/anestesia',          RegistroAnestesiaViewSet,     basename='anestesia')
 router.register(r'salud/consentimientos',    ConsentimientoViewSet,        basename='consentimiento')
 router.register(r'salud/enfermeria',         NotaEnfermeriaViewSet,        basename='nota-enfermeria')
+# ── Referencia / Contrareferencia ─────────────────────────────────────────────
+router.register(r'salud/referencias',                ReferenciaPacienteViewSet,       basename='referencia-paciente')
+router.register(r'salud/rehabilitacion/planes',      PlanRehabilitacionViewSet,        basename='plan-rehabilitacion')
+router.register(r'salud/rehabilitacion/sesiones',    SesionRehabilitacionViewSet,      basename='sesion-rehabilitacion')
+router.register(r'salud/odontologia/historias',      HistoriaOdontologicaViewSet,      basename='historia-odontologica')
+router.register(r'salud/odontologia/procedimientos', ProcedimientoOdontologicoViewSet, basename='procedimiento-odontologico')
+router.register(r'salud/telemedicina',               SesionTelemedicinaSViewSet,       basename='sesion-telemedicina')
+router.register(r'salud/uci/camas',                  CamaUCIViewSet,                   basename='cama-uci')
+router.register(r'salud/uci/admisiones',             AdmisionUCIViewSet,               basename='admision-uci')
+router.register(r'salud/uci/monitoreo',              MonitoreoUCIViewSet,              basename='monitoreo-uci')
+router.register(r'salud/banco-sangre/unidades',      UnidadHemoderivadoViewSet,        basename='unidad-hemoderivado')
+router.register(r'salud/banco-sangre/solicitudes',   SolicitudHemoderivadoViewSet,     basename='solicitud-hemoderivado')
+# ── Farmacia ──────────────────────────────────────────────────────────────────
+router.register(r'farmacia/medicamentos',            MedicamentoFarmaciaViewSet,       basename='medicamento-farmacia')
+router.register(r'farmacia/lotes',                   LoteInventarioViewSet,            basename='lote-inventario')
+router.register(r'farmacia/dispensaciones',          DispensacionMedicamentoViewSet,   basename='dispensacion-medicamento')
+# ── Laboratorio ───────────────────────────────────────────────────────────────
+router.register(r'laboratorio/solicitudes',          SolicitudLaboratorioViewSet,      basename='solicitud-laboratorio')
+router.register(r'laboratorio/resultados',           ResultadoLaboratorioViewSet,      basename='resultado-laboratorio')
 
 urlpatterns = [
     path('api/health/', health, name='health'),

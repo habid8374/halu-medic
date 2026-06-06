@@ -908,3 +908,454 @@ class NotaEnfermeria(models.Model):
 
     def __str__(self):
         return f'Enf/{self.get_turno_display()} — {self.ingreso} — {self.fecha_hora:%Y-%m-%d %H:%M}'
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REFERENCIA Y CONTRAREFERENCIA  (Res. 3047/2008)
+# ═══════════════════════════════════════════════════════════════════════════════
+class ReferenciaPaciente(models.Model):
+    TIPO_CHOICES = [
+        ('referencia',        'Referencia (envío a otra IPS)'),
+        ('contrareferencia',  'Contrareferencia (respuesta de regreso)'),
+        ('interconsulta',     'Interconsulta interna'),
+    ]
+    PRIORIDAD_CHOICES = [
+        ('inmediata', 'Inmediata (< 1 hora)'),
+        ('urgente',   'Urgente (< 6 horas)'),
+        ('prioritaria', 'Prioritaria (< 24 horas)'),
+        ('no_urgente', 'No urgente (programada)'),
+    ]
+    ESTADO_CHOICES = [
+        ('generada',  'Generada'),
+        ('enviada',   'Enviada / en tránsito'),
+        ('aceptada',  'Aceptada por IPS receptora'),
+        ('rechazada', 'Rechazada por IPS receptora'),
+        ('respondida', 'Respondida (contrareferencia recibida)'),
+        ('anulada',   'Anulada'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='referencia')
+    paciente = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT, related_name='referencias')
+    ingreso = models.ForeignKey(Ingreso, on_delete=models.SET_NULL, null=True, blank=True, related_name='referencias')
+
+    institucion_origen = models.CharField(max_length=300, blank=True)
+    codigo_habilitacion_origen = models.CharField(max_length=20, blank=True)
+    institucion_destino = models.CharField(max_length=300)
+    codigo_habilitacion_destino = models.CharField(max_length=20, blank=True)
+    servicio_destino = models.CharField(max_length=200, blank=True, help_text='Especialidad o servicio al que se refiere')
+
+    diagnostico_cie10 = models.CharField(max_length=10, blank=True)
+    descripcion_diagnostico = models.CharField(max_length=300, blank=True)
+    motivo_referencia = models.TextField(help_text='Motivo clínico de la referencia')
+    resumen_clinico = models.TextField(blank=True, help_text='Resumen del caso, tratamiento recibido')
+    examenes_adjuntos = models.TextField(blank=True, help_text='Lista de exámenes que acompañan al paciente')
+    medicamentos_actuales = models.TextField(blank=True)
+
+    prioridad = models.CharField(max_length=15, choices=PRIORIDAD_CHOICES, default='urgente')
+    estado = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='generada')
+
+    medico_remitente = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='referencias_generadas')
+    numero_autorizacion = models.CharField(max_length=60, blank=True)
+    requiere_ambulancia = models.BooleanField(default=False)
+    tipo_transporte = models.CharField(max_length=50, blank=True)
+
+    respuesta_diagnostico = models.TextField(blank=True)
+    respuesta_tratamiento = models.TextField(blank=True)
+    respuesta_recomendaciones = models.TextField(blank=True)
+    medico_responde = models.CharField(max_length=200, blank=True)
+    fecha_respuesta = models.DateTimeField(null=True, blank=True)
+    motivo_rechazo = models.TextField(blank=True)
+
+    fecha_referencia = models.DateTimeField(auto_now_add=True)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='referencias_creadas')
+
+    class Meta:
+        ordering = ['-fecha_referencia']
+        verbose_name = 'Referencia / Contrareferencia'
+        verbose_name_plural = 'Referencias / Contrareferencias'
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.paciente} → {self.institucion_destino}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REHABILITACIÓN Y TERAPIAS
+# ═══════════════════════════════════════════════════════════════════════════════
+class PlanRehabilitacion(models.Model):
+    TIPO_TERAPIA_CHOICES = [
+        ('fisioterapia',    'Fisioterapia'),
+        ('ocupacional',     'Terapia ocupacional'),
+        ('fonoaudiologia',  'Fonoaudiología / Terapia del lenguaje'),
+        ('psicologia',      'Psicología clínica'),
+        ('nutricion',       'Nutrición y dietética'),
+        ('trabajo_social',  'Trabajo social'),
+    ]
+    ESTADO_CHOICES = [
+        ('activo',     'Activo'),
+        ('completado', 'Completado'),
+        ('suspendido', 'Suspendido'),
+        ('cancelado',  'Cancelado'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    paciente = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT, related_name='planes_rehabilitacion')
+    ingreso = models.ForeignKey(Ingreso, on_delete=models.SET_NULL, null=True, blank=True, related_name='planes_rehabilitacion')
+    tipo_terapia = models.CharField(max_length=20, choices=TIPO_TERAPIA_CHOICES)
+    diagnostico_cie10 = models.CharField(max_length=10, blank=True)
+    descripcion_diagnostico = models.CharField(max_length=300, blank=True)
+    objetivo_general = models.TextField(help_text='Objetivo terapéutico principal')
+    objetivos_especificos = models.TextField(blank=True)
+    numero_sesiones_prescritas = models.PositiveIntegerField(default=10)
+    frecuencia_semanal = models.PositiveSmallIntegerField(default=3, help_text='Sesiones por semana')
+    terapeuta = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='planes_asignados')
+    medico_prescriptor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='planes_prescritos')
+    estado = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='activo')
+    fecha_inicio = models.DateField()
+    fecha_fin_estimada = models.DateField(null=True, blank=True)
+    observaciones = models.TextField(blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+        verbose_name = 'Plan de rehabilitación'
+
+    def __str__(self):
+        return f'{self.get_tipo_terapia_display()} — {self.paciente}'
+
+
+class SesionRehabilitacion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    plan = models.ForeignKey(PlanRehabilitacion, on_delete=models.CASCADE, related_name='sesiones')
+    numero_sesion = models.PositiveIntegerField()
+    fecha_hora = models.DateTimeField()
+    duracion_minutos = models.PositiveIntegerField(default=45)
+    actividades_realizadas = models.TextField(help_text='Descripción de las actividades terapéuticas realizadas')
+    escala_funcional = models.CharField(max_length=200, blank=True, help_text='Escala de evaluación funcional utilizada y puntaje')
+    evolucion = models.TextField(help_text='Evolución del paciente en esta sesión')
+    proximos_objetivos = models.TextField(blank=True)
+    asistio = models.BooleanField(default=True)
+    motivo_inasistencia = models.CharField(max_length=200, blank=True)
+    terapeuta = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='sesiones_realizadas')
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['numero_sesion']
+        verbose_name = 'Sesión de rehabilitación'
+
+    def __str__(self):
+        return f'Sesión {self.numero_sesion} — {self.plan}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ODONTOLOGÍA
+# ═══════════════════════════════════════════════════════════════════════════════
+class HistoriaOdontologica(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    paciente = models.OneToOneField('pacientes.Paciente', on_delete=models.CASCADE, related_name='historia_odontologica')
+    antecedentes_sistemicos = models.TextField(blank=True, help_text='Enfermedades sistémicas relevantes para odontología')
+    antecedentes_dentales = models.TextField(blank=True)
+    alergias = models.TextField(blank=True)
+    medicamentos_actuales = models.TextField(blank=True)
+    habitos = models.TextField(blank=True, help_text='Tabaquismo, bruxismo, etc.')
+    motivo_consulta = models.TextField(blank=True)
+    higiene_oral = models.CharField(max_length=15, choices=[('buena', 'Buena'), ('regular', 'Regular'), ('mala', 'Mala')], blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Historia odontológica'
+
+    def __str__(self):
+        return f'HO — {self.paciente}'
+
+
+class ProcedimientoOdontologico(models.Model):
+    """Procedimiento o diagnóstico por diente en odontograma."""
+    CARA_CHOICES = [
+        ('oclusal',    'Oclusal/Incisal'),
+        ('mesial',     'Mesial'),
+        ('distal',     'Distal'),
+        ('vestibular', 'Vestibular/Labial'),
+        ('lingual',    'Lingual/Palatino'),
+        ('total',      'Diente completo'),
+    ]
+    ESTADO_CHOICES = [
+        ('diagnosticado',  'Diagnosticado'),
+        ('en_tratamiento', 'En tratamiento'),
+        ('completado',     'Completado'),
+        ('referido',       'Referido a especialista'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    historia = models.ForeignKey(HistoriaOdontologica, on_delete=models.CASCADE, related_name='procedimientos')
+    numero_diente = models.PositiveSmallIntegerField(help_text='Número FDI: 11-18, 21-28, 31-38, 41-48')
+    cara = models.CharField(max_length=15, choices=CARA_CHOICES, default='total')
+    codigo_cie10_o = models.CharField(max_length=10, blank=True, help_text='Diagnóstico odontológico')
+    descripcion_diagnostico = models.CharField(max_length=300, blank=True)
+    cups = models.CharField(max_length=10, blank=True)
+    descripcion_tratamiento = models.CharField(max_length=300, blank=True)
+    material_utilizado = models.CharField(max_length=200, blank=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='diagnosticado')
+    odontologo = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='procedimientos_odontologicos')
+    observaciones = models.TextField(blank=True)
+    fecha = models.DateField(auto_now_add=True)
+    valor_cobrado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ['numero_diente', 'cara']
+        verbose_name = 'Procedimiento odontológico'
+
+    def __str__(self):
+        return f'Diente {self.numero_diente} ({self.cara}) — {self.descripcion_tratamiento or self.descripcion_diagnostico}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TELEMEDICINA  (Res. 2654/2019 MinSalud)
+# ═══════════════════════════════════════════════════════════════════════════════
+class SesionTelemedicina(models.Model):
+    TIPO_CHOICES = [
+        ('teleconsulta',      'Teleconsulta (primera vez)'),
+        ('telecontrol',       'Telecontrol (seguimiento)'),
+        ('teleinterconsulta', 'Teleinterconsulta'),
+        ('telemonitoreo',     'Telemonitoreo crónico'),
+        ('telediagnostico',   'Telediagnóstico'),
+    ]
+    PLATAFORMA_CHOICES = [
+        ('zoom',     'Zoom'),
+        ('meet',     'Google Meet'),
+        ('teams',    'Microsoft Teams'),
+        ('jitsi',    'Jitsi / HaluMedic'),
+        ('whatsapp', 'WhatsApp Video'),
+        ('otra',     'Otra'),
+    ]
+    ESTADO_CHOICES = [
+        ('programada', 'Programada'),
+        ('en_curso',   'En curso'),
+        ('completada', 'Completada'),
+        ('cancelada',  'Cancelada'),
+        ('no_asistio', 'No asistió'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    paciente = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT, related_name='sesiones_telemedicina')
+    medico = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='sesiones_telemedicina')
+    tipo = models.CharField(max_length=25, choices=TIPO_CHOICES, default='teleconsulta')
+    cups = models.CharField(max_length=10, blank=True, help_text='CUPS del servicio de telemedicina')
+    plataforma = models.CharField(max_length=15, choices=PLATAFORMA_CHOICES, default='jitsi')
+    link_reunion = models.URLField(blank=True)
+    codigo_sala = models.CharField(max_length=100, blank=True)
+    fecha_programada = models.DateTimeField()
+    duracion_estimada_min = models.PositiveIntegerField(default=20)
+    motivo_consulta = models.TextField(blank=True)
+    diagnostico_cie10 = models.CharField(max_length=10, blank=True)
+    notas_clinicas = models.TextField(blank=True, help_text='Anamnesis, examen físico virtual, plan')
+    formula_medica = models.TextField(blank=True)
+    incapacidad_dias = models.PositiveIntegerField(null=True, blank=True)
+    estado = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='programada')
+    consentimiento_firmado = models.BooleanField(default=False, help_text='Paciente aceptó términos telemedicina')
+    duracion_real_min = models.PositiveIntegerField(null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fecha_programada']
+        verbose_name = 'Sesión telemedicina'
+        verbose_name_plural = 'Sesiones telemedicina'
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.paciente} — {self.fecha_programada:%Y-%m-%d %H:%M}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# UCI / CUIDADOS INTENSIVOS
+# ═══════════════════════════════════════════════════════════════════════════════
+class CamaUCI(models.Model):
+    TIPO_CHOICES = [
+        ('uci_adulto', 'UCI Adulto'),
+        ('uci_neo',    'UCI Neonatal'),
+        ('uci_ped',    'UCI Pediátrica'),
+        ('ucc',        'Unidad Coronaria (UCC)'),
+        ('ucin',       'UCIN'),
+        ('intermedia', 'Cuidados intermedios'),
+    ]
+    ESTADO_CHOICES = [
+        ('libre',         'Libre'),
+        ('ocupada',       'Ocupada'),
+        ('mantenimiento', 'En mantenimiento'),
+        ('reservada',     'Reservada'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    numero_cama = models.CharField(max_length=10)
+    tipo = models.CharField(max_length=15, choices=TIPO_CHOICES, default='uci_adulto')
+    estado = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='libre')
+    ubicacion = models.CharField(max_length=100, blank=True, help_text='Piso, ala, box')
+    tiene_ventilador = models.BooleanField(default=True)
+    tiene_monitor = models.BooleanField(default=True)
+    observaciones = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['numero_cama']
+        verbose_name = 'Cama UCI'
+        verbose_name_plural = 'Camas UCI'
+
+    def __str__(self):
+        return f'Cama {self.numero_cama} ({self.get_tipo_display()}) — {self.get_estado_display()}'
+
+
+class AdmisionUCI(models.Model):
+    MOTIVO_INGRESO_CHOICES = [
+        ('respiratorio',   'Falla respiratoria'),
+        ('cardiaco',       'Falla cardíaca/cardiopatía'),
+        ('sepsis',         'Sepsis/choque séptico'),
+        ('neurologico',    'Evento neurológico'),
+        ('trauma',         'Politraumatismo'),
+        ('postquirurgico', 'Postoperatorio'),
+        ('metabolico',     'Trastorno metabólico'),
+        ('renal',          'Falla renal'),
+        ('otro',           'Otro'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ingreso = models.ForeignKey(Ingreso, on_delete=models.SET_NULL, null=True, blank=True, related_name='admisiones_uci')
+    paciente = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT, related_name='admisiones_uci')
+    cama = models.ForeignKey(CamaUCI, on_delete=models.SET_NULL, null=True, blank=True, related_name='admisiones')
+    diagnostico_ingreso_uci = models.CharField(max_length=10, blank=True, help_text='CIE-10')
+    descripcion_diagnostico = models.CharField(max_length=300, blank=True)
+    motivo_ingreso = models.CharField(max_length=20, choices=MOTIVO_INGRESO_CHOICES, default='otro')
+    apache_ii_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text='Score APACHE II (0-71)')
+    sofa_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text='Score SOFA')
+    ventilacion_mecanica = models.BooleanField(default=False)
+    modo_ventilacion = models.CharField(max_length=50, blank=True, help_text='VCV, PCV, PSV, SIMV, etc.')
+    drogas_vasoactivas = models.BooleanField(default=False)
+    dialisis = models.BooleanField(default=False)
+    fecha_ingreso_uci = models.DateTimeField()
+    fecha_egreso_uci = models.DateTimeField(null=True, blank=True)
+    motivo_egreso = models.CharField(max_length=200, blank=True)
+    dias_uci = models.PositiveIntegerField(null=True, blank=True)
+    medico_responsable = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='admisiones_uci')
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_ingreso_uci']
+        verbose_name = 'Admisión UCI'
+        verbose_name_plural = 'Admisiones UCI'
+
+    def __str__(self):
+        return f'UCI — {self.paciente} — {self.fecha_ingreso_uci:%Y-%m-%d}'
+
+    def save(self, *args, **kwargs):
+        if self.fecha_egreso_uci and self.fecha_ingreso_uci:
+            delta = self.fecha_egreso_uci - self.fecha_ingreso_uci
+            self.dias_uci = delta.days
+        super().save(*args, **kwargs)
+
+
+class MonitoreoUCI(models.Model):
+    """Registro horario de parámetros vitales y ventilatorios en UCI."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    admision = models.ForeignKey(AdmisionUCI, on_delete=models.CASCADE, related_name='monitoreos')
+    fecha_hora = models.DateTimeField()
+    tension_arterial_sistolica = models.PositiveSmallIntegerField(null=True, blank=True)
+    tension_arterial_diastolica = models.PositiveSmallIntegerField(null=True, blank=True)
+    presion_arterial_media = models.PositiveSmallIntegerField(null=True, blank=True)
+    frecuencia_cardiaca = models.PositiveSmallIntegerField(null=True, blank=True)
+    spo2 = models.PositiveSmallIntegerField(null=True, blank=True)
+    temperatura = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    frecuencia_resp = models.PositiveSmallIntegerField(null=True, blank=True)
+    fio2 = models.PositiveSmallIntegerField(null=True, blank=True, help_text='FiO2 %')
+    peep = models.PositiveSmallIntegerField(null=True, blank=True, help_text='PEEP cmH2O')
+    volumen_tidal = models.PositiveSmallIntegerField(null=True, blank=True, help_text='VT ml')
+    presion_plateau = models.PositiveSmallIntegerField(null=True, blank=True)
+    etco2 = models.PositiveSmallIntegerField(null=True, blank=True)
+    norepinefrina_dosis = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True)
+    dopamina_dosis = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True)
+    entradas_ml = models.PositiveIntegerField(null=True, blank=True)
+    salidas_ml = models.PositiveIntegerField(null=True, blank=True)
+    diuresis_ml_hora = models.PositiveIntegerField(null=True, blank=True)
+    glasgow = models.PositiveSmallIntegerField(null=True, blank=True)
+    observaciones = models.TextField(blank=True)
+    registrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='monitoreos_uci')
+
+    class Meta:
+        ordering = ['-fecha_hora']
+        verbose_name = 'Monitoreo UCI'
+
+    def __str__(self):
+        return f'Monitor UCI — {self.admision.paciente} — {self.fecha_hora:%Y-%m-%d %H:%M}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BANCO DE SANGRE Y HEMODERIVADOS
+# ═══════════════════════════════════════════════════════════════════════════════
+class UnidadHemoderivado(models.Model):
+    TIPO_CHOICES = [
+        ('globulos_rojos',  'Glóbulos rojos empaquetados'),
+        ('plasma',          'Plasma fresco congelado'),
+        ('plaquetas',       'Concentrado de plaquetas'),
+        ('crioprecipitado', 'Crioprecipitado'),
+        ('sangre_total',    'Sangre total'),
+        ('albumina',        'Albúmina'),
+        ('inmunoglobulina', 'Inmunoglobulina'),
+    ]
+    GRUPO_CHOICES = [('A', 'A'), ('B', 'B'), ('AB', 'AB'), ('O', 'O')]
+    RH_CHOICES = [('+', 'RH+'), ('-', 'RH-')]
+    ESTADO_CHOICES = [
+        ('disponible',  'Disponible'),
+        ('reservada',   'Reservada'),
+        ('transfundida', 'Transfundida'),
+        ('vencida',     'Vencida'),
+        ('descartada',  'Descartada'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    grupo_sanguineo = models.CharField(max_length=2, choices=GRUPO_CHOICES)
+    rh = models.CharField(max_length=1, choices=RH_CHOICES)
+    numero_unidad = models.CharField(max_length=30, unique=True)
+    banco_origen = models.CharField(max_length=200, blank=True)
+    fecha_donacion = models.DateField(null=True, blank=True)
+    fecha_vencimiento = models.DateField()
+    volumen_ml = models.PositiveIntegerField()
+    estado = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='disponible')
+    pruebas_serologicas = models.JSONField(default=dict, blank=True, help_text='{VIH, HepB, HepC, Chagas, Sifilis: neg/pos}')
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['fecha_vencimiento']
+        verbose_name = 'Unidad hemoderivado'
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} {self.grupo_sanguineo}{self.rh} — {self.numero_unidad}'
+
+
+class SolicitudHemoderivado(models.Model):
+    ESTADO_CHOICES = [
+        ('solicitada',   'Solicitada'),
+        ('en_reserva',   'En reserva'),
+        ('transfundida', 'Transfundida'),
+        ('cancelada',    'Cancelada'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    paciente = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT, related_name='solicitudes_hemoderivados')
+    ingreso = models.ForeignKey(Ingreso, on_delete=models.SET_NULL, null=True, blank=True, related_name='solicitudes_hemoderivados')
+    tipo_solicitado = models.CharField(max_length=20, choices=UnidadHemoderivado.TIPO_CHOICES)
+    cantidad_unidades = models.PositiveIntegerField(default=1)
+    grupo_requerido = models.CharField(max_length=2, choices=UnidadHemoderivado.GRUPO_CHOICES, blank=True)
+    rh_requerido = models.CharField(max_length=1, choices=UnidadHemoderivado.RH_CHOICES, blank=True)
+    indicacion_clinica = models.TextField()
+    urgente = models.BooleanField(default=False)
+    medico_solicitante = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='solicitudes_hemoderivados')
+    unidades_asignadas = models.ManyToManyField(UnidadHemoderivado, blank=True, related_name='solicitudes')
+    estado = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='solicitada')
+    reaccion_transfusional = models.TextField(blank=True)
+    fecha_solicitud = models.DateTimeField(auto_now_add=True)
+    fecha_transfusion = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-fecha_solicitud']
+        verbose_name = 'Solicitud hemoderivado'
+
+    def __str__(self):
+        return f'{self.get_tipo_solicitado_display()} x{self.cantidad_unidades} — {self.paciente}'

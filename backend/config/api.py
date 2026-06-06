@@ -2775,3 +2775,568 @@ class NotaEnfermeriaViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(enfermero=self.request.user)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NUEVOS MÓDULOS CLÍNICOS: REFERENCIA, REHABILITACIÓN, ODONTOLOGÍA,
+# TELEMEDICINA, UCI, BANCO DE SANGRE, FARMACIA, LABORATORIO
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from apps.historia.models import (
+    ReferenciaPaciente, PlanRehabilitacion, SesionRehabilitacion,
+    HistoriaOdontologica, ProcedimientoOdontologico, SesionTelemedicina,
+    CamaUCI, AdmisionUCI, MonitoreoUCI, UnidadHemoderivado, SolicitudHemoderivado,
+)
+from apps.farmacia.models import (
+    MedicamentoFarmacia, LoteInventario, MovimientoInventario, DispensacionMedicamento,
+)
+from apps.laboratorio.models import (
+    PanelLaboratorio, SolicitudLaboratorio, ResultadoLaboratorio,
+)
+
+
+# ── Referencia / Contrareferencia ─────────────────────────────────────────────
+
+class ReferenciaPacienteSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
+    tipo_label = serializers.CharField(source='get_tipo_display', read_only=True)
+    estado_label = serializers.CharField(source='get_estado_display', read_only=True)
+    prioridad_label = serializers.CharField(source='get_prioridad_display', read_only=True)
+
+    class Meta:
+        model = ReferenciaPaciente
+        fields = '__all__'
+        read_only_fields = ['id', 'fecha_referencia']
+
+
+class ReferenciaPacienteViewSet(viewsets.ModelViewSet):
+    serializer_class = ReferenciaPacienteSerializer
+
+    def get_queryset(self):
+        qs = ReferenciaPaciente.objects.select_related('paciente', 'ingreso', 'medico_remitente', 'creado_por')
+        paciente = self.request.query_params.get('paciente')
+        tipo = self.request.query_params.get('tipo')
+        estado = self.request.query_params.get('estado')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(creado_por=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def responder(self, request, pk=None):
+        """POST /api/salud/referencias/{id}/responder/ — registra la contrareferencia."""
+        ref = self.get_object()
+        ref.respuesta_diagnostico = request.data.get('respuesta_diagnostico', '')
+        ref.respuesta_tratamiento = request.data.get('respuesta_tratamiento', '')
+        ref.respuesta_recomendaciones = request.data.get('respuesta_recomendaciones', '')
+        ref.medico_responde = request.data.get('medico_responde', '')
+        ref.motivo_rechazo = request.data.get('motivo_rechazo', '')
+        nuevo_estado = request.data.get('estado', 'respondida')
+        ref.estado = nuevo_estado
+        ref.fecha_respuesta = timezone.now()
+        ref.save()
+        return Response(self.get_serializer(ref).data)
+
+
+# ── Plan de Rehabilitación ────────────────────────────────────────────────────
+
+class PlanRehabilitacionSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
+    tipo_terapia_label = serializers.CharField(source='get_tipo_terapia_display', read_only=True)
+
+    class Meta:
+        model = PlanRehabilitacion
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en']
+
+
+class PlanRehabilitacionViewSet(viewsets.ModelViewSet):
+    serializer_class = PlanRehabilitacionSerializer
+
+    def get_queryset(self):
+        qs = PlanRehabilitacion.objects.select_related('paciente', 'ingreso', 'terapeuta', 'medico_prescriptor')
+        paciente = self.request.query_params.get('paciente')
+        tipo_terapia = self.request.query_params.get('tipo_terapia')
+        estado = self.request.query_params.get('estado')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if tipo_terapia:
+            qs = qs.filter(tipo_terapia=tipo_terapia)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+
+# ── Sesión de Rehabilitación ──────────────────────────────────────────────────
+
+class SesionRehabilitacionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SesionRehabilitacion
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en']
+
+
+class SesionRehabilitacionViewSet(viewsets.ModelViewSet):
+    serializer_class = SesionRehabilitacionSerializer
+
+    def get_queryset(self):
+        qs = SesionRehabilitacion.objects.select_related('plan__paciente', 'terapeuta')
+        plan = self.request.query_params.get('plan')
+        if plan:
+            qs = qs.filter(plan=plan)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(terapeuta=self.request.user)
+
+
+# ── Historia Odontológica ─────────────────────────────────────────────────────
+
+class HistoriaOdontologicaSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
+
+    class Meta:
+        model = HistoriaOdontologica
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en', 'actualizado_en']
+
+
+class HistoriaOdontologicaViewSet(viewsets.ModelViewSet):
+    serializer_class = HistoriaOdontologicaSerializer
+
+    def get_queryset(self):
+        qs = HistoriaOdontologica.objects.select_related('paciente')
+        paciente = self.request.query_params.get('paciente')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        return qs
+
+
+# ── Procedimiento Odontológico ────────────────────────────────────────────────
+
+class ProcedimientoOdontologicoSerializer(serializers.ModelSerializer):
+    estado_label = serializers.CharField(source='get_estado_display', read_only=True)
+    cara_label = serializers.CharField(source='get_cara_display', read_only=True)
+
+    class Meta:
+        model = ProcedimientoOdontologico
+        fields = '__all__'
+        read_only_fields = ['id', 'fecha']
+
+
+class ProcedimientoOdontologicoViewSet(viewsets.ModelViewSet):
+    serializer_class = ProcedimientoOdontologicoSerializer
+
+    def get_queryset(self):
+        qs = ProcedimientoOdontologico.objects.select_related('historia__paciente', 'odontologo')
+        historia = self.request.query_params.get('historia')
+        numero_diente = self.request.query_params.get('numero_diente')
+        if historia:
+            qs = qs.filter(historia=historia)
+        if numero_diente:
+            qs = qs.filter(numero_diente=numero_diente)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(odontologo=self.request.user)
+
+
+# ── Sesión Telemedicina ───────────────────────────────────────────────────────
+
+class SesionTelemedicinaSserializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
+    tipo_label = serializers.CharField(source='get_tipo_display', read_only=True)
+    estado_label = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model = SesionTelemedicina
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en', 'actualizado_en']
+
+
+class SesionTelemedicinaSViewSet(viewsets.ModelViewSet):
+    serializer_class = SesionTelemedicinaSserializer
+
+    def get_queryset(self):
+        qs = SesionTelemedicina.objects.select_related('paciente', 'medico')
+        paciente = self.request.query_params.get('paciente')
+        estado = self.request.query_params.get('estado')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(medico=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def completar(self, request, pk=None):
+        """POST /api/salud/telemedicina/{id}/completar/ — cierra la sesión con notas."""
+        sesion = self.get_object()
+        sesion.notas_clinicas = request.data.get('notas_clinicas', sesion.notas_clinicas)
+        sesion.formula_medica = request.data.get('formula_medica', sesion.formula_medica)
+        sesion.diagnostico_cie10 = request.data.get('diagnostico_cie10', sesion.diagnostico_cie10)
+        sesion.incapacidad_dias = request.data.get('incapacidad_dias', sesion.incapacidad_dias)
+        sesion.duracion_real_min = request.data.get('duracion_real_min', sesion.duracion_real_min)
+        sesion.estado = 'completada'
+        sesion.save()
+        return Response(self.get_serializer(sesion).data)
+
+
+# ── Cama UCI ──────────────────────────────────────────────────────────────────
+
+class CamaUCISerializer(serializers.ModelSerializer):
+    tipo_label = serializers.CharField(source='get_tipo_display', read_only=True)
+    estado_label = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model = CamaUCI
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
+class CamaUCIViewSet(viewsets.ModelViewSet):
+    serializer_class = CamaUCISerializer
+
+    def get_queryset(self):
+        qs = CamaUCI.objects.all()
+        tipo = self.request.query_params.get('tipo')
+        estado = self.request.query_params.get('estado')
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+
+# ── Admisión UCI ──────────────────────────────────────────────────────────────
+
+class AdmisionUCISerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
+    motivo_label = serializers.CharField(source='get_motivo_ingreso_display', read_only=True)
+
+    class Meta:
+        model = AdmisionUCI
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en', 'dias_uci']
+
+
+class AdmisionUCIViewSet(viewsets.ModelViewSet):
+    serializer_class = AdmisionUCISerializer
+
+    def get_queryset(self):
+        qs = AdmisionUCI.objects.select_related('paciente', 'ingreso', 'cama', 'medico_responsable')
+        paciente = self.request.query_params.get('paciente')
+        activos = self.request.query_params.get('activos')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if activos is not None:
+            qs = qs.filter(fecha_egreso_uci__isnull=activos.lower() == 'true')
+        return qs
+
+
+# ── Monitoreo UCI ─────────────────────────────────────────────────────────────
+
+class MonitoreoUCISerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MonitoreoUCI
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
+class MonitoreoUCIViewSet(viewsets.ModelViewSet):
+    serializer_class = MonitoreoUCISerializer
+
+    def get_queryset(self):
+        qs = MonitoreoUCI.objects.select_related('admision__paciente', 'registrado_por')
+        admision = self.request.query_params.get('admision')
+        if admision:
+            qs = qs.filter(admision=admision)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(registrado_por=self.request.user)
+
+
+# ── Unidad Hemoderivado ───────────────────────────────────────────────────────
+
+class UnidadHemoderivadoSerializer(serializers.ModelSerializer):
+    tipo_label = serializers.CharField(source='get_tipo_display', read_only=True)
+    estado_label = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model = UnidadHemoderivado
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en']
+
+
+class UnidadHemoderivadoViewSet(viewsets.ModelViewSet):
+    serializer_class = UnidadHemoderivadoSerializer
+
+    def get_queryset(self):
+        qs = UnidadHemoderivado.objects.all()
+        tipo = self.request.query_params.get('tipo')
+        grupo_sanguineo = self.request.query_params.get('grupo_sanguineo')
+        estado = self.request.query_params.get('estado')
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        if grupo_sanguineo:
+            qs = qs.filter(grupo_sanguineo=grupo_sanguineo)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+
+# ── Solicitud Hemoderivado ────────────────────────────────────────────────────
+
+class SolicitudHemoderivadoSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
+    tipo_label = serializers.CharField(source='get_tipo_solicitado_display', read_only=True)
+
+    class Meta:
+        model = SolicitudHemoderivado
+        fields = '__all__'
+        read_only_fields = ['id', 'fecha_solicitud']
+
+
+class SolicitudHemoderivadoViewSet(viewsets.ModelViewSet):
+    serializer_class = SolicitudHemoderivadoSerializer
+
+    def get_queryset(self):
+        qs = SolicitudHemoderivado.objects.select_related('paciente', 'ingreso', 'medico_solicitante').prefetch_related('unidades_asignadas')
+        paciente = self.request.query_params.get('paciente')
+        estado = self.request.query_params.get('estado')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(medico_solicitante=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def asignar_unidad(self, request, pk=None):
+        """POST /api/salud/banco-sangre/solicitudes/{id}/asignar_unidad/
+        Body: { unidad_id: uuid }
+        """
+        solicitud = self.get_object()
+        unidad_id = request.data.get('unidad_id')
+        if not unidad_id:
+            return Response({'error': 'unidad_id requerido.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            unidad = UnidadHemoderivado.objects.get(pk=unidad_id)
+        except UnidadHemoderivado.DoesNotExist:
+            return Response({'error': 'Unidad no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        if unidad.estado != 'disponible':
+            return Response({'error': f'La unidad no está disponible (estado: {unidad.estado}).'}, status=status.HTTP_400_BAD_REQUEST)
+        solicitud.unidades_asignadas.add(unidad)
+        unidad.estado = 'reservada'
+        unidad.save(update_fields=['estado'])
+        solicitud.estado = 'en_reserva'
+        solicitud.save(update_fields=['estado'])
+        return Response(self.get_serializer(solicitud).data)
+
+
+# ── Medicamento Farmacia ──────────────────────────────────────────────────────
+
+class MedicamentoFarmaciaSerializer(serializers.ModelSerializer):
+    stock_bajo = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = MedicamentoFarmacia
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en', 'actualizado_en']
+
+
+class MedicamentoFarmaciaViewSet(viewsets.ModelViewSet):
+    serializer_class = MedicamentoFarmaciaSerializer
+
+    def get_queryset(self):
+        from django.db.models import Q
+        qs = MedicamentoFarmacia.objects.all()
+        activo = self.request.query_params.get('activo')
+        search = self.request.query_params.get('search', '').strip()
+        if activo is not None:
+            qs = qs.filter(activo=activo.lower() == 'true')
+        if search:
+            qs = qs.filter(
+                Q(nombre_generico__icontains=search) |
+                Q(nombre_comercial__icontains=search) |
+                Q(cum__icontains=search)
+            )
+        return qs
+
+
+# ── Lote Inventario ───────────────────────────────────────────────────────────
+
+class LoteInventarioSerializer(serializers.ModelSerializer):
+    medicamento_nombre = serializers.CharField(source='medicamento.nombre_generico', read_only=True)
+
+    class Meta:
+        model = LoteInventario
+        fields = '__all__'
+        read_only_fields = ['id', 'fecha_ingreso']
+
+
+class LoteInventarioViewSet(viewsets.ModelViewSet):
+    serializer_class = LoteInventarioSerializer
+
+    def get_queryset(self):
+        qs = LoteInventario.objects.select_related('medicamento', 'ingresado_por')
+        medicamento = self.request.query_params.get('medicamento')
+        if medicamento:
+            qs = qs.filter(medicamento=medicamento)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(ingresado_por=self.request.user)
+
+
+# ── Dispensación Medicamento ──────────────────────────────────────────────────
+
+class DispensacionMedicamentoSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
+    medicamento_nombre = serializers.CharField(source='medicamento.nombre_generico', read_only=True)
+
+    class Meta:
+        model = DispensacionMedicamento
+        fields = '__all__'
+        read_only_fields = ['id', 'fecha_prescripcion', 'valor_total']
+
+
+class DispensacionMedicamentoViewSet(viewsets.ModelViewSet):
+    serializer_class = DispensacionMedicamentoSerializer
+
+    def get_queryset(self):
+        qs = DispensacionMedicamento.objects.select_related(
+            'paciente', 'ingreso', 'medicamento', 'lote',
+            'medico_prescriptor', 'dispensado_por',
+        )
+        paciente = self.request.query_params.get('paciente')
+        ingreso = self.request.query_params.get('ingreso')
+        estado = self.request.query_params.get('estado')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(medico_prescriptor=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def dispensar(self, request, pk=None):
+        """POST /api/farmacia/dispensaciones/{id}/dispensar/ — marca como dispensado."""
+        disp = self.get_object()
+        if disp.estado != 'pendiente':
+            return Response({'error': f'No se puede dispensar (estado actual: {disp.estado}).'}, status=status.HTTP_400_BAD_REQUEST)
+        disp.estado = 'dispensado'
+        disp.dispensado_por = request.user
+        disp.fecha_dispensacion = timezone.now()
+        observaciones = request.data.get('observaciones', '')
+        if observaciones:
+            disp.observaciones = observaciones
+        disp.save()
+        return Response(self.get_serializer(disp).data)
+
+
+# ── Solicitud Laboratorio ─────────────────────────────────────────────────────
+
+class SolicitudLaboratorioSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.CharField(source='paciente.nombre_completo', read_only=True)
+    estado_label = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model = SolicitudLaboratorio
+        fields = '__all__'
+        read_only_fields = ['id', 'fecha_solicitud']
+
+
+class SolicitudLaboratorioViewSet(viewsets.ModelViewSet):
+    serializer_class = SolicitudLaboratorioSerializer
+
+    def get_queryset(self):
+        qs = SolicitudLaboratorio.objects.select_related(
+            'paciente', 'ingreso', 'medico_solicitante', 'tomado_por',
+        )
+        paciente = self.request.query_params.get('paciente')
+        ingreso = self.request.query_params.get('ingreso')
+        estado = self.request.query_params.get('estado')
+        urgente = self.request.query_params.get('urgente')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if estado:
+            qs = qs.filter(estado=estado)
+        if urgente is not None:
+            qs = qs.filter(urgente=urgente.lower() == 'true')
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(medico_solicitante=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def marcar_tomada(self, request, pk=None):
+        """POST /api/laboratorio/solicitudes/{id}/marcar_tomada/ — registra toma de muestra."""
+        sol = self.get_object()
+        sol.estado = 'tomada'
+        sol.tomado_por = request.user
+        sol.fecha_toma_muestra = timezone.now()
+        observaciones = request.data.get('observaciones', '')
+        if observaciones:
+            sol.observaciones = observaciones
+        sol.save()
+        return Response(self.get_serializer(sol).data)
+
+
+# ── Resultado Laboratorio ─────────────────────────────────────────────────────
+
+class ResultadoLaboratorioSerializer(serializers.ModelSerializer):
+    estado_label = serializers.CharField(source='get_estado_resultado_display', read_only=True)
+
+    class Meta:
+        model = ResultadoLaboratorio
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
+class ResultadoLaboratorioViewSet(viewsets.ModelViewSet):
+    serializer_class = ResultadoLaboratorioSerializer
+
+    def get_queryset(self):
+        qs = ResultadoLaboratorio.objects.select_related(
+            'solicitud__paciente', 'laboratorista', 'validado_por',
+        )
+        solicitud = self.request.query_params.get('solicitud')
+        if solicitud:
+            qs = qs.filter(solicitud=solicitud)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(laboratorista=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def validar(self, request, pk=None):
+        """POST /api/laboratorio/resultados/{id}/validar/ — valida el resultado."""
+        resultado = self.get_object()
+        if resultado.validado:
+            return Response({'error': 'El resultado ya está validado.'}, status=status.HTTP_400_BAD_REQUEST)
+        resultado.validado = True
+        resultado.validado_por = request.user
+        resultado.save(update_fields=['validado', 'validado_por'])
+        # Actualizar estado de solicitud si todos los resultados están validados
+        solicitud = resultado.solicitud
+        if not solicitud.resultados.filter(validado=False).exists():
+            solicitud.estado = 'resultado'
+            solicitud.save(update_fields=['estado'])
+        return Response(self.get_serializer(resultado).data)
