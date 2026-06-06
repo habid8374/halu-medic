@@ -53,6 +53,19 @@ export default function FacturacionPage() {
         </Link>
       </div>
 
+      {/* Acceso rápido Prefactura */}
+      <div className="mb-4">
+        <Link href="/facturacion/prefacturas">
+          <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 flex items-center justify-between hover:bg-violet-100 transition-colors cursor-pointer">
+            <div>
+              <p className="text-sm font-semibold text-violet-800">Prefacturas / Preliquidación</p>
+              <p className="text-xs text-violet-600 mt-0.5">Revisión y aprobación antes de generar FEV · Ajuste de ítems no facturables</p>
+            </div>
+            <span className="text-violet-500 text-xs font-medium">Ver prefacturas →</span>
+          </div>
+        </Link>
+      </div>
+
       {/* Resumen rápido */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {(['validada', 'enviada', 'error', 'borrador'] as EstadoFactura[]).map(e => {

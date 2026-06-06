@@ -368,3 +368,21 @@ export const medicosAPI = {
 }
 
 export default api
+
+// ── Prefactura ────────────────────────────────────────────────────────────────
+export const prefacturaAPI = {
+  list:   (params?: Record<string, string>) => api.get('/facturacion/prefacturas/', { params }),
+  get:    (id: string) => api.get(`/facturacion/prefacturas/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/facturacion/prefacturas/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/facturacion/prefacturas/${id}/`, data),
+  delete: (id: string) => api.delete(`/facturacion/prefacturas/${id}/`),
+  autocargar:    (id: string) => api.post(`/facturacion/prefacturas/${id}/autocargar/`),
+  cambiarEstado: (id: string, estado: string) => api.post(`/facturacion/prefacturas/${id}/cambiar_estado/`, { estado }),
+  recalcular:    (id: string) => api.post(`/facturacion/prefacturas/${id}/recalcular/`),
+}
+
+export const itemPrefacturaAPI = {
+  create: (data: Record<string, unknown>) => api.post('/facturacion/items/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/facturacion/items/${id}/`, data),
+  delete: (id: string) => api.delete(`/facturacion/items/${id}/`),
+}
