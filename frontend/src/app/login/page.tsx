@@ -34,7 +34,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex relative">
+      {/* Video de fondo — visible en móvil, oculto en desktop (lo maneja el panel izq) */}
+      <video
+        autoPlay loop muted playsInline
+        className="lg:hidden fixed inset-0 w-full h-full object-cover -z-10"
+        src="/login-bg.mp4"
+      />
+      {/* Overlay móvil */}
+      <div className="lg:hidden fixed inset-0 bg-halu-900/70 -z-10" />
+
       {/* Panel izquierdo — video de fondo */}
       <div className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden">
         {/* Video de fondo */}
@@ -100,23 +109,28 @@ export default function LoginPage() {
       </div>
 
       {/* Panel derecho — formulario */}
-      <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-20 bg-white">
+      <div className="flex-1 flex flex-col justify-center px-6 sm:px-16 lg:px-20 lg:bg-white py-10 lg:py-0">
         {/* Logo mobile */}
-        <div className="lg:hidden flex items-center mb-10">
+        <div className="lg:hidden flex items-center justify-center mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Halu Medic" width={130} height={38} className="object-contain" />
+          <img src="/logo-icon.png" alt="" className="h-10 w-10 object-contain mr-2.5" />
+          <span className="text-2xl font-extrabold tracking-tight" style={{ fontFamily: "'Nunito', sans-serif" }}>
+            <span style={{ color: '#e0efff' }}>Halu</span><span style={{ color: '#5eead4' }}>Medic</span>
+          </span>
         </div>
 
-        <div className="w-full max-w-sm mx-auto animate-slide-up">
+        <div className="w-full max-w-sm mx-auto animate-slide-up
+          lg:bg-transparent lg:shadow-none lg:border-0 lg:backdrop-blur-none lg:p-0
+          bg-white/15 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl p-6 lg:p-0">
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-slate-900">Iniciar sesión</h2>
-            <p className="text-slate-500 mt-1 text-sm">Accede a tu consultorio</p>
+            <h2 className="text-2xl font-bold lg:text-slate-900 text-white">Iniciar sesión</h2>
+            <p className="lg:text-slate-500 text-slate-300 mt-1 text-sm">Accede a tu consultorio</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Usuario */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">Usuario</label>
+              <label className="text-sm font-medium lg:text-slate-700 text-slate-200">Usuario</label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -134,7 +148,7 @@ export default function LoginPage() {
 
             {/* Contraseña */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">Contraseña</label>
+              <label className="text-sm font-medium lg:text-slate-700 text-slate-200">Contraseña</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -176,8 +190,8 @@ export default function LoginPage() {
           </form>
 
           {/* Info roles */}
-          <div className="mt-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
-            <p className="text-xs font-medium text-slate-500 mb-2">Roles disponibles</p>
+          <div className="mt-8 p-4 lg:bg-slate-50 bg-white/10 rounded-xl lg:border-slate-100 border-white/20 border">
+            <p className="text-xs font-medium lg:text-slate-500 text-slate-300 mb-2">Roles disponibles</p>
             <div className="grid grid-cols-2 gap-1.5">
               {[
                 { rol: 'Superadmin', color: 'bg-purple-100 text-purple-700' },
