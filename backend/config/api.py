@@ -243,12 +243,14 @@ from apps.facturacion.models import Factura, EstadoFactura
 class FacturaSerializer(serializers.ModelSerializer):
     consulta_info = serializers.SerializerMethodField()
     tiene_rips    = serializers.SerializerMethodField()
+    numero_hc     = serializers.SerializerMethodField()
+    historia_info = serializers.SerializerMethodField()
 
     class Meta:
         model = Factura
         fields = [
-            'id', 'consulta', 'consulta_info', 'convenio',
-            'numero_factus', 'cufe', 'qr_url',
+            'id', 'consulta', 'consulta_info', 'historia', 'historia_info', 'numero_hc',
+            'convenio', 'numero_factus', 'cufe', 'qr_url',
             'subtotal', 'descuento', 'iva', 'total', 'valor_copago',
             'estado', 'errores_dian', 'tiene_rips', 'cuv',
             'fecha_validacion', 'creado_en',
@@ -257,6 +259,26 @@ class FacturaSerializer(serializers.ModelSerializer):
             'id', 'numero_factus', 'cufe', 'qr_url', 'pdf_base64',
             'estado', 'errores_dian', 'cuv', 'fecha_validacion', 'creado_en',
         ]
+
+    def get_numero_hc(self, obj):
+        if obj.historia_id:
+            return obj.historia.numero_hc
+        try:
+            return obj.consulta.historia.numero_hc
+        except Exception:
+            return None
+
+    def get_historia_info(self, obj):
+        h = obj.historia
+        if not h:
+            return None
+        return {
+            'id':          str(h.id),
+            'numero_hc':   h.numero_hc,
+            'fecha':       h.fecha_atencion.strftime('%Y-%m-%d') if h.fecha_atencion else None,
+            'tipo':        h.tipo_registro,
+            'diagnostico': h.diagnostico_principal,
+        }
 
     def get_consulta_info(self, obj):
         consulta = obj.consulta
@@ -1312,3 +1334,748 @@ class TarifaMedicamentoViewSet(viewsets.ModelViewSet):
         if vigente is not None:
             qs = qs.filter(vigente=vigente.lower() == 'true')
         return qs
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MÓDULO DE REPORTES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from rest_framework.views import APIView as _APIView
+from apps.usuarios.permissions import EsAdminOSuperadmin as _EsAdmin
+
+
+class ReportesView(_APIView):
+    """
+    GET /api/reportes/?tipo=...&fecha_desde=...&fecha_hasta=...
+    Genera reportes agregados para el consultorio activo.
+
+    tipos disponibles:
+      resumen_general      → KPIs del período
+      hc_facturacion       → HC del período con estado de facturación
+      facturacion_periodo  → Facturas emitidas en el período
+      pendientes_facturar  → HC sin factura (ordenados por antigüedad)
+      por_aseguradora      → Totales facturados por EPS
+      glosas_errores       → Facturas con estado error/anulada
+      top_diagnosticos     → CIE-10 más frecuentes
+      top_procedimientos   → CUPS más frecuentes (órdenes HC)
+      rips_estado          → HC con/sin CUV en RIPS
+    """
+    permission_classes = [IsAuthenticated, _EsAdmin]
+
+    def get(self, request):
+        tipo        = request.query_params.get('tipo', 'resumen_general')
+        fecha_desde = request.query_params.get('fecha_desde', '')
+        fecha_hasta = request.query_params.get('fecha_hasta', '')
+
+        metodo = {
+            'resumen_general':     self._resumen_general,
+            'hc_facturacion':      self._hc_facturacion,
+            'facturacion_periodo': self._facturacion_periodo,
+            'pendientes_facturar': self._pendientes_facturar,
+            'por_aseguradora':     self._por_aseguradora,
+            'glosas_errores':      self._glosas_errores,
+            'top_diagnosticos':    self._top_diagnosticos,
+            'top_procedimientos':  self._top_procedimientos,
+            'rips_estado':         self._rips_estado,
+        }.get(tipo)
+
+        if not metodo:
+            return Response({'error': f'Tipo de reporte "{tipo}" no existe.'}, status=400)
+
+        return Response(metodo(fecha_desde, fecha_hasta))
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+
+    def _rango(self, qs, campo, fd, fh):
+        if fd:
+            qs = qs.filter(**{f'{campo}__date__gte': fd})
+        if fh:
+            qs = qs.filter(**{f'{campo}__date__lte': fh})
+        return qs
+
+    # ── 1. Resumen general ────────────────────────────────────────────────────
+
+    def _resumen_general(self, fd, fh):
+        from apps.historia.models import HistoriaClinica
+        from apps.facturacion.models import Factura, EstadoFactura
+        from apps.pacientes.models import Paciente
+        from django.db.models import Sum, Count, Q
+
+        hc_qs = self._rango(HistoriaClinica.objects.all(), 'fecha_atencion', fd, fh)
+        fev_qs = self._rango(Factura.objects.all(), 'creado_en', fd, fh)
+
+        total_hc       = hc_qs.count()
+        hc_facturadas  = hc_qs.filter(facturas__isnull=False).distinct().count()
+        hc_pendientes  = total_hc - hc_facturadas
+
+        fev_totales    = fev_qs.count()
+        fev_validadas  = fev_qs.filter(estado=EstadoFactura.VALIDADA).count()
+        fev_error      = fev_qs.filter(estado=EstadoFactura.ERROR).count()
+        fev_anuladas   = fev_qs.filter(estado=EstadoFactura.ANULADA).count()
+
+        total_facturado = fev_qs.filter(
+            estado=EstadoFactura.VALIDADA
+        ).aggregate(t=Sum('total'))['t'] or 0
+
+        total_pacientes = Paciente.objects.count()
+
+        return {
+            'tipo': 'resumen_general',
+            'periodo': {'desde': fd, 'hasta': fh},
+            'hc': {
+                'total': total_hc,
+                'facturadas': hc_facturadas,
+                'pendientes': hc_pendientes,
+                'pct_facturadas': round(hc_facturadas / total_hc * 100, 1) if total_hc else 0,
+            },
+            'facturacion': {
+                'total_fev': fev_totales,
+                'validadas': fev_validadas,
+                'error': fev_error,
+                'anuladas': fev_anuladas,
+                'total_facturado': float(total_facturado),
+            },
+            'total_pacientes': total_pacientes,
+        }
+
+    # ── 2. HC con estado de facturación ───────────────────────────────────────
+
+    def _hc_facturacion(self, fd, fh):
+        from apps.historia.models import HistoriaClinica
+        from django.db.models import Prefetch
+        from apps.facturacion.models import Factura
+
+        qs = self._rango(
+            HistoriaClinica.objects.select_related('paciente')
+            .prefetch_related('facturas'),
+            'fecha_atencion', fd, fh
+        ).order_by('-fecha_atencion')[:500]
+
+        rows = []
+        for hc in qs:
+            facturas = list(hc.facturas.all())
+            if facturas:
+                f = facturas[0]
+                estado_factura = f.estado
+                numero_fev     = f.numero_factus or '—'
+                factura_id     = str(f.id)
+            else:
+                estado_factura = 'sin_factura'
+                numero_fev     = '—'
+                factura_id     = None
+
+            rows.append({
+                'hc_id':              str(hc.id),
+                'numero_hc':          f'HC-{str(hc.numero_hc).zfill(5)}' if hc.numero_hc else '—',
+                'fecha_atencion':     hc.fecha_atencion.strftime('%Y-%m-%d %H:%M') if hc.fecha_atencion else '',
+                'tipo_registro':      hc.get_tipo_registro_display() if hasattr(hc, 'get_tipo_registro_display') else hc.tipo_registro,
+                'paciente_nombre':    hc.paciente.nombre_completo if hasattr(hc.paciente, 'nombre_completo') else str(hc.paciente),
+                'paciente_doc':       hc.paciente.numero_identificacion,
+                'diagnostico':        hc.diagnostico_principal or '—',
+                'estado_factura':     estado_factura,
+                'numero_fev':         numero_fev,
+                'factura_id':         factura_id,
+            })
+
+        facturadas  = sum(1 for r in rows if r['estado_factura'] not in ('sin_factura',))
+        pendientes  = len(rows) - facturadas
+
+        return {
+            'tipo': 'hc_facturacion',
+            'periodo': {'desde': fd, 'hasta': fh},
+            'resumen': {'total': len(rows), 'facturadas': facturadas, 'pendientes': pendientes},
+            'filas': rows,
+        }
+
+    # ── 3. Facturas del período ───────────────────────────────────────────────
+
+    def _facturacion_periodo(self, fd, fh):
+        from apps.facturacion.models import Factura, EstadoFactura
+        from django.db.models import Sum
+
+        qs = self._rango(
+            Factura.objects.select_related('historia__paciente', 'consulta__paciente', 'convenio__aseguradora'),
+            'creado_en', fd, fh
+        ).order_by('-creado_en')[:500]
+
+        rows = []
+        for f in qs:
+            if f.historia:
+                pax_nombre = str(f.historia.paciente)
+                pax_doc    = f.historia.paciente.numero_identificacion
+                num_hc     = f'HC-{str(f.historia.numero_hc).zfill(5)}' if f.historia.numero_hc else '—'
+            elif f.consulta:
+                pax_nombre = str(f.consulta.paciente)
+                pax_doc    = f.consulta.paciente.numero_identificacion
+                num_hc     = '—'
+            else:
+                pax_nombre = '—'; pax_doc = '—'; num_hc = '—'
+
+            rows.append({
+                'factura_id':    str(f.id),
+                'numero_fev':    f.numero_factus or '—',
+                'numero_hc':     num_hc,
+                'fecha':         f.creado_en.strftime('%Y-%m-%d') if f.creado_en else '',
+                'paciente':      pax_nombre,
+                'documento':     pax_doc,
+                'aseguradora':   f.convenio.aseguradora.nombre if f.convenio and f.convenio.aseguradora else 'Particular',
+                'total':         float(f.total),
+                'copago':        float(f.valor_copago),
+                'estado':        f.estado,
+                'cufe':          f.cufe[:20] + '...' if f.cufe else '—',
+                'tiene_cuv':     bool(f.cuv),
+            })
+
+        totales = {
+            'total_cop':     sum(r['total']  for r in rows if r['estado'] == 'validada'),
+            'total_copagos': sum(r['copago'] for r in rows if r['estado'] == 'validada'),
+            'count':         len(rows),
+            'validadas':     sum(1 for r in rows if r['estado'] == 'validada'),
+            'error':         sum(1 for r in rows if r['estado'] == 'error'),
+            'anuladas':      sum(1 for r in rows if r['estado'] == 'anulada'),
+        }
+
+        return {
+            'tipo': 'facturacion_periodo',
+            'periodo': {'desde': fd, 'hasta': fh},
+            'totales': totales,
+            'filas': rows,
+        }
+
+    # ── 4. HC sin factura ─────────────────────────────────────────────────────
+
+    def _pendientes_facturar(self, fd, fh):
+        from apps.historia.models import HistoriaClinica
+        from django.utils import timezone
+        from datetime import timedelta
+
+        qs = self._rango(
+            HistoriaClinica.objects.select_related('paciente')
+            .filter(facturas__isnull=True),
+            'fecha_atencion', fd, fh
+        ).order_by('fecha_atencion')[:500]
+
+        hoy = timezone.now().date()
+        rows = []
+        for hc in qs:
+            fecha = hc.fecha_atencion.date() if hc.fecha_atencion else None
+            dias  = (hoy - fecha).days if fecha else None
+            rows.append({
+                'hc_id':         str(hc.id),
+                'numero_hc':     f'HC-{str(hc.numero_hc).zfill(5)}' if hc.numero_hc else '—',
+                'fecha_atencion': str(fecha) if fecha else '',
+                'dias_pendiente': dias,
+                'alerta':        'critico' if dias and dias > 30 else ('advertencia' if dias and dias > 15 else 'normal'),
+                'paciente':      str(hc.paciente),
+                'documento':     hc.paciente.numero_identificacion,
+                'tipo':          hc.tipo_registro,
+                'diagnostico':   hc.diagnostico_principal or '—',
+            })
+
+        return {
+            'tipo': 'pendientes_facturar',
+            'periodo': {'desde': fd, 'hasta': fh},
+            'total': len(rows),
+            'criticos': sum(1 for r in rows if r['alerta'] == 'critico'),
+            'filas': rows,
+        }
+
+    # ── 5. Facturación por aseguradora ────────────────────────────────────────
+
+    def _por_aseguradora(self, fd, fh):
+        from apps.facturacion.models import Factura, EstadoFactura
+        from django.db.models import Sum, Count
+
+        qs = self._rango(
+            Factura.objects.filter(estado=EstadoFactura.VALIDADA)
+            .select_related('convenio__aseguradora'),
+            'creado_en', fd, fh
+        )
+
+        resumen: dict = {}
+        for f in qs:
+            nombre = f.convenio.aseguradora.nombre if f.convenio and f.convenio.aseguradora else 'Particular'
+            nit    = f.convenio.aseguradora.nit if f.convenio and f.convenio.aseguradora else '—'
+            key    = nombre
+            if key not in resumen:
+                resumen[key] = {'aseguradora': nombre, 'nit': nit, 'facturas': 0, 'total': 0.0, 'copagos': 0.0}
+            resumen[key]['facturas'] += 1
+            resumen[key]['total']    += float(f.total)
+            resumen[key]['copagos']  += float(f.valor_copago)
+
+        filas = sorted(resumen.values(), key=lambda x: x['total'], reverse=True)
+        return {
+            'tipo': 'por_aseguradora',
+            'periodo': {'desde': fd, 'hasta': fh},
+            'total_general': sum(r['total'] for r in filas),
+            'filas': filas,
+        }
+
+    # ── 6. Glosas y errores ───────────────────────────────────────────────────
+
+    def _glosas_errores(self, fd, fh):
+        from apps.facturacion.models import Factura, EstadoFactura
+
+        qs = self._rango(
+            Factura.objects.select_related('historia__paciente', 'consulta__paciente')
+            .filter(estado__in=[EstadoFactura.ERROR, EstadoFactura.ANULADA]),
+            'creado_en', fd, fh
+        ).order_by('-creado_en')[:200]
+
+        rows = []
+        for f in qs:
+            if f.historia:
+                pax = str(f.historia.paciente)
+                num_hc = f'HC-{str(f.historia.numero_hc).zfill(5)}' if f.historia.numero_hc else '—'
+            elif f.consulta:
+                pax = str(f.consulta.paciente)
+                num_hc = '—'
+            else:
+                pax = '—'; num_hc = '—'
+
+            rows.append({
+                'factura_id':   str(f.id),
+                'numero_fev':   f.numero_factus or '—',
+                'numero_hc':    num_hc,
+                'paciente':     pax,
+                'fecha':        f.creado_en.strftime('%Y-%m-%d') if f.creado_en else '',
+                'estado':       f.estado,
+                'total':        float(f.total),
+                'errores_dian': f.errores_dian or [],
+                'observaciones': f.observaciones,
+            })
+
+        return {
+            'tipo': 'glosas_errores',
+            'periodo': {'desde': fd, 'hasta': fh},
+            'total': len(rows),
+            'filas': rows,
+        }
+
+    # ── 7. Top diagnósticos CIE-10 ────────────────────────────────────────────
+
+    def _top_diagnosticos(self, fd, fh):
+        from apps.historia.models import HistoriaClinica
+        from django.db.models import Count
+
+        qs = self._rango(
+            HistoriaClinica.objects.exclude(diagnostico_principal=''),
+            'fecha_atencion', fd, fh
+        )
+
+        top = (qs.values('diagnostico_principal')
+               .annotate(total=Count('id'))
+               .order_by('-total')[:20])
+
+        return {
+            'tipo': 'top_diagnosticos',
+            'periodo': {'desde': fd, 'hasta': fh},
+            'filas': [{'cie10': r['diagnostico_principal'], 'total': r['total']} for r in top],
+        }
+
+    # ── 8. Top procedimientos CUPS ────────────────────────────────────────────
+
+    def _top_procedimientos(self, fd, fh):
+        from apps.historia.models import OrdenHC
+        from django.db.models import Count
+
+        qs = self._rango(
+            OrdenHC.objects.exclude(cups=''),
+            'creado_en', fd, fh
+        )
+
+        top = (qs.values('cups', 'descripcion_cups', 'tipo')
+               .annotate(total=Count('id'))
+               .order_by('-total')[:20])
+
+        return {
+            'tipo': 'top_procedimientos',
+            'periodo': {'desde': fd, 'hasta': fh},
+            'filas': list(top),
+        }
+
+    # ── 9. Estado RIPS / CUV ─────────────────────────────────────────────────
+
+    def _rips_estado(self, fd, fh):
+        from apps.facturacion.models import Factura, EstadoFactura
+
+        qs = self._rango(
+            Factura.objects.filter(estado=EstadoFactura.VALIDADA)
+            .select_related('historia__paciente', 'consulta__paciente'),
+            'creado_en', fd, fh
+        ).order_by('-creado_en')[:500]
+
+        rows = []
+        for f in qs:
+            if f.historia:
+                pax = str(f.historia.paciente)
+                num_hc = f'HC-{str(f.historia.numero_hc).zfill(5)}' if f.historia.numero_hc else '—'
+            elif f.consulta:
+                pax = str(f.consulta.paciente)
+                num_hc = '—'
+            else:
+                pax = '—'; num_hc = '—'
+
+            rows.append({
+                'factura_id':  str(f.id),
+                'numero_fev':  f.numero_factus or '—',
+                'numero_hc':   num_hc,
+                'paciente':    pax,
+                'fecha':       f.creado_en.strftime('%Y-%m-%d') if f.creado_en else '',
+                'total':       float(f.total),
+                'tiene_rips':  bool(f.rips_json),
+                'cuv':         f.cuv or None,
+                'rips_enviado_muv': f.rips_enviado_muv,
+            })
+
+        con_cuv    = sum(1 for r in rows if r['cuv'])
+        sin_cuv    = len(rows) - con_cuv
+
+        return {
+            'tipo': 'rips_estado',
+            'periodo': {'desde': fd, 'hasta': fh},
+            'resumen': {'total': len(rows), 'con_cuv': con_cuv, 'sin_cuv': sin_cuv},
+            'filas': rows,
+        }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  MÓDULO SALUD — Especialidades, Notas Médicas, Programación CX,
+#                 Descripción Quirúrgica, Ayudas Diagnósticas
+# ════════════════════════════════════════════════════════════════════════════
+
+from apps.catalogos.models import Especialidad
+from apps.historia.models import (
+    NotaMedica, ProgramacionCx, DescripcionQuirurgica,
+    AyudaDiagnostica, ResultadoAD,
+)
+from django.contrib.auth import get_user_model as _get_user
+
+_User = _get_user()
+
+
+# ── Especialidad ─────────────────────────────────────────────────────────────
+
+class EspecialidadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Especialidad
+        fields = ['id', 'codigo', 'nombre', 'activa']
+
+
+class EspecialidadViewSet(viewsets.ModelViewSet):
+    serializer_class = EspecialidadSerializer
+    queryset = Especialidad.objects.filter(activa=True)
+
+
+# ── Usuario médico (datos profesionales) ─────────────────────────────────────
+
+class MedicoProfesionalSerializer(serializers.ModelSerializer):
+    """Serializer reducido para mostrar el médico en registros clínicos."""
+    nombre_completo    = serializers.CharField(source='get_full_name', read_only=True)
+    especialidad_nombre = serializers.CharField(
+        source='especialidad_principal.nombre', read_only=True, default='')
+
+    class Meta:
+        model = _User
+        fields = [
+            'id', 'nombre_completo', 'email',
+            'tarjeta_profesional', 'numero_rethus',
+            'especialidad_principal', 'especialidad_nombre',
+            'rol',
+        ]
+
+
+# ── Notas Médicas ─────────────────────────────────────────────────────────────
+
+class NotaMedicaSerializer(serializers.ModelSerializer):
+    medico_info = MedicoProfesionalSerializer(source='medico', read_only=True)
+
+    class Meta:
+        model = NotaMedica
+        fields = [
+            'id', 'ingreso', 'historia', 'tipo', 'medico', 'medico_info',
+            'especialidad_nota', 'tarjeta_prof_nota', 'servicio',
+            'fecha_hora', 'subjetivo', 'objetivo', 'analisis', 'plan',
+            'resumen_hospitalizacion', 'diagnostico_egreso',
+            'desc_diagnostico_egreso', 'condicion_al_egreso',
+            'recomendaciones_egreso',
+            'firmada', 'firmada_en', 'creado_en',
+        ]
+        read_only_fields = ['firmada_en', 'creado_en']
+
+    def validate(self, attrs):
+        # Una vez firmada no se puede editar
+        instance = self.instance
+        if instance and instance.firmada and not attrs.get('firmada') == instance.firmada:
+            raise serializers.ValidationError(
+                'Una nota firmada no puede modificarse. Agregue una nota aclaratoria.')
+        if instance and instance.firmada:
+            raise serializers.ValidationError(
+                'Esta nota ya está firmada y es inmutable.')
+        return attrs
+
+
+class NotaMedicaViewSet(viewsets.ModelViewSet):
+    serializer_class = NotaMedicaSerializer
+
+    def get_queryset(self):
+        qs = NotaMedica.objects.select_related('medico', 'medico__especialidad_principal')
+        ingreso = self.request.query_params.get('ingreso')
+        historia = self.request.query_params.get('historia')
+        tipo = self.request.query_params.get('tipo')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if historia:
+            qs = qs.filter(historia=historia)
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def firmar(self, request, pk=None):
+        nota = self.get_object()
+        if nota.firmada:
+            return Response({'error': 'Ya está firmada.'}, status=400)
+        medico = request.user
+        # Snapshot anti-glosa: captura TP y especialidad al momento de la firma
+        nota.firmada = True
+        nota.firmada_en = timezone.now()
+        nota.medico = medico
+        nota.tarjeta_prof_nota = medico.tarjeta_profesional
+        nota.especialidad_nota = medico.especialidad_principal.nombre if medico.especialidad_principal else ''
+        nota.save()
+        return Response(NotaMedicaSerializer(nota).data)
+
+
+# ── Programación CX ───────────────────────────────────────────────────────────
+
+class ProgramacionCxSerializer(serializers.ModelSerializer):
+    cirujano_info     = MedicoProfesionalSerializer(source='cirujano', read_only=True)
+    anestesiologo_info = MedicoProfesionalSerializer(source='anestesiologo', read_only=True)
+    paciente_nombre   = serializers.CharField(source='paciente.__str__', read_only=True)
+
+    class Meta:
+        model = ProgramacionCx
+        fields = [
+            'id', 'numero_cx', 'ingreso', 'paciente', 'paciente_nombre',
+            'cups_principal', 'descripcion_cups', 'diagnostico_preop',
+            'desc_diagnostico_preop', 'tipo_cirugia',
+            'cirujano', 'cirujano_info', 'anestesiologo', 'anestesiologo_info',
+            'fecha_programada', 'duracion_estimada_min', 'quirofano',
+            'tipo_anestesia', 'numero_autorizacion', 'requiere_autorizacion',
+            'estado', 'observaciones_preop', 'creado_en',
+        ]
+        read_only_fields = ['numero_cx', 'creado_en']
+
+
+class ProgramacionCxViewSet(viewsets.ModelViewSet):
+    serializer_class = ProgramacionCxSerializer
+
+    def get_queryset(self):
+        qs = ProgramacionCx.objects.select_related(
+            'paciente', 'cirujano', 'anestesiologo',
+            'cirujano__especialidad_principal',
+            'anestesiologo__especialidad_principal',
+        )
+        ingreso = self.request.query_params.get('ingreso')
+        paciente = self.request.query_params.get('paciente')
+        estado = self.request.query_params.get('estado')
+        fecha = self.request.query_params.get('fecha')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        if estado:
+            qs = qs.filter(estado=estado)
+        if fecha:
+            qs = qs.filter(fecha_programada__date=fecha)
+        return qs
+
+
+# ── Descripción Quirúrgica ───────────────────────────────────────────────────
+
+class DescripcionQuirurgicaSerializer(serializers.ModelSerializer):
+    cirujano_info = MedicoProfesionalSerializer(source='cirujano', read_only=True)
+    anestesiologo_info = MedicoProfesionalSerializer(source='anestesiologo', read_only=True)
+    numero_formateado = serializers.SerializerMethodField()
+
+    def get_numero_formateado(self, obj):
+        return f'DQX-{str(obj.numero_dqx).zfill(5)}'
+
+    class Meta:
+        model = DescripcionQuirurgica
+        fields = [
+            'id', 'numero_dqx', 'numero_formateado', 'programacion', 'ingreso',
+            'diagnostico_preoperatorio', 'desc_diag_preop',
+            'diagnostico_postoperatorio', 'desc_diag_postop',
+            'cups_principal', 'descripcion_procedimiento', 'tipo_anestesia',
+            'cirujano', 'cirujano_info', 'cirujano_nombre', 'cirujano_tp',
+            'cirujano_especialidad',
+            'anestesiologo', 'anestesiologo_info', 'anestesiologo_nombre',
+            'primer_ayudante', 'segundo_ayudante',
+            'instrumentadora', 'enfermera_circulante',
+            'fecha_hora_inicio', 'fecha_hora_fin', 'quirofano',
+            'descripcion_tecnica', 'hallazgos', 'especimenes', 'implantes',
+            'complicaciones', 'sangrado_estimado_ml', 'liquidos_administrados',
+            'plan_postoperatorio',
+            'firmada', 'firmada_en', 'creado_en',
+        ]
+        read_only_fields = ['numero_dqx', 'firmada_en', 'creado_en']
+
+    def validate(self, attrs):
+        instance = self.instance
+        if instance and instance.firmada:
+            raise serializers.ValidationError('Una descripción quirúrgica firmada es inmutable.')
+        return attrs
+
+
+class DescripcionQuirurgicaViewSet(viewsets.ModelViewSet):
+    serializer_class = DescripcionQuirurgicaSerializer
+
+    def get_queryset(self):
+        qs = DescripcionQuirurgica.objects.select_related(
+            'cirujano', 'anestesiologo', 'ingreso',
+            'cirujano__especialidad_principal',
+        )
+        ingreso = self.request.query_params.get('ingreso')
+        programacion = self.request.query_params.get('programacion')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if programacion:
+            qs = qs.filter(programacion=programacion)
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def firmar(self, request, pk=None):
+        dqx = self.get_object()
+        if dqx.firmada:
+            return Response({'error': 'Ya está firmada.'}, status=400)
+        medico = request.user
+        dqx.firmada = True
+        dqx.firmada_en = timezone.now()
+        # Snapshot anti-glosa
+        if dqx.cirujano:
+            dqx.cirujano_nombre    = dqx.cirujano.get_full_name()
+            dqx.cirujano_tp        = dqx.cirujano.tarjeta_profesional
+            dqx.cirujano_especialidad = (
+                dqx.cirujano.especialidad_principal.nombre
+                if dqx.cirujano.especialidad_principal else ''
+            )
+        dqx.save()
+        return Response(DescripcionQuirurgicaSerializer(dqx).data)
+
+
+# ── Ayudas Diagnósticas ───────────────────────────────────────────────────────
+
+class ResultadoADSerializer(serializers.ModelSerializer):
+    archivo_url = serializers.SerializerMethodField()
+
+    def get_archivo_url(self, obj):
+        if obj.archivo:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.archivo.url) if request else obj.archivo.url
+        return None
+
+    class Meta:
+        model = ResultadoAD
+        fields = [
+            'id', 'ayuda', 'medico_interpreta', 'fecha_resultado',
+            'resultado_texto', 'interpretacion', 'conclusion',
+            'archivo', 'archivo_url', 'creado_en',
+        ]
+        read_only_fields = ['creado_en']
+        extra_kwargs = {'archivo': {'write_only': True}}
+
+
+class AyudaDiagnosticaSerializer(serializers.ModelSerializer):
+    resultado = ResultadoADSerializer(read_only=True)
+    medico_solicitante_nombre = serializers.CharField(
+        source='medico_solicitante.get_full_name', read_only=True, default='')
+
+    class Meta:
+        model = AyudaDiagnostica
+        fields = [
+            'id', 'ingreso', 'historia', 'tipo', 'cups', 'descripcion',
+            'indicacion_clinica', 'urgente',
+            'medico_solicitante', 'medico_solicitante_nombre',
+            'estado', 'fecha_solicitud', 'resultado',
+        ]
+        read_only_fields = ['fecha_solicitud']
+
+
+class AyudaDiagnosticaViewSet(viewsets.ModelViewSet):
+    serializer_class = AyudaDiagnosticaSerializer
+
+    def get_queryset(self):
+        qs = AyudaDiagnostica.objects.select_related(
+            'medico_solicitante', 'resultado'
+        ).prefetch_related()
+        ingreso = self.request.query_params.get('ingreso')
+        historia = self.request.query_params.get('historia')
+        tipo = self.request.query_params.get('tipo')
+        estado = self.request.query_params.get('estado')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if historia:
+            qs = qs.filter(historia=historia)
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+    @action(detail=True, methods=['post'], url_path='resultado',
+            parser_classes=[__import__('rest_framework.parsers', fromlist=['MultiPartParser']).MultiPartParser,
+                            __import__('rest_framework.parsers', fromlist=['FormParser']).FormParser,
+                            __import__('rest_framework.parsers', fromlist=['JSONParser']).JSONParser])
+    def cargar_resultado(self, request, pk=None):
+        ayuda = self.get_object()
+        data = request.data.copy()
+        data['ayuda'] = str(ayuda.id)
+        # Update or create resultado
+        try:
+            resultado = ayuda.resultado
+            ser = ResultadoADSerializer(resultado, data=data, partial=True,
+                                         context={'request': request})
+        except ResultadoAD.DoesNotExist:
+            ser = ResultadoADSerializer(data=data, context={'request': request})
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        ayuda.estado = 'resultado'
+        ayuda.save(update_fields=['estado'])
+        return Response(AyudaDiagnosticaSerializer(ayuda, context={'request': request}).data)
+
+
+# ── Censo (vista de ingresos activos) ─────────────────────────────────────────
+
+class CensoIngresoSerializer(serializers.ModelSerializer):
+    paciente_nombre = serializers.CharField(source='paciente.__str__', read_only=True)
+    paciente_doc    = serializers.CharField(
+        source='paciente.numero_identificacion', read_only=True)
+    paciente_id     = serializers.UUIDField(source='paciente.id', read_only=True)
+    dias_estancia   = serializers.SerializerMethodField()
+    notas_count     = serializers.IntegerField(
+        source='notas_medicas.count', read_only=True)
+    ayudas_count    = serializers.IntegerField(
+        source='ayudas_diagnosticas.count', read_only=True)
+    cx_count        = serializers.IntegerField(
+        source='programaciones_cx.count', read_only=True)
+    tiene_egreso    = serializers.SerializerMethodField()
+
+    def get_dias_estancia(self, obj):
+        from django.utils import timezone as tz
+        delta = tz.now() - obj.fecha_ingreso
+        return delta.days
+
+    def get_tiene_egreso(self, obj):
+        return hasattr(obj, 'egreso')
+
+    class Meta:
+        from apps.historia.models import Ingreso as _Ingreso
+        model = _Ingreso
+        fields = [
+            'id', 'numero_ingreso', 'paciente_id', 'paciente_nombre', 'paciente_doc',
+            'fecha_ingreso', 'tipo_atencion', 'motivo_ingreso', 'activo',
+            'dias_estancia', 'notas_count', 'ayudas_count', 'cx_count',
+            'tiene_egreso',
+        ]

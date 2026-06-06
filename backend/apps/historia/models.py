@@ -253,3 +253,328 @@ class OrdenHC(models.Model):
 
     def __str__(self):
         return f'{self.get_tipo_display()} — {self.cups or self.descripcion_cups}'
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  MÓDULO SALUD — Hospitalización, Cirugías y Ayudas Diagnósticas
+# ════════════════════════════════════════════════════════════════════════════
+
+ANESTESIA_CHOICES = [
+    ('general',   'General'),
+    ('regional',  'Regional'),
+    ('local',     'Local'),
+    ('sedacion',  'Sedación'),
+    ('epidural',  'Epidural'),
+    ('raquidea',  'Raquídea'),
+    ('mixta',     'Mixta'),
+]
+
+
+class NotaMedica(models.Model):
+    """
+    Nota/evolución médica de hospitalización en formato SOAP.
+    Una vez firmada NO puede editarse — solo se agrega nota aclaratoria.
+    Obligatoria: fecha+hora, médico firmante, especialidad, contenido.
+    """
+    TIPO_CHOICES = [
+        ('ingreso',         'Nota de ingreso/admisión'),
+        ('evolucion',       'Evolución médica'),
+        ('interconsulta',   'Interconsulta'),
+        ('valoracion',      'Valoración por especialidad'),
+        ('preoperatoria',   'Valoración preoperatoria'),
+        ('postoperatoria',  'Nota postoperatoria'),
+        ('anestesia',       'Valoración anestésica'),
+        ('enfermeria',      'Nota de enfermería'),
+        ('aclaratoria',     'Nota aclaratoria'),
+        ('epicrisis',       'Epicrisis / Resumen de egreso'),
+    ]
+
+    id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ingreso         = models.ForeignKey(Ingreso, on_delete=models.CASCADE,
+                                         related_name='notas_medicas')
+    historia        = models.ForeignKey(HistoriaClinica, on_delete=models.SET_NULL,
+                                         null=True, blank=True, related_name='notas_medicas')
+    tipo            = models.CharField(max_length=20, choices=TIPO_CHOICES, default='evolucion')
+    medico          = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                         null=True, blank=True, related_name='notas_medicas')
+    # Snapshot de especialidad al momento de firmar (anti-glosa)
+    especialidad_nota  = models.CharField(max_length=200, blank=True)
+    tarjeta_prof_nota  = models.CharField(max_length=20, blank=True)
+    servicio           = models.CharField(max_length=100, blank=True,
+                                           help_text='Servicio/sala hospitalaria (ej: Medicina Interna, UCI)')
+
+    fecha_hora      = models.DateTimeField(help_text='Fecha y hora de la evolución')
+
+    # ── SOAP ─────────────────────────────────────────────────────────────────
+    subjetivo   = models.TextField(blank=True, help_text='Síntomas y quejas referidas por el paciente')
+    objetivo    = models.TextField(blank=True, help_text='Examen físico, signos vitales, paraclínicos')
+    analisis    = models.TextField(blank=True, help_text='Análisis / impresión diagnóstica')
+    plan        = models.TextField(blank=True, help_text='Plan de manejo, órdenes, conducta')
+
+    # ── Epicrisis (solo tipo=epicrisis) ───────────────────────────────────────
+    resumen_hospitalizacion = models.TextField(blank=True)
+    diagnostico_egreso      = models.CharField(max_length=10, blank=True, help_text='CIE-10')
+    desc_diagnostico_egreso = models.CharField(max_length=300, blank=True)
+    condicion_al_egreso     = models.TextField(blank=True)
+    recomendaciones_egreso  = models.TextField(blank=True)
+
+    # ── Firma (una vez firmada el registro es inmutable) ──────────────────────
+    firmada     = models.BooleanField(default=False)
+    firmada_en  = models.DateTimeField(null=True, blank=True)
+
+    creado_en   = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['fecha_hora']
+        verbose_name = 'Nota médica'
+        verbose_name_plural = 'Notas médicas'
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.ingreso} — {self.fecha_hora}'
+
+
+class ProgramacionCx(models.Model):
+    """
+    Programación quirúrgica. Genera número propio (CX-XXXXX) amarrado al Ingreso.
+    Campos mínimos exigidos para autorización EPS y reporte RIPS quirúrgico.
+    """
+    ESTADO_CHOICES = [
+        ('programada',  'Programada'),
+        ('confirmada',  'Confirmada'),
+        ('en_curso',    'En curso'),
+        ('realizada',   'Realizada'),
+        ('suspendida',  'Suspendida'),
+        ('cancelada',   'Cancelada'),
+    ]
+    TIPO_CIRUGIA_CHOICES = [
+        ('electiva',   'Electiva'),
+        ('urgente',    'Urgente'),
+        ('emergencia', 'Emergencia'),
+    ]
+
+    id                    = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    numero_cx             = models.PositiveIntegerField(editable=False,
+                                                          help_text='Consecutivo CX-XXXXX')
+    ingreso               = models.ForeignKey(Ingreso, on_delete=models.SET_NULL,
+                                               null=True, blank=True,
+                                               related_name='programaciones_cx')
+    paciente              = models.ForeignKey('pacientes.Paciente', on_delete=models.PROTECT,
+                                               related_name='programaciones_cx')
+
+    # Procedimiento
+    cups_principal        = models.CharField(max_length=10, help_text='CUPS del procedimiento principal')
+    descripcion_cups      = models.CharField(max_length=300, blank=True)
+    diagnostico_preop     = models.CharField(max_length=10, blank=True, help_text='CIE-10 preoperatorio')
+    desc_diagnostico_preop = models.CharField(max_length=300, blank=True)
+    tipo_cirugia          = models.CharField(max_length=15, choices=TIPO_CIRUGIA_CHOICES,
+                                              default='electiva')
+
+    # Equipo quirúrgico
+    cirujano              = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                               null=True, blank=True,
+                                               related_name='cx_como_cirujano')
+    anestesiologo         = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                               null=True, blank=True,
+                                               related_name='cx_como_anestesiologo')
+
+    # Logística
+    fecha_programada      = models.DateTimeField()
+    duracion_estimada_min = models.PositiveIntegerField(default=60)
+    quirofano             = models.CharField(max_length=50, blank=True)
+    tipo_anestesia        = models.CharField(max_length=10, choices=ANESTESIA_CHOICES,
+                                              default='general')
+
+    # Autorización EPS
+    numero_autorizacion   = models.CharField(max_length=60, blank=True)
+    requiere_autorizacion = models.BooleanField(default=True)
+
+    estado                = models.CharField(max_length=15, choices=ESTADO_CHOICES,
+                                              default='programada')
+    observaciones_preop   = models.TextField(blank=True)
+    creado_en             = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_programada']
+        verbose_name = 'Programación quirúrgica'
+        verbose_name_plural = 'Programaciones quirúrgicas'
+        indexes = [
+            models.Index(fields=['numero_cx']),
+            models.Index(fields=['paciente', 'estado']),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.numero_cx:
+            ultimo = ProgramacionCx.objects.order_by('-numero_cx').first()
+            self.numero_cx = (ultimo.numero_cx + 1) if ultimo else 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'CX-{str(self.numero_cx).zfill(5)} — {self.descripcion_cups or self.cups_principal}'
+
+
+class DescripcionQuirurgica(models.Model):
+    """
+    Informe/descripción operatoria. Número propio DQX-XXXXX, siempre
+    amarrado al Ingreso del paciente.  Una vez firmado es inmutable.
+    Fuente: Res. 1995/1999 Art. 11 — registros específicos quirúrgicos.
+    """
+    id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    numero_dqx       = models.PositiveIntegerField(editable=False)
+    programacion     = models.OneToOneField(ProgramacionCx, on_delete=models.SET_NULL,
+                                             null=True, blank=True,
+                                             related_name='descripcion_qx')
+    ingreso          = models.ForeignKey(Ingreso, on_delete=models.SET_NULL,
+                                          null=True, blank=True,
+                                          related_name='descripciones_qx')
+
+    # Diagnósticos
+    diagnostico_preoperatorio   = models.CharField(max_length=10, blank=True, help_text='CIE-10')
+    desc_diag_preop             = models.CharField(max_length=300, blank=True)
+    diagnostico_postoperatorio  = models.CharField(max_length=10, blank=True, help_text='CIE-10')
+    desc_diag_postop            = models.CharField(max_length=300, blank=True)
+
+    # Procedimiento
+    cups_principal          = models.CharField(max_length=10)
+    descripcion_procedimiento = models.CharField(max_length=300, blank=True)
+    tipo_anestesia          = models.CharField(max_length=10, choices=ANESTESIA_CHOICES,
+                                                default='general')
+
+    # Equipo quirúrgico (snapshots anti-glosa)
+    cirujano                = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                                 null=True, blank=True,
+                                                 related_name='dqx_cirujano')
+    cirujano_nombre         = models.CharField(max_length=200, blank=True)
+    cirujano_tp             = models.CharField(max_length=20, blank=True,
+                                                help_text='TP del cirujano al momento de la firma')
+    cirujano_especialidad   = models.CharField(max_length=200, blank=True)
+
+    anestesiologo           = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                                 null=True, blank=True,
+                                                 related_name='dqx_anestesiologo')
+    anestesiologo_nombre    = models.CharField(max_length=200, blank=True)
+
+    primer_ayudante         = models.CharField(max_length=200, blank=True)
+    segundo_ayudante        = models.CharField(max_length=200, blank=True)
+    instrumentadora         = models.CharField(max_length=200, blank=True)
+    enfermera_circulante    = models.CharField(max_length=200, blank=True)
+
+    # Tiempos
+    fecha_hora_inicio       = models.DateTimeField()
+    fecha_hora_fin          = models.DateTimeField(null=True, blank=True)
+    quirofano               = models.CharField(max_length=50, blank=True)
+
+    # Contenido clínico del informe operatorio
+    descripcion_tecnica     = models.TextField(
+        help_text='Descripción paso a paso de la técnica quirúrgica utilizada')
+    hallazgos               = models.TextField(blank=True,
+        help_text='Hallazgos intraoperatorios relevantes')
+    especimenes             = models.TextField(blank=True,
+        help_text='Especímenes enviados a patología')
+    implantes               = models.TextField(blank=True,
+        help_text='Implantes, prótesis, mallas o dispositivos utilizados')
+    complicaciones          = models.TextField(blank=True)
+    sangrado_estimado_ml    = models.PositiveIntegerField(null=True, blank=True)
+    liquidos_administrados  = models.TextField(blank=True)
+    plan_postoperatorio     = models.TextField(blank=True)
+
+    # Firma (inmutable después de firmar)
+    firmada     = models.BooleanField(default=False)
+    firmada_en  = models.DateTimeField(null=True, blank=True)
+    creado_en   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+        verbose_name = 'Descripción quirúrgica'
+        verbose_name_plural = 'Descripciones quirúrgicas'
+        indexes = [models.Index(fields=['numero_dqx'])]
+
+    def save(self, *args, **kwargs):
+        if not self.numero_dqx:
+            ultimo = DescripcionQuirurgica.objects.order_by('-numero_dqx').first()
+            self.numero_dqx = (ultimo.numero_dqx + 1) if ultimo else 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'DQX-{str(self.numero_dqx).zfill(5)} — {self.descripcion_procedimiento or self.cups_principal}'
+
+
+class AyudaDiagnostica(models.Model):
+    """
+    Solicitud de ayuda diagnóstica (laboratorio, imagen, ecografía, etc.).
+    Amarrada al ingreso y/o historia clínica.
+    """
+    TIPO_CHOICES = [
+        ('laboratorio',       'Laboratorio clínico'),
+        ('rx',                'Radiografía'),
+        ('ecografia',         'Ecografía'),
+        ('tomografia',        'Tomografía (TAC)'),
+        ('resonancia',        'Resonancia magnética (RMN)'),
+        ('electrocardiograma','Electrocardiograma'),
+        ('ecocardiograma',    'Ecocardiograma'),
+        ('endoscopia',        'Endoscopia'),
+        ('biopsia',           'Biopsia / Patología'),
+        ('espirometria',      'Espirometría'),
+        ('otro',              'Otro'),
+    ]
+    ESTADO_CHOICES = [
+        ('solicitada',  'Solicitada'),
+        ('tomada',      'Tomada/Procesada'),
+        ('resultado',   'Con resultado'),
+        ('cancelada',   'Cancelada'),
+    ]
+
+    id                  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ingreso             = models.ForeignKey(Ingreso, on_delete=models.SET_NULL,
+                                             null=True, blank=True,
+                                             related_name='ayudas_diagnosticas')
+    historia            = models.ForeignKey(HistoriaClinica, on_delete=models.SET_NULL,
+                                             null=True, blank=True,
+                                             related_name='ayudas_diagnosticas')
+    tipo                = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    cups                = models.CharField(max_length=10, blank=True)
+    descripcion         = models.CharField(max_length=300)
+    indicacion_clinica  = models.TextField(blank=True)
+    urgente             = models.BooleanField(default=False)
+    medico_solicitante  = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                             null=True, blank=True,
+                                             related_name='ayudas_solicitadas')
+    estado              = models.CharField(max_length=15, choices=ESTADO_CHOICES,
+                                            default='solicitada')
+    fecha_solicitud     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_solicitud']
+        verbose_name = 'Ayuda diagnóstica'
+        verbose_name_plural = 'Ayudas diagnósticas'
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.descripcion}'
+
+
+class ResultadoAD(models.Model):
+    """
+    Resultado de una ayuda diagnóstica.
+    Soporta texto libre + archivo adjunto (imagen, PDF, DICOM thumbnail).
+    """
+    id                  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ayuda               = models.OneToOneField(AyudaDiagnostica, on_delete=models.CASCADE,
+                                                related_name='resultado')
+    medico_interpreta   = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                             null=True, blank=True,
+                                             related_name='resultados_interpretados')
+    fecha_resultado     = models.DateTimeField()
+    resultado_texto     = models.TextField(blank=True, help_text='Texto del resultado / informe')
+    interpretacion      = models.TextField(blank=True, help_text='Interpretación clínica')
+    conclusion          = models.TextField(blank=True)
+    archivo             = models.FileField(upload_to='ayudas_diagnosticas/%Y/%m/',
+                                            null=True, blank=True,
+                                            help_text='PDF, imagen, DICOM thumbnail')
+    creado_en           = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Resultado ayuda diagnóstica'
+        verbose_name_plural = 'Resultados ayudas diagnósticas'
+
+    def __str__(self):
+        return f'Resultado: {self.ayuda}'

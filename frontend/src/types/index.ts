@@ -298,3 +298,154 @@ export interface Paginated<T> {
   previous: string | null
   results: T[]
 }
+
+// ── Módulo Salud ──────────────────────────────────────────────────────────────
+
+export interface Especialidad {
+  id: number
+  codigo: string
+  nombre: string
+  activa: boolean
+}
+
+export interface MedicoProfesional {
+  id: string
+  nombre_completo: string
+  tarjeta_profesional: string
+  numero_rethus: string
+  especialidad: string
+  especialidad_principal?: number | null
+  especialidad_nombre?: string
+  rol: string
+}
+
+export type TipoNotaMedica =
+  | 'ingreso' | 'evolucion' | 'interconsulta' | 'valoracion'
+  | 'preoperatoria' | 'postoperatoria' | 'anestesia' | 'enfermeria'
+  | 'aclaratoria' | 'epicrisis'
+
+export interface NotaMedica {
+  id: string
+  ingreso: string
+  historia?: string | null
+  tipo: TipoNotaMedica
+  medico?: string | null
+  medico_info?: MedicoProfesional
+  especialidad_nota: string
+  tarjeta_prof_nota: string
+  servicio: string
+  fecha_hora: string
+  subjetivo: string
+  objetivo: string
+  analisis: string
+  plan: string
+  resumen_hospitalizacion: string
+  diagnostico_egreso: string
+  desc_diagnostico_egreso: string
+  condicion_al_egreso: string
+  recomendaciones_egreso: string
+  firmada: boolean
+  firmada_en?: string | null
+  creado_en: string
+}
+
+export type EstadoProgramacionCx = 'programada' | 'confirmada' | 'en_curso' | 'realizada' | 'suspendida' | 'cancelada'
+export type TipoAnestesia = 'general' | 'regional' | 'local' | 'sedacion' | 'epidural' | 'raquidea' | 'mixta'
+
+export interface ProgramacionCx {
+  id: string
+  numero_cx: number
+  ingreso?: string | null
+  paciente: string
+  paciente_nombre: string
+  cups_principal: string
+  descripcion_cups: string
+  diagnostico_preop: string
+  desc_diagnostico_preop: string
+  tipo_cirugia: 'electiva' | 'urgente' | 'emergencia'
+  cirujano?: string | null
+  cirujano_info?: MedicoProfesional
+  anestesiologo?: string | null
+  anestesiologo_info?: MedicoProfesional
+  fecha_programada: string
+  duracion_estimada_min: number
+  quirofano: string
+  tipo_anestesia: TipoAnestesia
+  numero_autorizacion: string
+  requiere_autorizacion: boolean
+  estado: EstadoProgramacionCx
+  observaciones_preop: string
+  creado_en: string
+}
+
+export interface DescripcionQuirurgica {
+  id: string
+  numero_dqx: number
+  numero_formateado: string
+  programacion?: string | null
+  ingreso?: string | null
+  diagnostico_preoperatorio: string
+  desc_diag_preop: string
+  diagnostico_postoperatorio: string
+  desc_diag_postop: string
+  cups_principal: string
+  descripcion_procedimiento: string
+  tipo_anestesia: TipoAnestesia
+  cirujano?: string | null
+  cirujano_info?: MedicoProfesional
+  cirujano_nombre: string
+  cirujano_tp: string
+  cirujano_especialidad: string
+  anestesiologo?: string | null
+  anestesiologo_info?: MedicoProfesional
+  anestesiologo_nombre: string
+  primer_ayudante: string
+  segundo_ayudante: string
+  instrumentadora: string
+  enfermera_circulante: string
+  fecha_hora_inicio: string
+  fecha_hora_fin?: string | null
+  quirofano: string
+  descripcion_tecnica: string
+  hallazgos: string
+  especimenes: string
+  implantes: string
+  complicaciones: string
+  sangrado_estimado_ml?: number | null
+  liquidos_administrados: string
+  plan_postoperatorio: string
+  firmada: boolean
+  firmada_en?: string | null
+  creado_en: string
+}
+
+export type TipoAyuda = 'laboratorio' | 'rx' | 'ecografia' | 'tomografia' | 'resonancia' | 'electrocardiograma' | 'ecocardiograma' | 'endoscopia' | 'biopsia' | 'espirometria' | 'otro'
+export type EstadoAyuda = 'solicitada' | 'tomada' | 'resultado' | 'cancelada'
+
+export interface ResultadoAD {
+  id: string
+  ayuda: string
+  medico_interpreta?: string | null
+  fecha_resultado: string
+  resultado_texto: string
+  interpretacion: string
+  conclusion: string
+  archivo_url?: string | null
+  creado_en: string
+}
+
+export interface AyudaDiagnostica {
+  id: string
+  ingreso?: string | null
+  historia?: string | null
+  tipo: TipoAyuda
+  cups: string
+  descripcion: string
+  indicacion_clinica: string
+  urgente: boolean
+  medico_solicitante?: string | null
+  medico_solicitante_nombre: string
+  estado: EstadoAyuda
+  fecha_solicitud: string
+  resultado?: ResultadoAD
+}

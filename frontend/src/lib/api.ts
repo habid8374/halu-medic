@@ -315,4 +315,56 @@ export const consultoriosAdminAPI = {
   crear:      (data: Record<string, unknown>) => api.post('/api/auth/signup/', data),
 }
 
+// ── Módulo Salud ────────────────────────────────────────────────────────────
+
+export const especialidadesAPI = {
+  list:   (params?: Record<string, string>) => api.get('/api/catalogos/especialidades/', { params }),
+  create: (data: Record<string, unknown>)   => api.post('/api/catalogos/especialidades/', data),
+  update: (id: string | number, data: Record<string, unknown>) =>
+    api.patch(`/api/catalogos/especialidades/${id}/`, data),
+}
+
+export const notasMedicasAPI = {
+  list:   (params?: Record<string, string>) => api.get('/api/salud/notas/', { params }),
+  get:    (id: string) => api.get(`/api/salud/notas/${id}/`),
+  create: (data: Record<string, unknown>)   => api.post('/api/salud/notas/', data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/api/salud/notas/${id}/`, data),
+  firmar: (id: string) => api.post(`/api/salud/notas/${id}/firmar/`),
+}
+
+export const programacionCxAPI = {
+  list:   (params?: Record<string, string>) => api.get('/api/salud/cx/', { params }),
+  get:    (id: string) => api.get(`/api/salud/cx/${id}/`),
+  create: (data: Record<string, unknown>)   => api.post('/api/salud/cx/', data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/api/salud/cx/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/salud/cx/${id}/`),
+}
+
+export const descripcionQxAPI = {
+  list:   (params?: Record<string, string>) => api.get('/api/salud/descripcion-qx/', { params }),
+  get:    (id: string) => api.get(`/api/salud/descripcion-qx/${id}/`),
+  create: (data: Record<string, unknown>)   => api.post('/api/salud/descripcion-qx/', data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/api/salud/descripcion-qx/${id}/`, data),
+  firmar: (id: string) => api.post(`/api/salud/descripcion-qx/${id}/firmar/`),
+}
+
+export const ayudasDiagnosticasAPI = {
+  list:   (params?: Record<string, string>) => api.get('/api/salud/ayudas/', { params }),
+  get:    (id: string) => api.get(`/api/salud/ayudas/${id}/`),
+  create: (data: Record<string, unknown>)   => api.post('/api/salud/ayudas/', data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/api/salud/ayudas/${id}/`, data),
+  cargarResultado: (id: string, formData: FormData) =>
+    api.post(`/api/salud/ayudas/${id}/cargar_resultado/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+}
+
+export const medicosAPI = {
+  list: () => api.get('/api/usuarios/medicos/'),
+}
+
 export default api

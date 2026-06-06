@@ -1,218 +1,435 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
-import { facturasAPI, consultasAPI, pacientesAPI, citasAPI, mensajeError } from '@/lib/api'
-import { PageHeader, Badge } from '@/components/ui'
+import { mensajeError } from '@/lib/api'
+import { PageHeader, Spinner } from '@/components/ui'
 import toast from 'react-hot-toast'
 import {
-  TrendingUp, Receipt, Users, CalendarDays, ClipboardList,
-  CheckCircle, AlertCircle, Clock, XCircle, BarChart3,
-  ArrowUp, DollarSign, FileText,
+  BarChart3, Receipt, ClipboardList, Clock, AlertCircle,
+  CheckCircle, Download, RefreshCw, TrendingUp, Users,
+  FileText, Stethoscope, Activity, ShieldAlert,
 } from 'lucide-react'
-import { formatCOP } from '@/components/facturacion/helpers'
 import clsx from 'clsx'
+import api from '@/lib/api'
 
-interface Resumen {
-  totalPacientes: number
-  citasHoy: number
-  consultasAbiertas: number
-  facturas: { validadas: number; enviadas: number; error: number; anuladas: number; total: number }
-  ingresosMes: number
-  copagosMes: number
+// ── helpers ────────────────────────────────────────────────────────────────
+function fmt(n: number) {
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
+}
+function fmtDate(s: string) {
+  return new Date(s + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-const hoy = new Date().toISOString().slice(0, 10)
+function exportCSV(rows: Record<string, unknown>[], nombre: string) {
+  if (!rows.length) { toast.error('Sin datos para exportar'); return }
+  const cols = Object.keys(rows[0])
+  const sep = ','
+  const lines = [
+    cols.join(sep),
+    ...rows.map(r => cols.map(c => {
+      const v = String(r[c] ?? '')
+      return v.includes(sep) || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v
+    }).join(sep)),
+  ]
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = `${nombre}.csv`; a.click()
+  URL.revokeObjectURL(url)
+}
 
-export default function ReportesPage() {
-  const { usuario } = useAuth()
-  const [resumen, setResumen] = useState<Resumen | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [periodoLabel] = useState(() => {
-    const d = new Date()
-    return d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
-  })
+// ── tipos de reporte ────────────────────────────────────────────────────────
+const REPORTES = [
+  { id: 'resumen',            label: 'Resumen general',          icon: BarChart3 },
+  { id: 'hc_facturacion',     label: 'HC vs Facturación',        icon: ClipboardList },
+  { id: 'facturacion_periodo',label: 'Facturación por período',  icon: Receipt },
+  { id: 'pendientes',         label: 'Pendientes de facturar',   icon: Clock },
+  { id: 'por_aseguradora',    label: 'Por aseguradora (EPS)',    icon: Users },
+  { id: 'glosas',             label: 'Glosas y errores',         icon: ShieldAlert },
+  { id: 'top_diagnosticos',   label: 'Top diagnósticos CIE-10',  icon: Stethoscope },
+  { id: 'top_procedimientos', label: 'Top procedimientos CUPS',  icon: Activity },
+  { id: 'rips_estado',        label: 'Estado RIPS / CUV',        icon: FileText },
+] as const
 
-  useEffect(() => {
-    const cargar = async () => {
-      try {
-        const [pac, citasRes, consultasRes, factRes] = await Promise.allSettled([
-          pacientesAPI.list({ page_size: 1 }),
-          citasAPI.list({ fecha: hoy }),
-          consultasAPI.list({ estado: 'abierta', page_size: 1 }),
-          facturasAPI.list({ page_size: 200 }),
-        ])
+type ReporteId = typeof REPORTES[number]['id']
 
-        const totalPacientes = pac.status === 'fulfilled' ? pac.value.data.count : 0
-        const citasHoy = citasRes.status === 'fulfilled' ? citasRes.value.data.count || citasRes.value.data.results?.length || 0 : 0
-        const consultasAbiertas = consultasRes.status === 'fulfilled' ? consultasRes.value.data.count : 0
+// ── subcomponentes de tabla ────────────────────────────────────────────────
+function Tabla({ cols, rows }: { cols: { key: string; label: string; right?: boolean }[]; rows: Record<string, unknown>[] }) {
+  if (!rows.length) return <p className="text-sm text-slate-400 text-center py-8">Sin registros en el período</p>
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-100">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-slate-50 border-b border-slate-100">
+            {cols.map(c => (
+              <th key={c.key} className={clsx('px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap', c.right ? 'text-right' : 'text-left')}>{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {rows.map((r, i) => (
+            <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+              {cols.map(c => (
+                <td key={c.key} className={clsx('px-3 py-2.5 text-slate-700', c.right ? 'text-right font-medium' : '')}>{String(r[c.key] ?? '—')}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
-        let validadas = 0, enviadas = 0, error = 0, anuladas = 0
-        let ingresosMes = 0, copagosMes = 0
-        const mesActual = new Date().toISOString().slice(0, 7)
+function KPICard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 p-5">
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</p>
+      <p className={clsx('text-3xl font-bold', color ?? 'text-slate-900')}>{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+    </div>
+  )
+}
 
-        if (factRes.status === 'fulfilled') {
-          const facts = factRes.value.data.results || []
-          facts.forEach((f: any) => {
-            if (f.estado === 'validada') validadas++
-            else if (f.estado === 'enviada') enviadas++
-            else if (f.estado === 'error') error++
-            else if (f.estado === 'anulada') anuladas++
-
-            if (f.estado === 'validada' && f.creado_en?.startsWith(mesActual)) {
-              ingresosMes += parseFloat(f.total || 0)
-              copagosMes  += parseFloat(f.valor_copago || 0)
-            }
-          })
-        }
-
-        setResumen({
-          totalPacientes, citasHoy, consultasAbiertas,
-          facturas: { validadas, enviadas, error, anuladas, total: validadas + enviadas + error + anuladas },
-          ingresosMes, copagosMes,
-        })
-      } catch (err) {
-        toast.error(mensajeError(err))
-      } finally {
-        setLoading(false)
-      }
-    }
-    cargar()
-  }, [])
-
-  if (loading) return (
-    <div className="p-8">
-      <div className="animate-pulse space-y-4">
-        <div className="h-8 bg-slate-100 rounded-xl w-64" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-32 bg-slate-100 rounded-2xl" />)}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {[...Array(2)].map((_, i) => <div key={i} className="h-64 bg-slate-100 rounded-2xl" />)}
-        </div>
+// ── renderizadores por tipo ────────────────────────────────────────────────
+function ResumenGeneral({ data }: { data: Record<string, unknown> }) {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPICard label="Atenciones (HC)" value={String(data.total_hc ?? 0)} />
+        <KPICard label="Facturadas" value={String(data.hc_facturadas ?? 0)} color="text-emerald-600" />
+        <KPICard label="Pendientes" value={String(data.hc_pendientes ?? 0)} color="text-amber-600" />
+        <KPICard label="Total facturado" value={fmt(Number(data.total_facturado ?? 0))} color="text-halu-700" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KPICard label="Facturas validadas DIAN" value={String(data.facturas_validadas ?? 0)} sub="Estado: validada" color="text-emerald-600" />
+        <KPICard label="Con error / glosa" value={String(data.facturas_error ?? 0)} sub="Requieren corrección" color="text-red-500" />
+        <KPICard label="Pacientes atendidos" value={String(data.pacientes_unicos ?? 0)} sub="Únicos en el período" />
       </div>
     </div>
   )
+}
 
-  const r = resumen!
+function HCFacturacion({ data }: { data: { items?: Record<string, unknown>[] } }) {
+  const rows = data.items ?? []
+  return (
+    <Tabla
+      cols={[
+        { key: 'numero_hc', label: 'HC' },
+        { key: 'paciente', label: 'Paciente' },
+        { key: 'fecha_atencion', label: 'Fecha atención' },
+        { key: 'tipo_registro', label: 'Tipo' },
+        { key: 'diagnostico', label: 'Diagnóstico' },
+        { key: 'estado_factura', label: 'Estado factura' },
+        { key: 'numero_factura', label: 'N° factura' },
+        { key: 'valor_factura', label: 'Valor', right: true },
+      ]}
+      rows={rows}
+    />
+  )
+}
+
+function FacturacionPeriodo({ data }: { data: { items?: Record<string, unknown>[]; total?: number; count?: number } }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <KPICard label="Total facturas" value={String(data.count ?? 0)} />
+        <KPICard label="Monto total" value={fmt(Number(data.total ?? 0))} color="text-emerald-600" />
+      </div>
+      <Tabla
+        cols={[
+          { key: 'numero_factus', label: 'N° factura' },
+          { key: 'fecha', label: 'Fecha' },
+          { key: 'paciente', label: 'Paciente' },
+          { key: 'numero_hc', label: 'HC' },
+          { key: 'aseguradora', label: 'EPS / Particular' },
+          { key: 'estado', label: 'Estado' },
+          { key: 'total', label: 'Valor', right: true },
+        ]}
+        rows={data.items ?? []}
+      />
+    </div>
+  )
+}
+
+function PendientesFacturar({ data }: { data: { items?: Record<string, unknown>[]; count?: number } }) {
+  return (
+    <div className="space-y-4">
+      {(data.count ?? 0) > 0 && (
+        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+          <p className="text-sm text-amber-700 font-medium">{data.count} historias clínicas sin facturar en el período</p>
+        </div>
+      )}
+      <Tabla
+        cols={[
+          { key: 'numero_hc', label: 'HC' },
+          { key: 'paciente', label: 'Paciente' },
+          { key: 'documento', label: 'Documento' },
+          { key: 'fecha_atencion', label: 'Fecha atención' },
+          { key: 'tipo_registro', label: 'Tipo' },
+          { key: 'diagnostico_principal', label: 'Diagnóstico' },
+          { key: 'aseguradora', label: 'EPS' },
+        ]}
+        rows={data.items ?? []}
+      />
+    </div>
+  )
+}
+
+function PorAseguradora({ data }: { data: { items?: Record<string, unknown>[] } }) {
+  return (
+    <Tabla
+      cols={[
+        { key: 'aseguradora', label: 'Aseguradora (EPS)' },
+        { key: 'nit', label: 'NIT' },
+        { key: 'facturas', label: 'Facturas', right: true },
+        { key: 'validadas', label: 'Validadas', right: true },
+        { key: 'pendientes', label: 'Pendientes HC', right: true },
+        { key: 'glosas', label: 'Glosas', right: true },
+        { key: 'total', label: 'Total facturado', right: true },
+      ]}
+      rows={data.items ?? []}
+    />
+  )
+}
+
+function GlosasErrores({ data }: { data: { items?: Record<string, unknown>[]; total_glosas?: number } }) {
+  return (
+    <div className="space-y-4">
+      {(data.total_glosas ?? 0) > 0 && (
+        <KPICard label="Total glosas / errores" value={String(data.total_glosas)} color="text-red-600" />
+      )}
+      <Tabla
+        cols={[
+          { key: 'numero_factura', label: 'N° factura' },
+          { key: 'fecha', label: 'Fecha' },
+          { key: 'paciente', label: 'Paciente' },
+          { key: 'aseguradora', label: 'EPS' },
+          { key: 'estado', label: 'Estado' },
+          { key: 'error_detalle', label: 'Detalle error' },
+          { key: 'total', label: 'Valor', right: true },
+        ]}
+        rows={data.items ?? []}
+      />
+    </div>
+  )
+}
+
+function TopDiagnosticos({ data }: { data: { items?: Record<string, unknown>[] } }) {
+  return (
+    <Tabla
+      cols={[
+        { key: 'rank', label: '#', right: true },
+        { key: 'cie10', label: 'CIE-10' },
+        { key: 'descripcion', label: 'Diagnóstico' },
+        { key: 'total', label: 'Atenciones', right: true },
+        { key: 'facturadas', label: 'Facturadas', right: true },
+      ]}
+      rows={(data.items ?? []).map((r, i) => ({ rank: i + 1, ...r }))}
+    />
+  )
+}
+
+function TopProcedimientos({ data }: { data: { items?: Record<string, unknown>[] } }) {
+  return (
+    <Tabla
+      cols={[
+        { key: 'rank', label: '#', right: true },
+        { key: 'cups', label: 'CUPS' },
+        { key: 'descripcion', label: 'Procedimiento' },
+        { key: 'total', label: 'Órdenes', right: true },
+        { key: 'ejecutadas', label: 'Ejecutadas', right: true },
+      ]}
+      rows={(data.items ?? []).map((r, i) => ({ rank: i + 1, ...r }))}
+    />
+  )
+}
+
+function RIPSEstado({ data }: { data: { items?: Record<string, unknown>[]; cuv_pendientes?: number; cuv_validados?: number } }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <KPICard label="RIPS validados (CUV)" value={String(data.cuv_validados ?? 0)} color="text-emerald-600" />
+        <KPICard label="RIPS pendientes" value={String(data.cuv_pendientes ?? 0)} color="text-amber-600" />
+      </div>
+      <Tabla
+        cols={[
+          { key: 'numero_factura', label: 'N° factura' },
+          { key: 'fecha', label: 'Fecha' },
+          { key: 'paciente', label: 'Paciente' },
+          { key: 'cuv', label: 'CUV' },
+          { key: 'estado_rips', label: 'Estado RIPS' },
+          { key: 'cucon', label: 'CUCON' },
+        ]}
+        rows={data.items ?? []}
+      />
+    </div>
+  )
+}
+
+// ── página principal ───────────────────────────────────────────────────────
+export default function ReportesPage() {
+  const { usuario } = useAuth()
+  const hoy = new Date().toISOString().slice(0, 10)
+  const primeroDeMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
+
+  const [tipoReporte, setTipoReporte] = useState<ReporteId>('resumen')
+  const [fechaDesde, setFechaDesde] = useState(primeroDeMes)
+  const [fechaHasta, setFechaHasta] = useState(hoy)
+  const [data, setData] = useState<Record<string, unknown> | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [generado, setGenerado] = useState(false)
+
+  const generar = useCallback(async () => {
+    setLoading(true)
+    setGenerado(false)
+    try {
+      const params = new URLSearchParams({ tipo: tipoReporte })
+      if (fechaDesde) params.set('fecha_desde', fechaDesde)
+      if (fechaHasta) params.set('fecha_hasta', fechaHasta)
+      const { data: res } = await api.get(`/api/reportes/?${params}`)
+      setData(res)
+      setGenerado(true)
+    } catch (err) {
+      toast.error(mensajeError(err))
+    } finally {
+      setLoading(false)
+    }
+  }, [tipoReporte, fechaDesde, fechaHasta])
+
+  const exportar = () => {
+    if (!data) return
+    const items: Record<string, unknown>[] = (data as any).items ?? (Array.isArray(data) ? data : [])
+    exportCSV(items, `reporte_${tipoReporte}_${fechaDesde}_${fechaHasta}`)
+  }
+
+  const reporte = REPORTES.find(r => r.id === tipoReporte)!
+
+  const renderData = () => {
+    if (!data) return null
+    const d = data as any
+    switch (tipoReporte) {
+      case 'resumen':             return <ResumenGeneral data={d} />
+      case 'hc_facturacion':      return <HCFacturacion data={d} />
+      case 'facturacion_periodo': return <FacturacionPeriodo data={d} />
+      case 'pendientes':          return <PendientesFacturar data={d} />
+      case 'por_aseguradora':     return <PorAseguradora data={d} />
+      case 'glosas':              return <GlosasErrores data={d} />
+      case 'top_diagnosticos':    return <TopDiagnosticos data={d} />
+      case 'top_procedimientos':  return <TopProcedimientos data={d} />
+      case 'rips_estado':         return <RIPSEstado data={d} />
+      default:                    return null
+    }
+  }
 
   return (
     <div className="page-padding animate-fade-in">
       <PageHeader
         title="Reportes"
-        description={`Resumen del consultorio · ${periodoLabel}`}
+        description="Análisis clínico y de facturación · Exportación CSV"
       />
 
-      {/* ── KPIs principales ───────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'Pacientes activos', valor: r.totalPacientes, icon: Users, color: 'text-halu-600', bg: 'bg-halu-50', visible: true },
-          { label: 'Citas hoy', valor: r.citasHoy, icon: CalendarDays, color: 'text-teal-600', bg: 'bg-teal-50', visible: usuario?.permisos.puede_gestionar_citas },
-          { label: 'Consultas abiertas', valor: r.consultasAbiertas, icon: ClipboardList, color: 'text-amber-600', bg: 'bg-amber-50', visible: usuario?.permisos.puede_ver_clinica },
-          { label: 'Facturas emitidas', valor: r.facturas.total, icon: Receipt, color: 'text-emerald-600', bg: 'bg-emerald-50', visible: usuario?.permisos.puede_facturar },
-        ].filter(k => k.visible).map((k) => (
-          <div key={k.label} className="bg-white rounded-2xl p-5 border border-slate-100 hover:shadow-sm transition-all">
-            <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center mb-3', k.bg)}>
-              <k.icon className={clsx('w-5 h-5', k.color)} />
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* ── Panel izquierdo: selector de reporte ───────────────────────── */}
+        <div className="lg:w-64 flex-shrink-0">
+          <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-50">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo de reporte</p>
             </div>
-            <p className="text-3xl font-bold text-slate-900">{k.valor}</p>
-            <p className="text-sm text-slate-500 mt-1">{k.label}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* ── Estado de facturación ─────────────────────────────────────── */}
-        {usuario?.permisos.puede_facturar && (
-          <div className="bg-white rounded-2xl p-6 border border-slate-100">
-            <h3 className="font-semibold text-slate-900 mb-5 flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-halu-600" />
-              Estado de facturas
-            </h3>
-            <div className="space-y-3">
-              {[
-                { label: 'Validadas por DIAN', count: r.facturas.validadas, icon: CheckCircle, color: 'text-emerald-600', bar: 'bg-emerald-500' },
-                { label: 'En proceso / Enviadas', count: r.facturas.enviadas, icon: Clock,        color: 'text-amber-600',  bar: 'bg-amber-400' },
-                { label: 'Con errores',           count: r.facturas.error,    icon: AlertCircle,  color: 'text-red-500',    bar: 'bg-red-400' },
-                { label: 'Anuladas',              count: r.facturas.anuladas, icon: XCircle,      color: 'text-slate-400',  bar: 'bg-slate-200' },
-              ].map((item) => {
-                const pct = r.facturas.total > 0 ? (item.count / r.facturas.total) * 100 : 0
-                return (
-                  <div key={item.label}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <item.icon className={clsx('w-4 h-4', item.color)} />
-                        <span className="text-sm text-slate-700">{item.label}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-900">{item.count}</span>
-                        <span className="text-xs text-slate-400">{pct.toFixed(0)}%</span>
-                      </div>
-                    </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className={clsx('h-full rounded-full transition-all', item.bar)}
-                        style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="p-2 space-y-0.5">
+              {REPORTES.map(r => (
+                <button
+                  key={r.id}
+                  onClick={() => { setTipoReporte(r.id); setData(null); setGenerado(false) }}
+                  className={clsx(
+                    'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left',
+                    tipoReporte === r.id
+                      ? 'bg-halu-600 text-white'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  )}
+                >
+                  <r.icon className="w-4 h-4 flex-shrink-0" />
+                  {r.label}
+                </button>
+              ))}
             </div>
           </div>
-        )}
+        </div>
 
-        {/* ── Ingresos del mes ──────────────────────────────────────────── */}
-        {usuario?.permisos.puede_facturar && (
-          <div className="bg-gradient-to-br from-halu-900 to-halu-700 rounded-2xl p-6 text-white">
-            <h3 className="font-semibold text-sm mb-6 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-teal-300" />
-              Ingresos del mes ({periodoLabel})
-            </h3>
-            <div className="space-y-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <DollarSign className="w-4 h-4 text-teal-400" />
-                  <p className="text-xs text-halu-300">Total facturado (validado DIAN)</p>
+        {/* ── Área principal ─────────────────────────────────────────────── */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* Filtros + acciones */}
+          <div className="bg-white border border-slate-100 rounded-2xl p-4">
+            <div className="flex flex-col sm:flex-row gap-3 items-end">
+              <div className="flex-1 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Desde</label>
+                  <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/30" />
                 </div>
-                <p className="text-4xl font-bold tracking-tight">{formatCOP(r.ingresosMes)}</p>
-              </div>
-              <div className="border-t border-white/10 pt-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <ArrowUp className="w-4 h-4 text-amber-300" />
-                  <p className="text-xs text-halu-300">Copagos recaudados</p>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
+                  <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/30" />
                 </div>
-                <p className="text-2xl font-semibold">{formatCOP(r.copagosMes)}</p>
               </div>
-              <div className="flex items-center gap-2 bg-white/10 rounded-xl p-3">
-                <FileText className="w-4 h-4 text-teal-300 flex-shrink-0" />
-                <p className="text-xs text-halu-200">
-                  Datos basados en facturas validadas por la DIAN en el mes actual.
-                  Normativa: Res. 948/2026 — SS-CUFE / SS-SinAporte
-                </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={generar}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-halu-600 text-white text-sm font-medium hover:bg-halu-700 disabled:opacity-50 transition-all"
+                >
+                  {loading ? <Spinner size="sm" /> : <RefreshCw className="w-4 h-4" />}
+                  Generar
+                </button>
+                {generado && (
+                  <button
+                    onClick={exportar}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    CSV
+                  </button>
+                )}
               </div>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* ── Indicador normativo ───────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-100">
-        <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2 text-sm">
-          <CheckCircle className="w-4 h-4 text-emerald-600" />
-          Estado normativo del sistema
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { label: 'Resolución 948/2026', desc: 'RIPS JSON como soporte FEV',      ok: true },
-            { label: 'CUCON activo',        desc: 'SHA-256 en convenios EPS',         ok: true },
-            { label: 'SS-CUFE / SS-SinAporte', desc: 'Factus API habilitado',         ok: true },
-          ].map(item => (
-            <div key={item.label} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
-              <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-slate-800">{item.label}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{item.desc}</p>
-              </div>
+          {/* Resultado */}
+          <div className="bg-white border border-slate-100 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-5 pb-4 border-b border-slate-50">
+              <reporte.icon className="w-5 h-5 text-halu-600" />
+              <h2 className="font-semibold text-slate-900">{reporte.label}</h2>
+              {generado && (
+                <span className="ml-auto text-xs text-slate-400">
+                  {fechaDesde && fmtDate(fechaDesde)} — {fechaHasta && fmtDate(fechaHasta)}
+                </span>
+              )}
             </div>
-          ))}
+
+            {loading && (
+              <div className="flex justify-center py-16">
+                <Spinner size="lg" />
+              </div>
+            )}
+
+            {!loading && !generado && (
+              <div className="text-center py-16">
+                <TrendingUp className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                <p className="text-sm text-slate-400">Selecciona un rango de fechas y presiona <strong>Generar</strong></p>
+              </div>
+            )}
+
+            {!loading && generado && renderData()}
+          </div>
+
+          {/* Nota normativa */}
+          <div className="flex items-start gap-2 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+            <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-500">
+              Reportes basados en datos de HC (Res. 1995/1999), facturas electrónicas y RIPS (Res. 948/2026).
+              Exportación UTF-8 BOM compatible con Excel Colombia.
+            </p>
+          </div>
         </div>
       </div>
     </div>
