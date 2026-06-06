@@ -110,13 +110,22 @@ export default function LoginPage() {
 
       {/* Panel derecho — formulario */}
       <div className="flex-1 flex flex-col justify-center px-6 sm:px-16 lg:px-20 lg:bg-white py-10 lg:py-0">
-        {/* Logo mobile */}
-        <div className="lg:hidden flex items-center justify-center mb-8">
+        {/* Logo mobile — grande y prominente */}
+        <div className="lg:hidden flex flex-col items-center mb-10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-icon.png" alt="" className="h-10 w-10 object-contain mr-2.5" />
-          <span className="text-2xl font-extrabold tracking-tight" style={{ fontFamily: "'Nunito', sans-serif" }}>
-            <span style={{ color: '#e0efff' }}>Halu</span><span style={{ color: '#5eead4' }}>Medic</span>
+          <img src="/logo-icon.png" alt="" className="h-20 w-20 object-contain mb-3 drop-shadow-2xl" />
+          <span
+            className="text-4xl font-black tracking-tight"
+            style={{
+              fontFamily: "'Nunito', sans-serif",
+              textShadow: '0 2px 20px rgba(0,0,0,0.5)',
+            }}
+          >
+            <span style={{ color: '#ffffff' }}>Halu</span><span style={{ color: '#5eead4' }}>Medic</span>
           </span>
+          <p className="text-slate-300 text-sm mt-2 tracking-wide" style={{ textShadow: '0 1px 8px rgba(0,0,0,0.6)' }}>
+            Gestión clínica y facturación electrónica
+          </p>
         </div>
 
         <div className="w-full max-w-sm mx-auto animate-slide-up
