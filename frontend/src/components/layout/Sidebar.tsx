@@ -93,17 +93,14 @@ export default function Sidebar() {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-slate-100 flex-shrink-0">
-        <Link href="/dashboard" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
-          {/* Ícono */}
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-halu-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-sm">
-            <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-white" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
-          {/* Wordmark */}
-          <span className="text-lg font-bold tracking-tight">
-            <span className="text-slate-800">Halu</span><span className="text-halu-600">Medic</span>
-          </span>
+        <Link href="/dashboard" onClick={() => setOpen(false)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt="Halu Medic"
+            className="h-10 w-auto object-contain"
+            style={{ mixBlendMode: 'multiply' }}
+          />
         </Link>
       </div>
 
