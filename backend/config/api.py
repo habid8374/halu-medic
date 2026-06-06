@@ -2360,3 +2360,101 @@ class ItemPrefacturaViewSet(viewsets.ModelViewSet):
         pre = instance.prefactura
         instance.delete()
         pre.recalcular_totales()
+
+
+# ═══════════════════════════════════════════════════════════
+#  NOTA DE AJUSTE RIPS — Res. 948/2026
+# ═══════════════════════════════════════════════════════════
+from apps.facturacion.models import NotaAjusteRIPS
+
+class NotaAjusteRIPSSerializer(serializers.ModelSerializer):
+    factura_numero   = serializers.CharField(source='factura.numero_factus', read_only=True, default='')
+    motivo_tipo_label = serializers.CharField(source='get_motivo_tipo_display', read_only=True)
+    estado_label     = serializers.CharField(source='get_estado_display', read_only=True)
+    creado_por_nombre = serializers.CharField(source='creado_por.nombre', read_only=True, default='')
+
+    class Meta:
+        model  = NotaAjusteRIPS
+        fields = [
+            'id', 'factura', 'factura_numero', 'cuv_original', 'numero_factus_original',
+            'motivo_tipo', 'motivo_tipo_label', 'motivo_detalle',
+            'datos_originales', 'datos_corregidos',
+            'rips_ajuste_json', 'estado', 'estado_label',
+            'cuv_ajuste', 'respuesta_factus',
+            'creado_por', 'creado_por_nombre', 'creado_en', 'actualizado_en',
+        ]
+        read_only_fields = ['rips_ajuste_json', 'cuv_ajuste', 'respuesta_factus', 'creado_en', 'actualizado_en']
+
+
+class NotaAjusteRIPSViewSet(viewsets.ModelViewSet):
+    serializer_class   = NotaAjusteRIPSSerializer
+    permission_classes = [IsAuthenticated, _PuedeFacturar]
+
+    def get_queryset(self):
+        qs = NotaAjusteRIPS.objects.select_related('factura', 'creado_por').all()
+        factura = self.request.query_params.get('factura')
+        if factura:
+            qs = qs.filter(factura=factura)
+        return qs
+
+    def perform_create(self, serializer):
+        factura = serializer.validated_data.get('factura')
+        # Pre-cargar CUV y número original desde la factura
+        cuv_orig    = factura.cuv or ''
+        num_orig    = factura.numero_factus or ''
+        serializer.save(
+            creado_por=self.request.user,
+            cuv_original=cuv_orig,
+            numero_factus_original=num_orig,
+        )
+
+    @action(detail=True, methods=['post'], url_path='generar_rips')
+    def generar_rips(self, request, pk=None):
+        """
+        Genera el JSON del RIPS de ajuste a partir de los datos_corregidos.
+        El JSON resultante mantiene la estructura de Res. 948/2026 con los
+        campos clínicos corregidos, listo para enviar a Factus.
+        """
+        nota = self.get_object()
+        factura = nota.factura
+
+        # Construir RIPS base desde la factura original
+        try:
+            from config.api import _generar_rips_json
+            rips_base = _generar_rips_json(factura)
+        except Exception:
+            rips_base = {}
+
+        # Mezclar con datos corregidos
+        corregidos = nota.datos_corregidos or {}
+        if corregidos:
+            # Aplicar correcciones sobre el RIPS base
+            def aplicar(obj, correcciones):
+                if isinstance(obj, dict):
+                    for k, v in correcciones.items():
+                        if k in obj:
+                            obj[k] = v
+                    for v in obj.values():
+                        aplicar(v, correcciones)
+                elif isinstance(obj, list):
+                    for item in obj:
+                        aplicar(item, correcciones)
+            aplicar(rips_base, corregidos)
+
+        nota.rips_ajuste_json = rips_base
+        nota.save(update_fields=['rips_ajuste_json'])
+        return Response({
+            'message': 'RIPS de ajuste generado. Revise y envíe a MinSalud vía Factus.',
+            'nota': NotaAjusteRIPSSerializer(nota).data,
+        })
+
+    @action(detail=True, methods=['post'], url_path='marcar_enviada')
+    def marcar_enviada(self, request, pk=None):
+        """Registra que la nota fue enviada a MinSalud (manual o vía Factus)."""
+        nota = self.get_object()
+        cuv_ajuste = request.data.get('cuv_ajuste', '')
+        nota.estado     = 'enviada'
+        nota.cuv_ajuste = cuv_ajuste
+        nota.respuesta_factus = request.data.get('respuesta_factus')
+        nota.save(update_fields=['estado', 'cuv_ajuste', 'respuesta_factus'])
+        return Response(NotaAjusteRIPSSerializer(nota).data)
