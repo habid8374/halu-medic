@@ -1,12 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth-context'
-import { suscripcionesAPI, mensajeError } from '@/lib/api'
+import { suscripcionesAPI, consultoriosAdminAPI, mensajeError } from '@/lib/api'
 import { PageHeader, Badge, Button } from '@/components/ui'
 import toast from 'react-hot-toast'
 import {
   Building2, CheckCircle, AlertCircle, Clock, XCircle,
-  CreditCard, RefreshCw, Ban, Play, ChevronDown, ChevronUp,
+  CreditCard, RefreshCw, Ban, Play, ChevronDown, ChevronUp, Plus, X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -33,6 +33,13 @@ const PLAN_LABEL: Record<string, string> = {
   basico: 'Básico', pro: 'Pro', clinica: 'Clínica',
 }
 
+const FORM_VACIO = {
+  nombre: '', nit: '', razon_social: '', telefono: '', email: '',
+  municipio_codigo: '11001', slug: '', plan: 'basico',
+  admin_nombre: '', admin_apellido: '', admin_cedula: '',
+  admin_username: '', admin_email: '', admin_password: '',
+}
+
 export default function SuperadminPage() {
   const { usuario } = useAuth()
   const [suscripciones, setSuscripciones] = useState<Suscripcion[]>([])
@@ -42,6 +49,9 @@ export default function SuperadminPage() {
   const [meses, setMeses]   = useState(1)
   const [monto, setMonto]   = useState('')
   const [referencia, setRef] = useState('')
+  const [modalNuevo, setModalNuevo] = useState(false)
+  const [creando, setCreando] = useState(false)
+  const [form, setForm] = useState(FORM_VACIO)
 
   useEffect(() => {
     if (!usuario?.permisos.es_superadmin) return
@@ -82,6 +92,22 @@ export default function SuperadminPage() {
     finally { setAccionando(null) }
   }
 
+  const crearConsultorio = async () => {
+    if (!form.nombre || !form.nit || !form.slug || !form.admin_nombre || !form.admin_username || !form.admin_password || !form.admin_cedula || !form.email || !form.admin_email) {
+      toast.error('Completa todos los campos obligatorios')
+      return
+    }
+    setCreando(true)
+    try {
+      const { data } = await consultoriosAdminAPI.crear(form as Record<string, unknown>)
+      toast.success(`Consultorio "${form.nombre}" creado. Prueba hasta: ${data.prueba_hasta}`)
+      setModalNuevo(false)
+      setForm(FORM_VACIO)
+      cargar()
+    } catch (err) { toast.error(mensajeError(err)) }
+    finally { setCreando(false) }
+  }
+
   if (!usuario?.permisos.es_superadmin) return (
     <div className="page-padding flex flex-col items-center justify-center min-h-[400px]">
       <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
@@ -97,7 +123,14 @@ export default function SuperadminPage() {
   return (
     <div className="page-padding animate-fade-in">
       <PageHeader title="Superadmin — Axentia" description="Gestión de consultorios y suscripciones SaaS"
-        action={<Button variant="secondary" onClick={cargar}><RefreshCw className="w-4 h-4" />Actualizar</Button>} />
+        action={
+          <div className="flex gap-2">
+            <Button onClick={() => setModalNuevo(true)}>
+              <Plus className="w-4 h-4" />Nuevo Consultorio
+            </Button>
+            <Button variant="secondary" onClick={cargar}><RefreshCw className="w-4 h-4" />Actualizar</Button>
+          </div>
+        } />
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-4 mb-8">
@@ -211,6 +244,83 @@ export default function SuperadminPage() {
           </div>
         ))}
       </div>
+      {/* Modal Nuevo Consultorio */}
+      {modalNuevo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Nuevo Consultorio</h3>
+                <p className="text-sm text-slate-500 mt-0.5">Crear tenant y usuario administrador</p>
+              </div>
+              <button onClick={() => setModalNuevo(false)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Datos del Consultorio</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { key: 'nombre',          label: 'Nombre *',        type: 'text' },
+                  { key: 'nit',             label: 'NIT *',           type: 'text' },
+                  { key: 'razon_social',    label: 'Razón social',    type: 'text' },
+                  { key: 'telefono',        label: 'Teléfono',        type: 'text' },
+                  { key: 'email',           label: 'Email consultorio *', type: 'email' },
+                  { key: 'municipio_codigo',label: 'Cód. municipio',  type: 'text' },
+                  { key: 'slug',            label: 'Subdominio * (ej: clinica-sur)', type: 'text' },
+                ].map(f => (
+                  <div key={f.key} className={f.key === 'slug' ? 'col-span-2' : ''}>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">{f.label}</label>
+                    <input type={f.type} value={(form as Record<string,string>)[f.key]}
+                      onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500" />
+                    {f.key === 'slug' && (
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Acceso: <span className="font-mono">{form.slug || 'tu-clinica'}.halumedic.co</span>
+                      </p>
+                    )}
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Plan</label>
+                  <select value={form.plan} onChange={e => setForm(p => ({ ...p, plan: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500">
+                    <option value="basico">Básico</option>
+                    <option value="pro">Pro</option>
+                    <option value="clinica">Clínica</option>
+                  </select>
+                </div>
+              </div>
+
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider pt-2">Administrador del Consultorio</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { key: 'admin_nombre',   label: 'Nombre *',   type: 'text' },
+                  { key: 'admin_apellido', label: 'Apellido',   type: 'text' },
+                  { key: 'admin_cedula',   label: 'Cédula *',   type: 'text' },
+                  { key: 'admin_username', label: 'Usuario *',  type: 'text' },
+                  { key: 'admin_email',    label: 'Email *',    type: 'email' },
+                  { key: 'admin_password', label: 'Contraseña * (mín. 8 chars)', type: 'password' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">{f.label}</label>
+                    <input type={f.type} value={(form as Record<string,string>)[f.key]}
+                      onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 pb-6">
+              <Button variant="secondary" onClick={() => setModalNuevo(false)}>Cancelar</Button>
+              <Button onClick={crearConsultorio} loading={creando}>
+                <Building2 className="w-4 h-4" />
+                Crear Consultorio
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

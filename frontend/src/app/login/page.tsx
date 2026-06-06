@@ -118,11 +118,7 @@ export default function LoginPage() {
           </div>
 
           {/* Footer */}
-          <p className="text-center text-xs text-slate-400 mt-4">
-            ¿No tienes cuenta?{' '}
-            <a href="/signup" className="text-teal-400 font-semibold hover:underline">Registra tu consultorio</a>
-          </p>
-          <p className="text-center text-xs text-slate-300 mt-2">
+          <p className="text-center text-xs text-slate-300 mt-4">
             © 2026 Axentia Technologies · Halu Group
           </p>
         </div>
@@ -227,12 +223,6 @@ export default function LoginPage() {
                 : 'Ingresar'}
             </button>
           </form>
-          <div className="mt-6 text-center">
-            <p className="text-sm text-slate-500">
-              ¿No tienes cuenta?{' '}
-              <a href="/signup" className="text-halu-600 font-semibold hover:underline">Registra tu consultorio gratis</a>
-            </p>
-          </div>
         </div>
       </div>
 

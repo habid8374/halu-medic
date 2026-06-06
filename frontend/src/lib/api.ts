@@ -294,4 +294,15 @@ export const facturasPGPAPI = {
   rips:        (id: string) => api.get(`/api/facturacion/pgp/${id}/rips/`),
 }
 
+// ── Superadmin — Consultorios ─────────────────────────────────────────────────
+
+export const consultoriosAdminAPI = {
+  list:       (params?: Record<string, unknown>) => api.get('/api/admin/consultorios/', { params }),
+  get:        (id: string) => api.get(`/api/admin/consultorios/${id}/`),
+  activar:    (id: string) => api.post(`/api/admin/consultorios/${id}/activar/`),
+  desactivar: (id: string) => api.post(`/api/admin/consultorios/${id}/desactivar/`),
+  estadisticas: (id: string) => api.get(`/api/admin/consultorios/${id}/estadisticas/`),
+  crear:      (data: Record<string, unknown>) => api.post('/api/auth/signup/', data),
+}
+
 export default api

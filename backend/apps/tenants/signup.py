@@ -13,8 +13,10 @@ import re
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
+
+from apps.usuarios.permissions import EsSuperadmin
 
 from apps.tenants.models import Consultorio, Dominio
 from apps.suscripciones.models import Suscripcion, EstadoSuscripcion
@@ -81,8 +83,7 @@ class SignupSerializer(serializers.Serializer):
 # ── Vista ─────────────────────────────────────────────────────────────────────
 
 class SignupView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    permission_classes = [IsAuthenticated, EsSuperadmin]
 
     def post(self, request):
         ser = SignupSerializer(data=request.data)
