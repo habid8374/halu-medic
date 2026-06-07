@@ -111,6 +111,10 @@ export default function Sidebar() {
             <span style={{ color: '#1a3a6b' }}>Halu</span><span style={{ color: '#00b5b5' }}>Medic</span>
           </span>
         </Link>
+        {/* Campana solo en desktop — en móvil está junto al hamburger */}
+        <div className="hidden lg:block">
+          <NotificacionesBell />
+        </div>
       </div>
 
       {/* Consultorio activo */}
@@ -237,13 +241,16 @@ export default function Sidebar() {
   return (
     <>
       {/* Botón hamburguesa — solo móvil */}
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed top-3 left-3 z-50 lg:hidden p-2 bg-white rounded-xl shadow-sm border border-slate-200"
-        aria-label="Abrir menú"
-      >
-        <Menu className="w-5 h-5 text-slate-700" />
-      </button>
+      <div className="fixed top-3 left-3 z-50 lg:hidden flex items-center gap-2">
+        <button
+          onClick={() => setOpen(true)}
+          className="p-2 bg-white rounded-xl shadow-sm border border-slate-200"
+          aria-label="Abrir menú"
+        >
+          <Menu className="w-5 h-5 text-slate-700" />
+        </button>
+        <NotificacionesBell />
+      </div>
 
       {/* Overlay — solo móvil cuando open */}
       {open && (
