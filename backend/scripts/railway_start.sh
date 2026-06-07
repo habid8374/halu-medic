@@ -3,19 +3,26 @@ set -e
 
 echo "=== Halu Medic — Railway startup ==="
 
-echo "→ Migraciones schema público (shared)..."
+# Solo las migraciones del schema público (rápido — no itera tenants)
+echo "→ Migraciones shared..."
 python manage.py migrate_schemas --shared --noinput
 
-echo "→ Crear tenant demo y registrar dominio Railway..."
-python manage.py setup_railway_domain \
-  --domain "${RAILWAY_PUBLIC_DOMAIN:-halu-medic-production.up.railway.app}" \
-  || echo "setup_railway_domain: no crítico"
+# Archivos estáticos (rápido)
+echo "→ Collectstatic..."
+python manage.py collectstatic --noinput
 
-echo "→ Migraciones schemas tenant (incluye demo)..."
-python manage.py migrate_schemas --noinput
+# Todo lo lento corre en background DESPUÉS de que gunicorn arranque
+(
+  echo "→ [BG] Registrar dominio Railway..."
+  python manage.py setup_railway_domain \
+    --domain "${RAILWAY_PUBLIC_DOMAIN:-halu-medic-production.up.railway.app}" \
+    || echo "[BG] setup_railway_domain: no crítico"
 
-echo "→ Crear usuario admin en tenant demo..."
-python manage.py shell -c "
+  echo "→ [BG] Migraciones tenant schemas..."
+  python manage.py migrate_schemas --noinput || echo "[BG] migrate_schemas: error"
+
+  echo "→ [BG] Crear usuario admin..."
+  python manage.py shell -c "
 from django_tenants.utils import schema_context
 from apps.usuarios.models import Usuario
 with schema_context('demo'):
@@ -35,20 +42,16 @@ with schema_context('demo'):
     u.is_staff = True
     u.is_superuser = True
     u.save()
-    print('Usuario demo OK:', u.username)
-" || echo "setup usuario demo: no crítico"
+    print('[BG] Usuario demo OK:', u.username)
+" || echo "[BG] usuario: no crítico"
 
-echo "→ Archivos estáticos..."
-python manage.py collectstatic --noinput
-
-# Importar catálogos en background — no bloquean el arranque
-(
-  sleep 10
   echo "→ [BG] Importar CUPS..."
-  python manage.py importar_cups || echo "CUPS ya importados"
+  python manage.py importar_cups || echo "[BG] CUPS ya importados"
+
   echo "→ [BG] Importar CIE-10..."
-  python manage.py importar_cie10 || echo "CIE-10 ya importados"
-  echo "→ [BG] Catálogos completados."
+  python manage.py importar_cie10 || echo "[BG] CIE-10 ya importados"
+
+  echo "→ [BG] Tareas de fondo completadas."
 ) &
 
 echo "→ Levantando gunicorn..."
