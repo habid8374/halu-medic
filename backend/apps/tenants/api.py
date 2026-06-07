@@ -140,6 +140,17 @@ class ConfiguracionConsultorioSerializer(serializers.Serializer):
     factura_rango_desde        = serializers.IntegerField(required=False, allow_null=True)
     factura_rango_hasta        = serializers.IntegerField(required=False, allow_null=True)
     factura_leyenda            = serializers.CharField(required=False, allow_blank=True)
+    firma_factura_nombre       = serializers.CharField(required=False, allow_blank=True)
+    firma_factura_cargo        = serializers.CharField(required=False, allow_blank=True)
+    regimen_tributario         = serializers.CharField(required=False, allow_blank=True)
+
+    # Datos IPS adicionales
+    regimen                    = serializers.CharField(required=False, allow_blank=True)
+    nivel_atencion             = serializers.CharField(required=False, allow_blank=True)
+    representante_legal        = serializers.CharField(required=False, allow_blank=True)
+    departamento               = serializers.CharField(required=False, allow_blank=True)
+    sitio_web                  = serializers.CharField(required=False, allow_blank=True)
+    logo_url                   = serializers.CharField(required=False, allow_blank=True)
 
 
 class ConfiguracionConsultorioView(APIView):
@@ -161,6 +172,9 @@ class ConfiguracionConsultorioView(APIView):
         'factus_username', 'factus_password', 'factus_rango_numeracion_id',
         'resolucion_dian', 'resolucion_fecha', 'factura_prefijo',
         'factura_rango_desde', 'factura_rango_hasta', 'factura_leyenda',
+        'firma_factura_nombre', 'firma_factura_cargo', 'regimen_tributario',
+        'regimen', 'nivel_atencion', 'representante_legal',
+        'departamento', 'sitio_web', 'logo_url',
     ]
 
     def get(self, request):
@@ -188,6 +202,16 @@ class ConfiguracionConsultorioView(APIView):
             'factura_rango_desde': c.factura_rango_desde,
             'factura_rango_hasta': c.factura_rango_hasta,
             'factura_leyenda':     c.factura_leyenda,
+            'firma_factura_nombre': c.firma_factura_nombre,
+            'firma_factura_cargo':  c.firma_factura_cargo,
+            'regimen_tributario':   c.regimen_tributario,
+            # Datos IPS adicionales
+            'regimen':            c.regimen,
+            'nivel_atencion':     c.nivel_atencion,
+            'representante_legal': c.representante_legal,
+            'departamento':       c.departamento,
+            'sitio_web':          c.sitio_web,
+            'logo_url':           c.logo_url,
         })
 
     def put(self, request):

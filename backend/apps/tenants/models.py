@@ -63,6 +63,35 @@ class Consultorio(TenantMixin):
     factura_leyenda        = models.TextField(blank=True,
                               help_text='Leyenda/texto legal que aparece en la representación gráfica (PDF)')
 
+    # ── Datos IPS adicionales ─────────────────────────────────────────────────
+    class RegimenChoices(models.TextChoices):
+        CONTRIBUTIVO = 'contributivo', 'Contributivo'
+        SUBSIDIADO   = 'subsidiado',   'Subsidiado'
+        MIXTO        = 'mixto',        'Mixto'
+
+    class NivelAtencionChoices(models.TextChoices):
+        UNO    = '1', 'Nivel I'
+        DOS    = '2', 'Nivel II'
+        TRES   = '3', 'Nivel III'
+        CUATRO = '4', 'Nivel IV'
+
+    regimen               = models.CharField(max_length=20, choices=RegimenChoices.choices, blank=True)
+    nivel_atencion        = models.CharField(max_length=2, choices=NivelAtencionChoices.choices, blank=True)
+    representante_legal   = models.CharField(max_length=200, blank=True)
+    departamento          = models.CharField(max_length=100, blank=True)
+    sitio_web             = models.CharField(max_length=200, blank=True)
+    logo_url              = models.TextField(blank=True, help_text='URL o base64 del logo de la IPS')
+
+    # ── Datos de firma en facturación ────────────────────────────────────────
+    firma_factura_nombre  = models.CharField(max_length=200, blank=True)
+    firma_factura_cargo   = models.CharField(max_length=200, blank=True)
+
+    class RegimenTributarioChoices(models.TextChoices):
+        SIMPLIFICADO = 'simplificado', 'Régimen Simplificado'
+        COMUN        = 'comun',        'Régimen Común'
+
+    regimen_tributario    = models.CharField(max_length=20, choices=RegimenTributarioChoices.choices, blank=True)
+
     creado_en       = models.DateTimeField(auto_now_add=True)
     actualizado_en  = models.DateTimeField(auto_now=True)
 
