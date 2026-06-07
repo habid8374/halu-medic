@@ -8,7 +8,7 @@ import clsx from 'clsx'
 
 interface CamaUCI {
   id: string
-  numero: string
+  numero_cama: string
   estado: 'libre' | 'ocupada' | 'mantenimiento' | 'reservada'
   estado_display: string
   admision_activa?: AdmisionUCI
@@ -169,7 +169,7 @@ export default function UCIPage() {
                 )}
               >
                 <BedDouble className={clsx('w-5 h-5 mx-auto mb-1', CAMA_TEXT[cama.estado])} />
-                <p className={clsx('text-xs font-bold', CAMA_TEXT[cama.estado])}>{cama.numero}</p>
+                <p className={clsx('text-xs font-bold', CAMA_TEXT[cama.estado])}>{cama.numero_cama}</p>
                 <p className={clsx('text-xs mt-0.5', CAMA_TEXT[cama.estado])}>{cama.estado_display}</p>
                 {cama.estado === 'ocupada' && cama.admision_activa && (
                   <p className="text-xs text-slate-500 truncate mt-1 text-left leading-tight">
@@ -202,7 +202,7 @@ export default function UCIPage() {
         <div className="bg-white rounded-2xl border border-slate-100 p-5 mb-4">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h2 className="font-semibold text-slate-900">Cama {camaSeleccionada.numero} · {admisionDetalle.paciente_nombre}</h2>
+              <h2 className="font-semibold text-slate-900">Cama {camaSeleccionada.numero_cama} · {admisionDetalle.paciente_nombre}</h2>
               <p className="text-xs text-slate-500">Ingreso: {admisionDetalle.fecha_ingreso ? new Date(admisionDetalle.fecha_ingreso).toLocaleDateString('es-CO') : ''}</p>
             </div>
             <div className="flex gap-2">
@@ -294,7 +294,7 @@ export default function UCIPage() {
 
 function NuevaCamaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [modo, setModo] = useState<'individual' | 'rango'>('individual')
-  const [form, setForm] = useState({ numero: '', tipo: 'uci_adulto', estado: 'libre' })
+  const [form, setForm] = useState({ numero_cama: '', tipo: 'uci_adulto', estado: 'libre' })
   const [rango, setRango] = useState({ prefijo: 'UCI-', desde: '1', hasta: '10', tipo: 'uci_adulto' })
   const [saving, setSaving] = useState(false)
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -306,9 +306,9 @@ function NuevaCamaModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     setSaving(true)
     try {
       if (modo === 'individual') {
-        if (!form.numero) { toast.error('El número de cama es requerido'); setSaving(false); return }
+        if (!form.numero_cama) { toast.error('El número de cama es requerido'); setSaving(false); return }
         await api.post('/api/salud/uci/camas/', form)
-        toast.success(`Cama ${form.numero} creada`)
+        toast.success(`Cama ${form.numero_cama} creada`)
       } else {
         const desde = parseInt(rango.desde)
         const hasta = parseInt(rango.hasta)
@@ -318,7 +318,7 @@ function NuevaCamaModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
         const promesas = []
         for (let i = desde; i <= hasta; i++) {
           promesas.push(api.post('/api/salud/uci/camas/', {
-            numero: `${rango.prefijo}${i}`,
+            numero_cama: `${rango.prefijo}${i}`,
             tipo: rango.tipo,
             estado: 'libre',
           }))
@@ -363,7 +363,7 @@ function NuevaCamaModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             <>
               <div>
                 <label className="text-xs font-medium text-slate-600 block mb-1">Número / Identificador *</label>
-                <input value={form.numero} onChange={set('numero')} className={INPUT} placeholder="Ej: UCI-01, CAMA-5, UCC-A1" />
+                <input value={form.numero_cama} onChange={set('numero_cama')} className={INPUT} placeholder="Ej: UCI-01, CAMA-5, UCC-A1" />
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-600 block mb-1">Tipo de unidad</label>
@@ -457,7 +457,7 @@ function AdmisionModal({ cama, onClose, onSaved }: {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="p-5 border-b flex items-center justify-between">
           <div>
-            <h2 className="font-bold text-slate-900">Admisión UCI · Cama {cama.numero}</h2>
+            <h2 className="font-bold text-slate-900">Admisión UCI · Cama {cama.numero_cama}</h2>
             <p className="text-xs text-slate-500">Ingresar paciente a cuidados intensivos</p>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"><X className="w-4 h-4" /></button>
