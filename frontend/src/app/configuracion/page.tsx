@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { consultorioAPI, mensajeError } from '@/lib/api'
 import { PageHeader, Button, Input, Card } from '@/components/ui'
@@ -9,6 +9,8 @@ import {
   Building2, Shield, FileText,
   Save, Eye, EyeOff, CheckCircle, AlertCircle,
   Hash, Calendar, Tag, AlignLeft, Zap, DollarSign, ShieldCheck,
+  MapPin, Upload, ImageIcon, Globe, Phone, Mail,
+  Stethoscope, User,
 } from 'lucide-react'
 import { TarifariosTab } from '@/components/configuracion/TarifariosTab'
 
@@ -33,16 +35,43 @@ interface ConfigData {
   factura_rango_desde: number | null
   factura_rango_hasta: number | null
   factura_leyenda: string
+  firma_factura_nombre: string
+  firma_factura_cargo: string
+  regimen_tributario: string
+  // IPS fields
+  regimen: string
+  nivel_atencion: string
+  representante_legal: string
+  departamento: string
+  sitio_web: string
+  logo_url: string
 }
 
 const TABS = [
-  { id: 'general',      label: 'Consultorio',   icon: Building2,  link: null },
-  { id: 'factus',       label: 'Facturación',   icon: Zap,        link: null },
-  { id: 'resolucion',   label: 'Resolución',    icon: FileText,   link: null },
-  { id: 'tarifarios',   label: 'Tarifarios',    icon: DollarSign, link: null },
-  { id: 'aseguradoras', label: 'Aseguradoras',  icon: ShieldCheck, link: '/configuracion/aseguradoras' },
-  { id: 'convenios',    label: 'Convenios EPS', icon: FileText,   link: '/configuracion/convenios' },
+  { id: 'general',      label: 'Consultorio',   icon: Building2,    link: null },
+  { id: 'ips',          label: 'Datos IPS',      icon: Stethoscope,  link: null },
+  { id: 'contacto',     label: 'Contacto',       icon: MapPin,       link: null },
+  { id: 'facturacion',  label: 'Facturación',    icon: Zap,          link: null },
+  { id: 'resolucion',   label: 'Resolución',     icon: FileText,     link: null },
+  { id: 'logo',         label: 'Logo',           icon: ImageIcon,    link: null },
+  { id: 'tarifarios',   label: 'Tarifarios',     icon: DollarSign,   link: null },
+  { id: 'aseguradoras', label: 'Aseguradoras',   icon: ShieldCheck,  link: '/configuracion/aseguradoras' },
+  { id: 'convenios',    label: 'Convenios EPS',  icon: FileText,     link: '/configuracion/convenios' },
 ]
+
+const DEPARTAMENTOS_COLOMBIA = [
+  'Amazonas', 'Antioquia', 'Arauca', 'Atlántico', 'Bolívar', 'Boyacá',
+  'Caldas', 'Caquetá', 'Casanare', 'Cauca', 'Cesar', 'Chocó',
+  'Córdoba', 'Cundinamarca', 'Guainía', 'Guaviare', 'Huila',
+  'La Guajira', 'Magdalena', 'Meta', 'Nariño', 'Norte de Santander',
+  'Putumayo', 'Quindío', 'Risaralda', 'San Andrés y Providencia',
+  'Santander', 'Sucre', 'Tolima', 'Valle del Cauca', 'Vaupés', 'Vichada',
+  'Bogotá D.C.',
+]
+
+const INPUT_CLASS = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/20 bg-white disabled:bg-slate-50 disabled:text-slate-400'
+const LABEL_CLASS = 'block text-xs font-medium text-slate-600 mb-1'
+const SECTION_HEADER = 'text-sm font-semibold text-slate-700 mb-3'
 
 export default function ConfiguracionPage() {
   const { usuario } = useAuth()
@@ -50,6 +79,7 @@ export default function ConfiguracionPage() {
   const [data, setData]       = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
 
   // Campos secretos — nunca vienen del API, solo se envían al guardar
   const [clientSecret, setClientSecret] = useState('')
@@ -66,6 +96,18 @@ export default function ConfiguracionPage() {
 
   const set = (campo: keyof ConfigData, valor: unknown) =>
     setData(prev => prev ? { ...prev, [campo]: valor } : prev)
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('El logo no debe superar 2 MB')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => set('logo_url', reader.result as string)
+    reader.readAsDataURL(file)
+  }
 
   const guardar = async () => {
     if (!data) return
@@ -189,8 +231,203 @@ export default function ConfiguracionPage() {
         </Card>
       )}
 
+      {/* ── Tab: Datos IPS ────────────────────────────────────────────────── */}
+      {tab === 'ips' && (
+        <Card className="space-y-6">
+          <div className="flex items-center gap-2 text-slate-700 font-semibold border-b border-slate-100 pb-4">
+            <Stethoscope className="w-4 h-4 text-halu-600" />
+            Datos de la IPS
+          </div>
+
+          {/* Identificación */}
+          <div>
+            <p className={SECTION_HEADER}>Identificación y habilitación</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL_CLASS}>Código de habilitación REPS</label>
+                <input
+                  className={INPUT_CLASS}
+                  value={data.codigo_prestador}
+                  onChange={e => set('codigo_prestador', e.target.value)}
+                  disabled={!esAdmin}
+                  placeholder="Ej: 0801234500"
+                />
+                <p className="text-xs text-slate-400 mt-1 ml-1">Código asignado por el Ministerio de Salud (REPS)</p>
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>NIT con dígito de verificación</label>
+                <input
+                  className={INPUT_CLASS}
+                  value={data.nit}
+                  onChange={e => set('nit', e.target.value)}
+                  disabled={!esAdmin}
+                  placeholder="Ej: 900123456-7"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Clasificación */}
+          <div>
+            <p className={SECTION_HEADER}>Clasificación</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL_CLASS}>Régimen</label>
+                <select
+                  className={INPUT_CLASS}
+                  value={data.regimen}
+                  onChange={e => set('regimen', e.target.value)}
+                  disabled={!esAdmin}
+                >
+                  <option value="">Seleccionar régimen...</option>
+                  <option value="contributivo">Contributivo</option>
+                  <option value="subsidiado">Subsidiado</option>
+                  <option value="mixto">Mixto</option>
+                </select>
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>Nivel de atención</label>
+                <select
+                  className={INPUT_CLASS}
+                  value={data.nivel_atencion}
+                  onChange={e => set('nivel_atencion', e.target.value)}
+                  disabled={!esAdmin}
+                >
+                  <option value="">Seleccionar nivel...</option>
+                  <option value="1">Nivel I</option>
+                  <option value="2">Nivel II</option>
+                  <option value="3">Nivel III</option>
+                  <option value="4">Nivel IV</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Representación legal */}
+          <div>
+            <p className={SECTION_HEADER}>Representación legal</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className={LABEL_CLASS}>Nombre del representante legal</label>
+                <input
+                  className={INPUT_CLASS}
+                  value={data.representante_legal}
+                  onChange={e => set('representante_legal', e.target.value)}
+                  disabled={!esAdmin}
+                  placeholder="Nombre completo del representante legal"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Info card */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700">
+            <p className="font-medium mb-1">¿Qué es el código de habilitación REPS?</p>
+            <p className="text-xs">Es el código asignado por el Ministerio de Salud al inscribirte en el
+              Registro Especial de Prestadores de Servicios de Salud. Lo puedes consultar en
+              <strong> reps.sispro.gov.co</strong>.</p>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Tab: Contacto y ubicación ─────────────────────────────────────── */}
+      {tab === 'contacto' && (
+        <Card className="space-y-6">
+          <div className="flex items-center gap-2 text-slate-700 font-semibold border-b border-slate-100 pb-4">
+            <MapPin className="w-4 h-4 text-halu-600" />
+            Contacto y ubicación
+          </div>
+
+          {/* Dirección */}
+          <div>
+            <p className={SECTION_HEADER}>Ubicación</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className={LABEL_CLASS}>Dirección</label>
+                <input
+                  className={INPUT_CLASS}
+                  value={data.direccion}
+                  onChange={e => set('direccion', e.target.value)}
+                  disabled={!esAdmin}
+                  placeholder="Calle, carrera, número, barrio"
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>Municipio / Ciudad</label>
+                <input
+                  className={INPUT_CLASS}
+                  value={data.municipio_codigo}
+                  onChange={e => set('municipio_codigo', e.target.value)}
+                  disabled={!esAdmin}
+                  placeholder="Ej: Barranquilla (08001)"
+                />
+                <p className="text-xs text-slate-400 mt-1 ml-1">Código DANE o nombre del municipio</p>
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>Departamento</label>
+                <select
+                  className={INPUT_CLASS}
+                  value={data.departamento}
+                  onChange={e => set('departamento', e.target.value)}
+                  disabled={!esAdmin}
+                >
+                  <option value="">Seleccionar departamento...</option>
+                  {DEPARTAMENTOS_COLOMBIA.map(dep => (
+                    <option key={dep} value={dep}>{dep}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Contacto */}
+          <div>
+            <p className={SECTION_HEADER}>Información de contacto</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL_CLASS}>
+                  <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> Teléfono</span>
+                </label>
+                <input
+                  className={INPUT_CLASS}
+                  value={data.telefono}
+                  onChange={e => set('telefono', e.target.value)}
+                  disabled={!esAdmin}
+                  placeholder="+57 300 000 0000"
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>
+                  <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> Correo institucional</span>
+                </label>
+                <input
+                  className={INPUT_CLASS}
+                  type="email"
+                  value={data.email}
+                  onChange={e => set('email', e.target.value)}
+                  disabled={!esAdmin}
+                  placeholder="info@miips.com.co"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className={LABEL_CLASS}>
+                  <span className="flex items-center gap-1"><Globe className="w-3 h-3" /> Sitio web (opcional)</span>
+                </label>
+                <input
+                  className={INPUT_CLASS}
+                  value={data.sitio_web}
+                  onChange={e => set('sitio_web', e.target.value)}
+                  disabled={!esAdmin}
+                  placeholder="https://www.miips.com.co"
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* ── Tab: Facturación electrónica (Factus) ────────────────────────── */}
-      {tab === 'factus' && (
+      {tab === 'facturacion' && (
         <div className="space-y-4">
           {/* Estado Factus */}
           <div className={`flex items-center gap-3 p-4 rounded-xl border ${
@@ -270,6 +507,35 @@ export default function ConfiguracionPage() {
               <p>2. Ve a <strong>Configuración → Aplicaciones OAuth2</strong></p>
               <p>3. Crea una aplicación y copia el Client ID y Client Secret</p>
               <p>4. El ID del rango lo encuentras en <strong>Rangos de numeración</strong></p>
+            </div>
+          </Card>
+
+          {/* Firma y régimen tributario */}
+          <Card className="space-y-5">
+            <div className="flex items-center gap-2 text-slate-700 font-semibold border-b border-slate-100 pb-4">
+              <User className="w-4 h-4 text-halu-600" />
+              Firma y régimen tributario
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input label="Nombre quien firma facturas" value={data.firma_factura_nombre}
+                onChange={e => set('firma_factura_nombre', e.target.value)} disabled={!esAdmin}
+                placeholder="Nombre completo" />
+              <Input label="Cargo del firmante" value={data.firma_factura_cargo}
+                onChange={e => set('firma_factura_cargo', e.target.value)} disabled={!esAdmin}
+                placeholder="Ej: Gerente, Director médico" />
+              <div>
+                <label className={LABEL_CLASS}>Régimen tributario</label>
+                <select
+                  className={INPUT_CLASS}
+                  value={data.regimen_tributario}
+                  onChange={e => set('regimen_tributario', e.target.value)}
+                  disabled={!esAdmin}
+                >
+                  <option value="">Seleccionar régimen...</option>
+                  <option value="simplificado">Régimen Simplificado</option>
+                  <option value="comun">Régimen Común</option>
+                </select>
+              </div>
             </div>
           </Card>
         </div>
@@ -354,6 +620,86 @@ Vigente del 1 al 5000. Este documento no genera obligaciones tributarias adicion
               </p>
             </div>
           )}
+        </Card>
+      )}
+
+      {/* ── Tab: Logo ─────────────────────────────────────────────────────── */}
+      {tab === 'logo' && (
+        <Card className="space-y-6">
+          <div className="flex items-center gap-2 text-slate-700 font-semibold border-b border-slate-100 pb-4">
+            <ImageIcon className="w-4 h-4 text-halu-600" />
+            Logo de la IPS
+          </div>
+
+          {/* Preview */}
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-48 h-48 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
+              {data.logo_url ? (
+                <img
+                  src={data.logo_url}
+                  alt="Logo IPS"
+                  className="w-full h-full object-contain p-3"
+                />
+              ) : (
+                <div className="text-center text-slate-400">
+                  <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                  <p className="text-xs">Sin logo</p>
+                </div>
+              )}
+            </div>
+
+            {esAdmin && (
+              <div className="flex flex-col items-center gap-2">
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  className="hidden"
+                  onChange={handleLogoChange}
+                />
+                <button
+                  onClick={() => logoInputRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  Subir imagen
+                </button>
+                {data.logo_url && (
+                  <button
+                    onClick={() => set('logo_url', '')}
+                    className="text-xs text-red-500 hover:text-red-700 transition-colors"
+                  >
+                    Eliminar logo
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* También se puede pegar una URL */}
+          <div>
+            <label className={LABEL_CLASS}>URL del logo (alternativa)</label>
+            <input
+              className={INPUT_CLASS}
+              value={data.logo_url.startsWith('data:') ? '' : data.logo_url}
+              onChange={e => set('logo_url', e.target.value)}
+              disabled={!esAdmin}
+              placeholder="https://ejemplo.com/logo.png"
+            />
+            <p className="text-xs text-slate-400 mt-1 ml-1">
+              Si prefieres usar una URL en lugar de subir el archivo directamente.
+            </p>
+          </div>
+
+          {/* Instrucciones */}
+          <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-500 space-y-1.5">
+            <p className="font-medium text-slate-600">Recomendaciones para el logo</p>
+            <p>• Formato: PNG, JPEG, SVG o WebP</p>
+            <p>• Tamaño máximo: 2 MB</p>
+            <p>• Dimensiones recomendadas: 400 × 400 px o superior</p>
+            <p>• Fondo transparente (PNG/SVG) para mejor resultado en documentos</p>
+            <p>• El logo aparecerá en facturas, reportes e impresiones</p>
+          </div>
         </Card>
       )}
 
