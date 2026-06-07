@@ -3,21 +3,22 @@ set -e
 
 echo "=== Halu Medic — Railway startup ==="
 
-# 1. Migraciones schema público (solo tablas compartidas — rápido)
-echo "→ Migraciones shared..."
+# 1. Migraciones schema público (rápido)
+echo "→ Migraciones shared (public schema)..."
 python manage.py migrate_schemas --shared --noinput
 
-# 2. Registrar dominio Railway
-echo "→ Registrar dominio..."
+# 2. Registrar dominio Railway (crea tenant 'demo' si no existe)
+echo "→ Registrar dominio Railway..."
 python manage.py setup_railway_domain \
   --domain "${RAILWAY_PUBLIC_DOMAIN:-halu-medic-production.up.railway.app}" \
   || echo "setup_railway_domain: no crítico"
 
-# 3. Migraciones de TODOS los tenant schemas (necesario antes de servir requests)
-echo "→ Migraciones tenant schemas..."
-python manage.py migrate_schemas --noinput
+# 3. Migrar SOLO el schema 'demo' (no itera todos los schemas — mucho más rápido)
+echo "→ Migraciones schema demo..."
+python manage.py tenant_command migrate --schema=demo --noinput \
+  || python manage.py migrate_schemas --noinput
 
-# 4. Crear usuario admin en tenant demo
+# 4. Crear usuario admin
 echo "→ Crear usuario admin..."
 python manage.py shell -c "
 from django_tenants.utils import schema_context
@@ -39,25 +40,20 @@ with schema_context('demo'):
     u.is_staff = True
     u.is_superuser = True
     u.save()
-    print('Usuario demo OK:', u.username)
-" || echo "setup usuario demo: no crítico"
+    print('Usuario OK:', u.username)
+" || echo "usuario: no crítico"
 
-# 5. Archivos estáticos (rápido)
+# 5. Archivos estáticos
 echo "→ Collectstatic..."
 python manage.py collectstatic --noinput
 
-# 6. Importaciones de catálogos en BACKGROUND — no bloquean gunicorn
-#    Usan nohup para sobrevivir al exec que sigue
+# 6. Catálogos en background (no bloquean arranque)
 nohup bash -c "
   sleep 5
-  echo '→ [BG] Importar CUPS...'
-  python manage.py importar_cups || echo '[BG] CUPS ya importados'
-  echo '→ [BG] Importar CIE-10...'
-  python manage.py importar_cie10 || echo '[BG] CIE-10 ya importados'
-  echo '→ [BG] Catálogos listos.'
+  python manage.py importar_cups    || echo 'CUPS ya OK'
+  python manage.py importar_cie10   || echo 'CIE10 ya OK'
 " > /tmp/catalogos.log 2>&1 &
 
-# 7. Levantar gunicorn (reemplaza este proceso)
 echo "→ Levantando gunicorn..."
 exec gunicorn config.wsgi:application \
   --bind 0.0.0.0:${PORT:-8000} \
