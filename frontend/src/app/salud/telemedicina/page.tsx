@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import api, { mensajeError } from '@/lib/api'
-import { PageHeader, Button, Badge, EmptyState, Card } from '@/components/ui'
-import { Plus, Video, ExternalLink, CheckCircle2, Clock, X } from 'lucide-react'
+import { PageHeader, Button, Badge, EmptyState, Card, BuscadorPacienteIngreso } from '@/components/ui'
+import { Plus, Video, ExternalLink, CheckCircle2, Clock, X, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 
@@ -235,6 +235,8 @@ function NuevaTeleconsultaModal({ onClose, onSaved }: { onClose: () => void; onS
     duracion_estimada_min: '30', motivo_consulta: '',
   })
   const [saving, setSaving] = useState(false)
+  const [showBuscador, setShowBuscador] = useState(false)
+  const [pacienteNombre, setPacienteNombre] = useState('')
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
