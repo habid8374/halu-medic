@@ -2715,7 +2715,9 @@ class ConsentimientoViewSet(viewsets.ModelViewSet):
         ci.fecha_firma = timezone.now()
         ci.nombre_paciente_firmante = request.data.get('nombre_firmante', '')
         ci.nombre_acompanante = request.data.get('nombre_acompanante', '')
-        ci.parentesco_acompanante = request.data.get('parentesco', '')
+        ci.parentesco_acompanante = request.data.get('parentesco_acompanante', request.data.get('parentesco', ''))
+        ci.firma_imagen = request.data.get('firma_imagen', '')
+        ci.firma_acompanante_imagen = request.data.get('firma_acompanante_imagen', '')
         ci.medico = request.user
         ci.save()
         return Response(self.get_serializer(ci).data)

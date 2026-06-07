@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { consentimientosAPI, mensajeError } from '@/lib/api'
-import { PageHeader, Button, Badge, EmptyState, BuscadorPacienteIngreso } from '@/components/ui'
+import { PageHeader, Button, Badge, EmptyState, BuscadorPacienteIngreso, FirmarModal } from '@/components/ui'
 import { FileText, Plus, Check, X, Clock, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -17,6 +17,7 @@ interface Consentimiento {
   nombre_paciente_firmante: string
   fecha_firma: string | null
   creado_en: string
+  firma_imagen?: string
 }
 
 const TIPO_LABELS: Record<string, string> = {
@@ -38,6 +39,7 @@ export default function ConsentimientosPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [filtroEstado, setFiltroEstado] = useState('')
+  const [showFirmar, setShowFirmar] = useState<string | null>(null)
 
   const cargar = async () => {
     setLoading(true)
@@ -52,14 +54,8 @@ export default function ConsentimientosPage() {
 
   useEffect(() => { cargar() }, [filtroEstado])
 
-  const firmar = async (id: string) => {
-    const nombre = prompt('Nombre completo del paciente firmante:')
-    if (!nombre) return
-    try {
-      await consentimientosAPI.firmar(id, { nombre_firmante: nombre })
-      toast.success('Consentimiento firmado')
-      cargar()
-    } catch (e) { toast.error(mensajeError(e)) }
+  const firmar = (id: string) => {
+    setShowFirmar(id)
   }
 
   const rechazar = async (id: string) => {
@@ -124,9 +120,14 @@ export default function ConsentimientosPage() {
                   {c.procedimiento && ` · ${c.procedimiento}`}
                 </p>
                 {c.fecha_firma && (
-                  <p className="text-xs text-green-600 mt-0.5">
+                  <p className="text-xs text-green-600 mt-0.5 flex items-center gap-1.5">
                     Firmado: {new Date(c.fecha_firma).toLocaleDateString('es-CO')}
                     {c.nombre_paciente_firmante && ` — ${c.nombre_paciente_firmante}`}
+                    {c.firma_imagen && (
+                      <span className="inline-flex items-center gap-0.5 bg-green-100 text-green-700 text-[10px] font-semibold px-1.5 py-0.5 rounded">
+                        ✓ Firma digital
+                      </span>
+                    )}
                   </p>
                 )}
               </div>
@@ -151,6 +152,14 @@ export default function ConsentimientosPage() {
         <NuevoConsentimientoModal
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); cargar() }}
+        />
+      )}
+      {showFirmar && (
+        <FirmarModal
+          consentimientoId={showFirmar}
+          pacienteNombre={consentimientos.find(c => c.id === showFirmar)?.paciente_nombre ?? ''}
+          onClose={() => setShowFirmar(null)}
+          onFirmado={() => { setShowFirmar(null); cargar() }}
         />
       )}
     </div>
