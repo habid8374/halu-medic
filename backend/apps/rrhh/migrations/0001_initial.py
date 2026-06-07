@@ -143,7 +143,7 @@ class Migration(migrations.Migration):
                 ('contrato', models.ForeignKey(
                     blank=True, null=True,
                     on_delete=django.db.models.deletion.SET_NULL,
-                    to='rrhh.contratoempelado',
+                    to='rrhh.contratoempleado',
                 )),
                 ('empleado', models.ForeignKey(
                     on_delete=django.db.models.deletion.CASCADE,
