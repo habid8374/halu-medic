@@ -18,15 +18,14 @@ def plantilla_cups_rips(request):
         ['890401', 'CONSULTA DE PRIMERA VEZ POR MEDICINA ESPECIALIZADA',          '01', '01', '13', '2', '1', '01', '1'],
         ['890402', 'CONSULTA DE CONTROL O DE SEGUIMIENTO POR MEDICINA ESPECIALIZADA', '01', '01', '13', '2', '1', '01', '1'],
     ]
-    output = io.StringIO()
-    csv.writer(output).writerows(rows)
-    response = HttpResponse(
-        '﻿' + output.getvalue(),
-        content_type='text/csv; charset=utf-8-sig',
-    )
-    response['Content-Disposition'] = 'attachment; filename="plantilla_cups_rips.csv"'
-    response['Access-Control-Expose-Headers'] = 'Content-Disposition'
-    return response
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=',', quoting=csv.QUOTE_ALL)
+    for row in rows:
+        writer.writerow(row)
+    resp = HttpResponse(buf.getvalue(), content_type='text/csv; charset=utf-8')
+    resp['Content-Disposition'] = 'attachment; filename="plantilla_cups_rips.csv"'
+    resp['Access-Control-Expose-Headers'] = 'Content-Disposition'
+    return resp
 
 
 @api_view(['POST'])

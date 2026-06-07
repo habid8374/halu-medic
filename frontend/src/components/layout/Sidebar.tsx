@@ -173,10 +173,10 @@ export default function Sidebar() {
 
       {/* Consultorio activo */}
       <div className="mx-3 mt-3 p-3 bg-blue-800/40 rounded-xl border border-blue-700/40 flex items-center gap-2.5 flex-shrink-0">
-        <div className="w-7 h-7 bg-blue-700 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+        <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden shadow border border-white/30">
           {consultorioLogo
             ? <img src={consultorioLogo} alt="" className="w-full h-full object-contain" />
-            : <Building2 className="w-3.5 h-3.5 text-blue-200" />
+            : <Building2 className="w-4 h-4 text-blue-700" />
           }
         </div>
         <div className="min-w-0">
