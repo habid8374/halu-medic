@@ -7,7 +7,7 @@ Endpoints disponibles:
   /api/facturacion/facturas/
   /api/facturacion/facturas/{id}/emitir/
 """
-from rest_framework import serializers, viewsets, status
+from rest_framework import serializers, viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
@@ -3340,3 +3340,405 @@ class ResultadoLaboratorioViewSet(viewsets.ModelViewSet):
             solicitud.estado = 'resultado'
             solicitud.save(update_fields=['estado'])
         return Response(self.get_serializer(resultado).data)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# PHASE 5 — RRHH, OPERACIONES, EPIDEMIOLOGÍA, CONTABILIDAD
+# ════════════════════════════════════════════════════════════════════════════
+
+from apps.rrhh.models import Cargo, ContratoEmpleado, Turno, LiquidacionNomina, Incapacidad
+from apps.operaciones.models import (
+    EquipoEsterilizable, CicloEsterilizacion,
+    EquipoBiomedico, OrdenMantenimiento, DietaTerapeutica,
+)
+from apps.epidemiologia.models import NotificacionSIVIGILA, BrotEpidemico
+from apps.contabilidad.models import CuentaContable, AsientoContable, LineaAsiento, PresupuestoAnual
+
+
+# ── RRHH ──────────────────────────────────────────────────────────────────────
+
+class CargoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cargo
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
+class CargoViewSet(viewsets.ModelViewSet):
+    serializer_class = CargoSerializer
+    queryset = Cargo.objects.all()
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['nombre', 'departamento']
+
+
+class ContratoEmpleadoSerializer(serializers.ModelSerializer):
+    empleado_nombre = serializers.CharField(source='empleado.get_full_name', read_only=True)
+    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+
+    class Meta:
+        model = ContratoEmpleado
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en']
+
+
+class ContratoEmpleadoViewSet(viewsets.ModelViewSet):
+    serializer_class = ContratoEmpleadoSerializer
+
+    def get_queryset(self):
+        qs = ContratoEmpleado.objects.select_related('empleado', 'cargo')
+        emp = self.request.query_params.get('empleado')
+        if emp:
+            qs = qs.filter(empleado=emp)
+        est = self.request.query_params.get('estado')
+        if est:
+            qs = qs.filter(estado=est)
+        return qs
+
+
+class TurnoSerializer(serializers.ModelSerializer):
+    empleado_nombre = serializers.CharField(source='empleado.get_full_name', read_only=True)
+    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+
+    class Meta:
+        model = Turno
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
+class TurnoViewSet(viewsets.ModelViewSet):
+    serializer_class = TurnoSerializer
+
+    def get_queryset(self):
+        qs = Turno.objects.select_related('empleado')
+        emp = self.request.query_params.get('empleado')
+        if emp:
+            qs = qs.filter(empleado=emp)
+        fecha = self.request.query_params.get('fecha')
+        if fecha:
+            qs = qs.filter(fecha=fecha)
+        tipo = self.request.query_params.get('tipo')
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        return qs
+
+    @action(detail=False, methods=['post'], url_path='programar-semana')
+    def programar_semana(self, request):
+        """POST /api/rrhh/turnos/programar-semana/ — crea/actualiza turnos en lote para una semana.
+        Body: { turnos: [ {empleado, fecha, tipo, hora_inicio, hora_fin, servicio}, ... ] }
+        """
+        turnos_data = request.data.get('turnos', [])
+        if not turnos_data:
+            return Response({'error': 'Se requiere la lista de turnos.'}, status=status.HTTP_400_BAD_REQUEST)
+        creados = 0
+        actualizados = 0
+        errores = []
+        for item in turnos_data:
+            try:
+                empleado_id = item.get('empleado')
+                fecha = item.get('fecha')
+                defaults = {k: v for k, v in item.items() if k not in ('empleado', 'fecha')}
+                _, created = Turno.objects.update_or_create(
+                    empleado_id=empleado_id, fecha=fecha, defaults=defaults,
+                )
+                if created:
+                    creados += 1
+                else:
+                    actualizados += 1
+            except Exception as exc:
+                errores.append({'data': item, 'error': str(exc)})
+        return Response(
+            {'creados': creados, 'actualizados': actualizados, 'errores': errores},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class LiquidacionNominaSerializer(serializers.ModelSerializer):
+    empleado_nombre = serializers.CharField(source='empleado.get_full_name', read_only=True)
+
+    class Meta:
+        model = LiquidacionNomina
+        fields = '__all__'
+        read_only_fields = ['id', 'total_devengado', 'total_descuentos', 'neto_pagar', 'creado_en']
+
+
+class LiquidacionNominaViewSet(viewsets.ModelViewSet):
+    serializer_class = LiquidacionNominaSerializer
+
+    def get_queryset(self):
+        qs = LiquidacionNomina.objects.select_related('empleado', 'contrato')
+        emp = self.request.query_params.get('empleado')
+        if emp:
+            qs = qs.filter(empleado=emp)
+        est = self.request.query_params.get('estado')
+        if est:
+            qs = qs.filter(estado=est)
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def aprobar(self, request, pk=None):
+        """POST /api/rrhh/nomina/{id}/aprobar/ — aprueba la liquidación."""
+        liq = self.get_object()
+        if liq.estado != 'borrador':
+            return Response({'error': 'Solo se pueden aprobar liquidaciones en borrador.'}, status=status.HTTP_400_BAD_REQUEST)
+        liq.estado = 'aprobada'
+        liq.save(update_fields=['estado'])
+        return Response(self.get_serializer(liq).data)
+
+    @action(detail=True, methods=['post'])
+    def pagar(self, request, pk=None):
+        """POST /api/rrhh/nomina/{id}/pagar/ — registra la liquidación como pagada."""
+        liq = self.get_object()
+        if liq.estado != 'aprobada':
+            return Response({'error': 'Solo se pueden pagar liquidaciones aprobadas.'}, status=status.HTTP_400_BAD_REQUEST)
+        liq.estado = 'pagada'
+        liq.save(update_fields=['estado'])
+        return Response(self.get_serializer(liq).data)
+
+
+class IncapacidadSerializer(serializers.ModelSerializer):
+    empleado_nombre = serializers.CharField(source='empleado.get_full_name', read_only=True)
+    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+
+    class Meta:
+        model = Incapacidad
+        fields = '__all__'
+        read_only_fields = ['id', 'dias', 'creado_en']
+
+
+class IncapacidadViewSet(viewsets.ModelViewSet):
+    serializer_class = IncapacidadSerializer
+
+    def get_queryset(self):
+        qs = Incapacidad.objects.select_related('empleado')
+        emp = self.request.query_params.get('empleado')
+        if emp:
+            qs = qs.filter(empleado=emp)
+        return qs
+
+
+# ── ESTERILIZACIÓN ────────────────────────────────────────────────────────────
+
+class EquipoEsterilizableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EquipoEsterilizable
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
+class EquipoEsterilizableViewSet(viewsets.ModelViewSet):
+    serializer_class = EquipoEsterilizableSerializer
+    queryset = EquipoEsterilizable.objects.all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['codigo', 'nombre']
+
+
+class CicloEsterilizacionSerializer(serializers.ModelSerializer):
+    metodo_display = serializers.CharField(source='get_metodo_display', read_only=True)
+    operador_nombre = serializers.CharField(source='operador.get_full_name', read_only=True)
+
+    class Meta:
+        model = CicloEsterilizacion
+        fields = '__all__'
+        read_only_fields = ['id', 'numero_ciclo', 'creado_en']
+
+
+class CicloEsterilizacionViewSet(viewsets.ModelViewSet):
+    serializer_class = CicloEsterilizacionSerializer
+
+    def get_queryset(self):
+        qs = CicloEsterilizacion.objects.select_related('operador').prefetch_related('equipos')
+        resultado = self.request.query_params.get('resultado')
+        if resultado:
+            qs = qs.filter(resultado=resultado)
+        return qs
+
+
+# ── MANTENIMIENTO BIOMÉDICO ────────────────────────────────────────────────────
+
+class EquipoBiomedicoSerializer(serializers.ModelSerializer):
+    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+    estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model = EquipoBiomedico
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
+class EquipoBiomedicoViewSet(viewsets.ModelViewSet):
+    serializer_class = EquipoBiomedicoSerializer
+    queryset = EquipoBiomedico.objects.all()
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['codigo_inventario', 'nombre', 'serial', 'marca']
+
+
+class OrdenMantenimientoSerializer(serializers.ModelSerializer):
+    equipo_nombre = serializers.CharField(source='equipo.nombre', read_only=True)
+    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+
+    class Meta:
+        model = OrdenMantenimiento
+        fields = '__all__'
+        read_only_fields = ['id', 'numero_orden', 'fecha_solicitud']
+
+
+class OrdenMantenimientoViewSet(viewsets.ModelViewSet):
+    serializer_class = OrdenMantenimientoSerializer
+
+    def get_queryset(self):
+        qs = OrdenMantenimiento.objects.select_related('equipo', 'solicitado_por')
+        equipo = self.request.query_params.get('equipo')
+        if equipo:
+            qs = qs.filter(equipo=equipo)
+        est = self.request.query_params.get('estado')
+        if est:
+            qs = qs.filter(estado=est)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(solicitado_por=self.request.user)
+
+
+# ── NUTRICIÓN ─────────────────────────────────────────────────────────────────
+
+class DietaTerapeuticaSerializer(serializers.ModelSerializer):
+    tipo_dieta_display = serializers.CharField(source='get_tipo_dieta_display', read_only=True)
+
+    class Meta:
+        model = DietaTerapeutica
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en']
+
+
+class DietaTerapeuticaViewSet(viewsets.ModelViewSet):
+    serializer_class = DietaTerapeuticaSerializer
+
+    def get_queryset(self):
+        qs = DietaTerapeutica.objects.select_related('paciente', 'ingreso', 'medico_prescriptor')
+        paciente = self.request.query_params.get('paciente')
+        if paciente:
+            qs = qs.filter(paciente=paciente)
+        ingreso = self.request.query_params.get('ingreso')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        return qs
+
+
+# ── EPIDEMIOLOGÍA / SIVIGILA ───────────────────────────────────────────────────
+
+class NotificacionSIVIGILASerializer(serializers.ModelSerializer):
+    evento_display = serializers.CharField(source='get_evento_display', read_only=True)
+    clasificacion_display = serializers.CharField(source='get_clasificacion_display', read_only=True)
+    paciente_nombre = serializers.CharField(source='paciente.__str__', read_only=True)
+
+    class Meta:
+        model = NotificacionSIVIGILA
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en', 'actualizado_en']
+
+
+class NotificacionSIVIGILAViewSet(viewsets.ModelViewSet):
+    serializer_class = NotificacionSIVIGILASerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['evento', 'numero_sivigila']
+
+    def get_queryset(self):
+        qs = NotificacionSIVIGILA.objects.select_related('paciente', 'notificado_por')
+        evento = self.request.query_params.get('evento')
+        if evento:
+            qs = qs.filter(evento=evento)
+        estado = self.request.query_params.get('estado')
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(notificado_por=self.request.user)
+
+
+class BrotEpidemicoSerializer(serializers.ModelSerializer):
+    evento_display = serializers.CharField(source='get_evento_display', read_only=True)
+
+    class Meta:
+        model = BrotEpidemico
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en']
+
+
+class BrotEpidemicoViewSet(viewsets.ModelViewSet):
+    serializer_class = BrotEpidemicoSerializer
+
+    def get_queryset(self):
+        return BrotEpidemico.objects.prefetch_related('notificaciones').select_related('responsable')
+
+
+# ── CONTABILIDAD ──────────────────────────────────────────────────────────────
+
+class CuentaContableSerializer(serializers.ModelSerializer):
+    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+
+    class Meta:
+        model = CuentaContable
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
+class CuentaContableViewSet(viewsets.ModelViewSet):
+    serializer_class = CuentaContableSerializer
+    queryset = CuentaContable.objects.all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['codigo', 'nombre']
+
+
+class LineaAsientoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LineaAsiento
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
+class AsientoContableSerializer(serializers.ModelSerializer):
+    lineas = LineaAsientoSerializer(many=True, required=False)
+    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+
+    class Meta:
+        model = AsientoContable
+        fields = '__all__'
+        read_only_fields = ['id', 'numero', 'creado_en']
+
+    def create(self, validated_data):
+        lineas_data = validated_data.pop('lineas', [])
+        asiento = AsientoContable.objects.create(**validated_data)
+        for linea in lineas_data:
+            LineaAsiento.objects.create(asiento=asiento, **linea)
+        return asiento
+
+
+class AsientoContableViewSet(viewsets.ModelViewSet):
+    serializer_class = AsientoContableSerializer
+
+    def get_queryset(self):
+        qs = AsientoContable.objects.prefetch_related('lineas').select_related('creado_por')
+        tipo = self.request.query_params.get('tipo')
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        estado = self.request.query_params.get('estado')
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(creado_por=self.request.user)
+
+
+class PresupuestoAnualSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PresupuestoAnual
+        fields = '__all__'
+        read_only_fields = ['id', 'creado_en']
+
+
+class PresupuestoAnualViewSet(viewsets.ModelViewSet):
+    serializer_class = PresupuestoAnualSerializer
+    queryset = PresupuestoAnual.objects.all()
+

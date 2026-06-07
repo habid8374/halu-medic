@@ -71,6 +71,24 @@ from config.api import (
     SolicitudLaboratorioViewSet,
     ResultadoLaboratorioViewSet,
 )
+from config.api import (
+    # Phase 5
+    CargoViewSet,
+    ContratoEmpleadoViewSet,
+    TurnoViewSet,
+    LiquidacionNominaViewSet,
+    IncapacidadViewSet,
+    EquipoEsterilizableViewSet,
+    CicloEsterilizacionViewSet,
+    EquipoBiomedicoViewSet,
+    OrdenMantenimientoViewSet,
+    DietaTerapeuticaViewSet,
+    NotificacionSIVIGILAViewSet,
+    BrotEpidemicoViewSet,
+    CuentaContableViewSet,
+    AsientoContableViewSet,
+    PresupuestoAnualViewSet,
+)
 from apps.tarifas.api import ManualTarifarioViewSet
 from apps.usuarios.auth import (
     LoginView,
@@ -140,6 +158,27 @@ router.register(r'farmacia/dispensaciones',          DispensacionMedicamentoView
 # ── Laboratorio ───────────────────────────────────────────────────────────────
 router.register(r'laboratorio/solicitudes',          SolicitudLaboratorioViewSet,      basename='solicitud-laboratorio')
 router.register(r'laboratorio/resultados',           ResultadoLaboratorioViewSet,      basename='resultado-laboratorio')
+# ── RRHH ──────────────────────────────────────────────────────────────────────
+router.register(r'rrhh/cargos',                      CargoViewSet,                     basename='cargo')
+router.register(r'rrhh/contratos',                   ContratoEmpleadoViewSet,          basename='contrato')
+router.register(r'rrhh/turnos',                      TurnoViewSet,                     basename='turno')
+router.register(r'rrhh/nomina',                      LiquidacionNominaViewSet,         basename='liquidacion-nomina')
+router.register(r'rrhh/incapacidades',               IncapacidadViewSet,               basename='incapacidad')
+# ── Esterilización ────────────────────────────────────────────────────────────
+router.register(r'operaciones/equipos-esterilizables', EquipoEsterilizableViewSet,     basename='equipo-esterilizable')
+router.register(r'operaciones/ciclos-esterilizacion',  CicloEsterilizacionViewSet,     basename='ciclo-esterilizacion')
+# ── Mantenimiento Biomédico ───────────────────────────────────────────────────
+router.register(r'operaciones/equipos-biomedicos',   EquipoBiomedicoViewSet,           basename='equipo-biomedico')
+router.register(r'operaciones/mantenimiento',        OrdenMantenimientoViewSet,        basename='orden-mantenimiento')
+# ── Nutrición ─────────────────────────────────────────────────────────────────
+router.register(r'operaciones/dietas',               DietaTerapeuticaViewSet,          basename='dieta')
+# ── Epidemiología ─────────────────────────────────────────────────────────────
+router.register(r'epidemiologia/notificaciones',     NotificacionSIVIGILAViewSet,      basename='notificacion-sivigila')
+router.register(r'epidemiologia/brotes',             BrotEpidemicoViewSet,             basename='brote-epidemico')
+# ── Contabilidad ──────────────────────────────────────────────────────────────
+router.register(r'contabilidad/cuentas',             CuentaContableViewSet,            basename='cuenta-contable')
+router.register(r'contabilidad/asientos',            AsientoContableViewSet,           basename='asiento-contable')
+router.register(r'contabilidad/presupuestos',        PresupuestoAnualViewSet,          basename='presupuesto-anual')
 
 urlpatterns = [
     path('api/health/', health, name='health'),

@@ -431,3 +431,111 @@ export const enfermeriaAPI = {
   create: (data: Record<string, unknown>) => api.post('/api/salud/enfermeria/', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/api/salud/enfermeria/${id}/`, data),
 }
+
+// ── RRHH ──────────────────────────────────────────────────────────────────────
+export const cargoAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/rrhh/cargos/', { params }),
+  create: (data: Record<string, unknown>) => api.post('/api/rrhh/cargos/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/rrhh/cargos/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/rrhh/cargos/${id}/`),
+}
+
+export const contratoAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/rrhh/contratos/', { params }),
+  get:    (id: string) => api.get(`/api/rrhh/contratos/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/rrhh/contratos/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/rrhh/contratos/${id}/`, data),
+}
+
+export const turnoAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/rrhh/turnos/', { params }),
+  create: (data: Record<string, unknown>) => api.post('/api/rrhh/turnos/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/rrhh/turnos/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/rrhh/turnos/${id}/`),
+}
+
+export const nominaAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/rrhh/nomina/', { params }),
+  get:    (id: string) => api.get(`/api/rrhh/nomina/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/rrhh/nomina/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/rrhh/nomina/${id}/`, data),
+}
+
+export const incapacidadRRHHAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/rrhh/incapacidades/', { params }),
+  create: (data: Record<string, unknown>) => api.post('/api/rrhh/incapacidades/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/rrhh/incapacidades/${id}/`, data),
+}
+
+// ── Esterilización ────────────────────────────────────────────────────────────
+export const esterilizacionAPI = {
+  equipos: {
+    list:   (params?: Record<string, unknown>) => api.get('/api/operaciones/equipos-esterilizables/', { params }),
+    create: (data: Record<string, unknown>) => api.post('/api/operaciones/equipos-esterilizables/', data),
+    update: (id: string, data: Record<string, unknown>) => api.patch(`/api/operaciones/equipos-esterilizables/${id}/`, data),
+  },
+  ciclos: {
+    list:   (params?: Record<string, unknown>) => api.get('/api/operaciones/ciclos-esterilizacion/', { params }),
+    get:    (id: string) => api.get(`/api/operaciones/ciclos-esterilizacion/${id}/`),
+    create: (data: Record<string, unknown>) => api.post('/api/operaciones/ciclos-esterilizacion/', data),
+    update: (id: string, data: Record<string, unknown>) => api.patch(`/api/operaciones/ciclos-esterilizacion/${id}/`, data),
+  },
+}
+
+// ── Mantenimiento Biomédico ───────────────────────────────────────────────────
+export const mantenimientoAPI = {
+  equipos: {
+    list:   (params?: Record<string, unknown>) => api.get('/api/operaciones/equipos-biomedicos/', { params }),
+    get:    (id: string) => api.get(`/api/operaciones/equipos-biomedicos/${id}/`),
+    create: (data: Record<string, unknown>) => api.post('/api/operaciones/equipos-biomedicos/', data),
+    update: (id: string, data: Record<string, unknown>) => api.patch(`/api/operaciones/equipos-biomedicos/${id}/`, data),
+  },
+  ordenes: {
+    list:   (params?: Record<string, unknown>) => api.get('/api/operaciones/mantenimiento/', { params }),
+    get:    (id: string) => api.get(`/api/operaciones/mantenimiento/${id}/`),
+    create: (data: Record<string, unknown>) => api.post('/api/operaciones/mantenimiento/', data),
+    update: (id: string, data: Record<string, unknown>) => api.patch(`/api/operaciones/mantenimiento/${id}/`, data),
+  },
+}
+
+// ── Nutrición ─────────────────────────────────────────────────────────────────
+export const dietaAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/operaciones/dietas/', { params }),
+  create: (data: Record<string, unknown>) => api.post('/api/operaciones/dietas/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/operaciones/dietas/${id}/`, data),
+}
+
+// ── Epidemiología / SIVIGILA ──────────────────────────────────────────────────
+export const sivigilaAPI = {
+  notificaciones: {
+    list:   (params?: Record<string, unknown>) => api.get('/api/epidemiologia/notificaciones/', { params }),
+    get:    (id: string) => api.get(`/api/epidemiologia/notificaciones/${id}/`),
+    create: (data: Record<string, unknown>) => api.post('/api/epidemiologia/notificaciones/', data),
+    update: (id: string, data: Record<string, unknown>) => api.patch(`/api/epidemiologia/notificaciones/${id}/`, data),
+  },
+  brotes: {
+    list:   (params?: Record<string, unknown>) => api.get('/api/epidemiologia/brotes/', { params }),
+    create: (data: Record<string, unknown>) => api.post('/api/epidemiologia/brotes/', data),
+    update: (id: string, data: Record<string, unknown>) => api.patch(`/api/epidemiologia/brotes/${id}/`, data),
+  },
+}
+
+// ── Contabilidad ──────────────────────────────────────────────────────────────
+export const contabilidadAPI = {
+  cuentas: {
+    list:   (params?: Record<string, unknown>) => api.get('/api/contabilidad/cuentas/', { params }),
+    create: (data: Record<string, unknown>) => api.post('/api/contabilidad/cuentas/', data),
+    update: (id: string, data: Record<string, unknown>) => api.patch(`/api/contabilidad/cuentas/${id}/`, data),
+  },
+  asientos: {
+    list:   (params?: Record<string, unknown>) => api.get('/api/contabilidad/asientos/', { params }),
+    get:    (id: string) => api.get(`/api/contabilidad/asientos/${id}/`),
+    create: (data: Record<string, unknown>) => api.post('/api/contabilidad/asientos/', data),
+    update: (id: string, data: Record<string, unknown>) => api.patch(`/api/contabilidad/asientos/${id}/`, data),
+  },
+  presupuestos: {
+    list:   () => api.get('/api/contabilidad/presupuestos/'),
+    create: (data: Record<string, unknown>) => api.post('/api/contabilidad/presupuestos/', data),
+    update: (id: string, data: Record<string, unknown>) => api.patch(`/api/contabilidad/presupuestos/${id}/`, data),
+  },
+}

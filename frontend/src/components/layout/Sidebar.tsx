@@ -11,7 +11,7 @@ import {
   LogOut, ChevronRight, ChevronDown, Building2, ShieldCheck,
   FileJson, ListTree, BookOpen, Stethoscope, FileSpreadsheet,
   Menu, X, UserCog, HeartPulse, BedDouble, Microscope, Scissors,
-  Pill, FlaskConical,
+  Pill, FlaskConical, UserCheck, Wrench, Activity, Calculator,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -56,6 +56,27 @@ const navItems: NavItem[] = [
   },
   { href: '/farmacia',    label: 'Farmacia',     icon: Pill,         requiere: 'puede_ver_clinica' },
   { href: '/laboratorio', label: 'Laboratorio',  icon: FlaskConical, requiere: 'puede_ver_clinica' },
+  {
+    label: 'RRHH',
+    icon: UserCheck,
+    requiere: 'es_admin',
+    children: [
+      { href: '/rrhh',               label: 'Contratos y turnos' },
+      { href: '/rrhh/incapacidades', label: 'Incapacidades' },
+    ],
+  },
+  {
+    label: 'Operaciones',
+    icon: Wrench,
+    requiere: 'es_admin',
+    children: [
+      { href: '/operaciones/esterilizacion', label: 'Esterilización' },
+      { href: '/operaciones/mantenimiento',  label: 'Mantenimiento biomédico' },
+      { href: '/operaciones/nutricion',      label: 'Nutrición y dietas' },
+    ],
+  },
+  { href: '/epidemiologia', label: 'Epidemiología / SIVIGILA', icon: Activity, requiere: 'es_admin' },
+  { href: '/contabilidad',  label: 'Contabilidad',             icon: Calculator, requiere: 'es_admin' },
   {
     label: 'Facturación',
     icon: Receipt,
@@ -103,9 +124,13 @@ export default function Sidebar() {
   // Submenús abiertos — auto-abre si la ruta activa está dentro
   const isFacturacionActive = pathname.startsWith('/facturacion')
   const isSaludActive = pathname.startsWith('/salud') || pathname.startsWith('/historia-clinica') || pathname.startsWith('/consultas')
+  const isRRHHActive = pathname.startsWith('/rrhh')
+  const isOperacionesActive = pathname.startsWith('/operaciones')
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     Facturación: isFacturacionActive,
     Salud: isSaludActive,
+    RRHH: isRRHHActive,
+    Operaciones: isOperacionesActive,
   })
 
   if (!usuario) return null
