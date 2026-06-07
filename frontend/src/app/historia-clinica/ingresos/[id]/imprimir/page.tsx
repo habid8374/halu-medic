@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ingresosAPI, notasMedicasAPI } from '@/lib/api'
+import { ingresosAPI, notasMedicasAPI, ayudasDiagnosticasAPI } from '@/lib/api'
 import { Ingreso, NotaMedica } from '@/types'
 
 function fmtFecha(s?: string | null) {
@@ -74,19 +74,23 @@ export default function ImprimirPage() {
 
   const [ingreso, setIngreso] = useState<Ingreso | null>(null)
   const [notas, setNotas] = useState<NotaMedica[]>([])
+  const [ayudas, setAyudas] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function cargar() {
       try {
-        const [resIngreso, resNotas] = await Promise.all([
+        const [resIngreso, resNotas, resAyudas] = await Promise.all([
           ingresosAPI.get(id),
           notasMedicasAPI.list({ ingreso: id, ordering: 'fecha_hora', page_size: '200' }),
+          ayudasDiagnosticasAPI.list({ ingreso: id, page_size: '200' }).catch(() => ({ data: [] })),
         ])
         setIngreso(resIngreso.data)
         const notasData = resNotas.data?.results ?? resNotas.data ?? []
         setNotas(notasData)
+        const ayudasData = resAyudas.data?.results ?? resAyudas.data ?? []
+        setAyudas(Array.isArray(ayudasData) ? ayudasData : [])
       } catch (e: unknown) {
         setError('No se pudo cargar la historia clínica.')
         console.error(e)
@@ -279,6 +283,32 @@ export default function ImprimirPage() {
                 </div>
               </div>
             ))}
+          </Section>
+        )}
+
+        {/* ── Ayudas diagnósticas ── */}
+        {ayudas.length > 0 && (
+          <Section title={`Ayudas Diagnósticas (${ayudas.length})`}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Tipo</th>
+                  <th style={{ textAlign: 'left' }}>Descripción</th>
+                  <th style={{ textAlign: 'left' }}>Fecha</th>
+                  <th style={{ textAlign: 'left' }}>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ayudas.map((a: any) => (
+                  <tr key={a.id}>
+                    <td>{a.tipo_label ?? a.tipo ?? '—'}</td>
+                    <td>{a.descripcion ?? a.nombre ?? '—'}</td>
+                    <td>{fmtFecha(a.fecha ?? a.creado_en)}</td>
+                    <td>{a.estado_label ?? a.estado ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </Section>
         )}
 

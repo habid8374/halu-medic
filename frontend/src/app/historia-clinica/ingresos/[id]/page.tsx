@@ -763,6 +763,11 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
             Ver paciente
           </button>
         </Link>
+        <button
+          onClick={() => window.open(`/historia-clinica/ingresos/${id}/imprimir`, '_blank')}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <Printer className="w-4 h-4" />Imprimir HC
+        </button>
       </div>
 
       {/* Timeline HC */}
