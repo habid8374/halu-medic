@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
 import { dashboardAPI, pacientesAPI, citasAPI, consultasAPI, facturasAPI } from '@/lib/api'
@@ -12,14 +12,18 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 
+const horaCol = () => new Date().toLocaleTimeString('es-CO', {
+  timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+})
+
 const saludar = (nombre: string) => {
-  const h = new Date().getHours()
+  const h = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' })).getHours()
   const s = h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches'
   return `${s}, ${nombre.split(' ')[0]}`
 }
 
 const fechaHoy = () => new Date().toLocaleDateString('es-CO', {
-  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  timeZone: 'America/Bogota', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
 })
 
 interface DashStats {
@@ -121,6 +125,12 @@ export default function DashboardPage() {
       .finally(() => setLoadingIngresos(false))
   }, [])
 
+  const [hora, setHora] = useState(horaCol())
+  useEffect(() => {
+    const t = setInterval(() => setHora(horaCol()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
   if (!usuario) return null
 
   const p = usuario.permisos
@@ -148,7 +158,8 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{saludar(usuario.nombre)}</h1>
-          <p className="text-slate-500 text-sm mt-1 capitalize">{fechaHoy()}</p>
+          <p className="text-slate-500 text-sm mt-0.5 capitalize">{fechaHoy()}</p>
+          <p className="text-slate-400 text-xs mt-0.5 font-mono">{hora} · Colombia</p>
         </div>
         <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-1.5 rounded-full border border-emerald-100">
           <Activity className="w-3.5 h-3.5" />

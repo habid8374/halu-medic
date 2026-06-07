@@ -157,7 +157,7 @@ export default function Sidebar() {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="h-16 flex items-center px-4 border-b border-slate-100 flex-shrink-0">
+      <div className="h-16 flex items-center px-4 border-b border-blue-800/50 flex-shrink-0">
         <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-2 flex-1 min-w-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-icon.png" alt="" className="h-9 w-9 object-contain flex-shrink-0" />
@@ -172,16 +172,16 @@ export default function Sidebar() {
       </div>
 
       {/* Consultorio activo */}
-      <div className="mx-3 mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5 flex-shrink-0">
-        <div className="w-7 h-7 bg-halu-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+      <div className="mx-3 mt-3 p-3 bg-blue-800/40 rounded-xl border border-blue-700/40 flex items-center gap-2.5 flex-shrink-0">
+        <div className="w-7 h-7 bg-blue-700 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
           {consultorioLogo
             ? <img src={consultorioLogo} alt="" className="w-full h-full object-contain" />
-            : <Building2 className="w-3.5 h-3.5 text-halu-600" />
+            : <Building2 className="w-3.5 h-3.5 text-blue-200" />
           }
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-700 truncate">{consultorioNombre || 'Mi Consultorio'}</p>
-          {consultorioDominio && <p className="text-xs text-slate-400">{consultorioDominio}</p>}
+          <p className="text-xs font-medium text-blue-100 truncate">{consultorioNombre || 'Mi Consultorio'}</p>
+          {consultorioDominio && <p className="text-xs text-blue-300">{consultorioDominio}</p>}
         </div>
       </div>
 
@@ -199,21 +199,21 @@ export default function Sidebar() {
                   className={clsx(
                     'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group',
                     anyChildActive
-                      ? 'bg-halu-50 text-halu-700'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      ? 'bg-white/15 text-white'
+                      : 'text-blue-200 hover:bg-white/10 hover:text-white'
                   )}
                 >
                   <item.icon className={clsx('w-4 h-4 flex-shrink-0 transition-colors',
-                    anyChildActive ? 'text-halu-600' : 'text-slate-400 group-hover:text-slate-600'
+                    anyChildActive ? 'text-white' : 'text-blue-300 group-hover:text-white'
                   )} />
                   <span className="flex-1 text-left">{item.label}</span>
                   {isOpen
-                    ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                    : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    ? <ChevronDown className="w-3.5 h-3.5 text-blue-300" />
+                    : <ChevronRight className="w-3.5 h-3.5 text-blue-300" />
                   }
                 </button>
                 {isOpen && (
-                  <div className="ml-4 mt-0.5 space-y-0.5 border-l-2 border-slate-100 pl-3">
+                  <div className="ml-4 mt-0.5 space-y-0.5 border-l-2 border-blue-700/50 pl-3">
                     {item.children.map(child => {
                       const childActive = pathname === child.href || pathname.startsWith(child.href + '/')
                       return (
@@ -224,12 +224,12 @@ export default function Sidebar() {
                           className={clsx(
                             'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all',
                             childActive
-                              ? 'bg-halu-50 text-halu-700 font-medium'
-                              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                              ? 'bg-white/15 text-white font-medium'
+                              : 'text-blue-300 hover:bg-white/10 hover:text-white'
                           )}
                         >
                           <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0',
-                            childActive ? 'bg-halu-500' : 'bg-slate-300'
+                            childActive ? 'bg-white' : 'bg-blue-500'
                           )} />
                           {child.label}
                         </Link>
@@ -251,42 +251,40 @@ export default function Sidebar() {
               className={clsx(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group',
                 active
-                  ? 'bg-halu-50 text-halu-700'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  ? 'bg-white/15 text-white'
+                  : 'text-blue-200 hover:bg-white/10 hover:text-white'
               )}
             >
               <item.icon className={clsx('w-4 h-4 flex-shrink-0 transition-colors',
-                active ? 'text-halu-600' : 'text-slate-400 group-hover:text-slate-600'
+                active ? 'text-white' : 'text-blue-300 group-hover:text-white'
               )} />
               <span className="flex-1">{item.label}</span>
-              {active && <ChevronRight className="w-3.5 h-3.5 text-halu-400" />}
+              {active && <ChevronRight className="w-3.5 h-3.5 text-blue-300" />}
             </Link>
           )
         })}
       </nav>
 
       {/* Usuario */}
-      <div className="p-3 border-t border-slate-100 flex-shrink-0">
-        <div className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors">
-          <div className="w-8 h-8 bg-gradient-to-br from-halu-500 to-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
+      <div className="p-3 border-t border-blue-800/50 flex-shrink-0">
+        <div className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/10 transition-colors">
+          <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-blue-400 rounded-full flex items-center justify-center flex-shrink-0">
             <span className="text-white text-xs font-bold">
               {usuario.nombre.charAt(0).toUpperCase()}
             </span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-slate-900 truncate leading-none">
+            <p className="text-sm font-medium text-white truncate leading-none">
               {usuario.nombre}
             </p>
-            <span className={clsx('text-xs px-1.5 py-0.5 rounded-md font-medium mt-1 inline-block',
-              rolColor[usuario.rol] || 'bg-slate-100 text-slate-600'
-            )}>
+            <span className="text-xs text-blue-300 mt-0.5 inline-block">
               {usuario.rol_label}
             </span>
           </div>
           <button
             onClick={handleLogout}
             title="Cerrar sesión"
-            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            className="p-1.5 text-blue-300 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition-colors"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -319,7 +317,7 @@ export default function Sidebar() {
 
       {/* Sidebar móvil — drawer */}
       <aside className={clsx(
-        'fixed inset-y-0 left-0 z-50 w-[var(--sidebar-width)] bg-white border-r border-slate-100 transition-transform duration-300 lg:hidden',
+        'fixed inset-y-0 left-0 z-50 w-[var(--sidebar-width)] bg-[#0f2d5e] border-r border-blue-900 transition-transform duration-300 lg:hidden',
         open ? 'translate-x-0' : '-translate-x-full'
       )}>
         <button
@@ -332,7 +330,7 @@ export default function Sidebar() {
       </aside>
 
       {/* Sidebar desktop — siempre visible */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[var(--sidebar-width)] bg-white border-r border-slate-100 flex-col z-40">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[var(--sidebar-width)] bg-[#0f2d5e] border-r border-blue-900 flex-col z-40">
         {sidebarContent}
       </aside>
     </>
