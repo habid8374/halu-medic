@@ -14,6 +14,7 @@ import {
   Pill, FlaskConical, UserCheck, Wrench, Activity, Calculator,
 } from 'lucide-react'
 import clsx from 'clsx'
+import NotificacionesBell from './NotificacionesBell'
 
 interface SubItem {
   href: string
@@ -155,13 +156,14 @@ export default function Sidebar() {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-slate-100 flex-shrink-0">
-        <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-2">
+        <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-2 flex-1 min-w-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-icon.png" alt="" className="h-9 w-9 object-contain flex-shrink-0" />
           <span className="text-[1.35rem] font-extrabold tracking-tight leading-none" style={{ fontFamily: "'Nunito', 'Poppins', sans-serif" }}>
             <span style={{ color: '#1a3a6b' }}>Halu</span><span style={{ color: '#00b5b5' }}>Medic</span>
           </span>
         </Link>
+        <NotificacionesBell />
       </div>
 
       {/* Consultorio activo */}

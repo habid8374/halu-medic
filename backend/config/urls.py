@@ -71,6 +71,7 @@ from config.api import (
     SolicitudLaboratorioViewSet,
     ResultadoLaboratorioViewSet,
 )
+from config.api import dashboard_stats
 from config.api import (
     # Phase 5
     CargoViewSet,
@@ -88,6 +89,7 @@ from config.api import (
     CuentaContableViewSet,
     AsientoContableViewSet,
     PresupuestoAnualViewSet,
+    NotificacionViewSet,
 )
 from apps.tarifas.api import ManualTarifarioViewSet
 from apps.usuarios.auth import (
@@ -179,6 +181,7 @@ router.register(r'epidemiologia/brotes',             BrotEpidemicoViewSet,      
 router.register(r'contabilidad/cuentas',             CuentaContableViewSet,            basename='cuenta-contable')
 router.register(r'contabilidad/asientos',            AsientoContableViewSet,           basename='asiento-contable')
 router.register(r'contabilidad/presupuestos',        PresupuestoAnualViewSet,          basename='presupuesto-anual')
+router.register(r'notificaciones',                   NotificacionViewSet,              basename='notificacion')
 
 urlpatterns = [
     path('api/health/', health, name='health'),
@@ -210,4 +213,7 @@ urlpatterns = [
 
     # ── Reportes ──────────────────────────────────────────────────────────────
     path('api/reportes/', ReportesView.as_view(), name='reportes'),
+
+    # ── Dashboard stats ───────────────────────────────────────────────────────
+    path('api/dashboard/stats/', dashboard_stats, name='dashboard_stats'),
 ]

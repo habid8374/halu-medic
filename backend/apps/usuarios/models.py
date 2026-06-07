@@ -9,6 +9,7 @@ Jerarquía de roles:
   FACTURADOR  → Facturación y RIPS, sin acceso clínico
   AUDITOR     → Solo lectura en todo
 """
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 import uuid
@@ -105,3 +106,31 @@ class Usuario(AbstractUser):
     @property
     def solo_lectura(self):
         return self.rol == Rol.AUDITOR
+
+
+class Notificacion(models.Model):
+    TIPO_CHOICES = [
+        ('cita', 'Cita próxima'),
+        ('ingreso', 'Nuevo ingreso'),
+        ('resultado', 'Resultado disponible'),
+        ('turno', 'Turno asignado'),
+        ('contrato', 'Contrato por vencer'),
+        ('sistema', 'Sistema'),
+    ]
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notificaciones',
+    )
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    titulo = models.CharField(max_length=200)
+    mensaje = models.TextField()
+    leida = models.BooleanField(default=False)
+    url = models.CharField(max_length=300, blank=True)
+    creada_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-creada_en']
+
+    def __str__(self):
+        return f'{self.titulo} → {self.usuario}'

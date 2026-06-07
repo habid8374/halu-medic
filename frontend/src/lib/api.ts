@@ -134,6 +134,14 @@ export const consultasAPI = {
   update: (id: string, data: Record<string, unknown>) => api.put(`/api/consultas/${id}/`, data),
 }
 
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+export const dashboardAPI = {
+  stats:           () => api.get('/api/dashboard/stats/'),
+  ingresosActivos: (params?: Record<string, unknown>) =>
+    api.get('/api/historia/ingresos/', { params: { activo: 'true', ordering: '-fecha_ingreso', page_size: 5, ...params } }),
+}
+
 // ── Facturación ───────────────────────────────────────────────────────────────
 
 export const facturasAPI = {
@@ -538,4 +546,11 @@ export const contabilidadAPI = {
     create: (data: Record<string, unknown>) => api.post('/api/contabilidad/presupuestos/', data),
     update: (id: string, data: Record<string, unknown>) => api.patch(`/api/contabilidad/presupuestos/${id}/`, data),
   },
+}
+
+// ── Notificaciones ────────────────────────────────────────────────────────────
+export const notificacionesAPI = {
+  list: () => api.get('/api/notificaciones/'),
+  marcarLeida: (id: string) => api.post(`/api/notificaciones/${id}/marcar_leida/`),
+  marcarTodasLeidas: () => api.post('/api/notificaciones/marcar_todas_leidas/'),
 }

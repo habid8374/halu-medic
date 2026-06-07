@@ -3744,3 +3744,71 @@ class PresupuestoAnualViewSet(viewsets.ModelViewSet):
     serializer_class = PresupuestoAnualSerializer
     queryset = PresupuestoAnual.objects.all()
 
+
+# ── DASHBOARD STATS ───────────────────────────────────────────────────────────
+
+from rest_framework.decorators import api_view, permission_classes as _pcs
+
+
+@api_view(['GET'])
+@_pcs([IsAuthenticated])
+def dashboard_stats(request):
+    from django.utils import timezone
+    from apps.historia.models import Ingreso, HistoriaClinica
+    from apps.citas.models import Cita
+    from apps.pacientes.models import Paciente
+    from apps.facturacion.models import Prefactura
+
+    hoy = timezone.now().date()
+    inicio_mes = hoy.replace(day=1)
+
+    stats = {
+        # Hoy
+        'ingresos_activos':       Ingreso.objects.filter(activo=True).count(),
+        'citas_hoy':              Cita.objects.filter(fecha_hora_inicio__date=hoy).count(),
+        'nuevos_pacientes_hoy':   Paciente.objects.filter(creado_en__date=hoy).count(),
+        'consultas_hoy':          HistoriaClinica.objects.filter(creado_en__date=hoy).count(),
+        # Mes
+        'ingresos_mes':           Ingreso.objects.filter(fecha_ingreso__date__gte=inicio_mes).count(),
+        'nuevos_pacientes_mes':   Paciente.objects.filter(creado_en__date__gte=inicio_mes).count(),
+        'prefacturas_pendientes': Prefactura.objects.filter(estado__in=['borrador', 'en_revision']).count(),
+        'prefacturas_aprobadas':  Prefactura.objects.filter(estado='aprobada').count(),
+        # Total
+        'total_pacientes':        Paciente.objects.count(),
+    }
+    return Response(stats)
+
+
+# ── NOTIFICACIONES ────────────────────────────────────────────────────────────
+
+from apps.usuarios.models import Notificacion
+
+
+class NotificacionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notificacion
+        fields = '__all__'
+        read_only_fields = ['id', 'creada_en', 'usuario']
+
+
+class NotificacionViewSet(viewsets.ModelViewSet):
+    serializer_class = NotificacionSerializer
+
+    def get_queryset(self):
+        return Notificacion.objects.filter(usuario=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(usuario=self.request.user)
+
+    @action(detail=False, methods=['post'])
+    def marcar_todas_leidas(self, request):
+        Notificacion.objects.filter(usuario=request.user, leida=False).update(leida=True)
+        return Response({'ok': True})
+
+    @action(detail=True, methods=['post'])
+    def marcar_leida(self, request, pk=None):
+        notif = self.get_object()
+        notif.leida = True
+        notif.save()
+        return Response({'ok': True})
+
