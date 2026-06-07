@@ -148,36 +148,72 @@ class Command(BaseCommand):
             eliminados = MedicamentoFarmacia.objects.all().delete()[0]
             self.stdout.write(f'  Eliminados {eliminados} medicamentos existentes')
 
-        # Intentar enriquecer con datos del catálogo INVIMA
-        catalogo = {c.cum: c for c in CatalogoMedicamento.objects.all()}
+        # Primero cargar la lista esencial con precios
+        esenciales_cum = {}
+        for nombre, cum, concentracion, forma, unidad, precio in ESENCIALES:
+            esenciales_cum[cum] = (nombre, concentracion, forma, unidad, precio)
+
+        # Cargar todos del catálogo INVIMA
+        catalogo = list(CatalogoMedicamento.objects.all())
         self.stdout.write(f'  Catálogo INVIMA: {len(catalogo)} registros')
 
-        creados = 0
+        # CUMs ya existentes en farmacia
+        existentes = set(MedicamentoFarmacia.objects.values_list('cum', flat=True))
+
+        nuevos = []
         omitidos = 0
 
-        for nombre, cum, concentracion, forma, unidad, precio in ESENCIALES:
-            if MedicamentoFarmacia.objects.filter(cum=cum).exists():
+        for cat in catalogo:
+            if cat.cum in existentes:
                 omitidos += 1
                 continue
 
-            # Enriquecer con catálogo si existe
-            cat = catalogo.get(cum)
-            if cat:
-                concentracion = cat.concentracion or concentracion
-                forma         = cat.forma_farmaceutica or forma
+            # Si está en la lista esencial, usar sus datos (con precio)
+            if cat.cum in esenciales_cum:
+                nombre, concentracion, forma, unidad, precio = esenciales_cum[cat.cum]
+            else:
+                nombre        = cat.principio_activo
+                concentracion = cat.concentracion or ''
+                forma         = cat.forma_farmaceutica or ''
+                unidad        = 'und'
+                precio        = 0
 
-            MedicamentoFarmacia.objects.create(
-                nombre_generico    = nombre,
-                cum                = cum,
-                concentracion      = concentracion,
-                forma_farmaceutica = forma,
+            nuevos.append(MedicamentoFarmacia(
+                nombre_generico    = nombre[:200],
+                cum                = cat.cum,
+                concentracion      = concentracion[:100] if concentracion else '',
+                forma_farmaceutica = forma[:100] if forma else '',
                 unidad_medida      = unidad,
                 precio_unitario    = precio,
                 stock_actual       = 0,
-                stock_minimo       = 10,
+                stock_minimo       = 5,
                 activo             = True,
-            )
-            creados += 1
+            ))
+
+        # También agregar esenciales que no estén en el catálogo INVIMA
+        cats_cum = {c.cum for c in catalogo}
+        for cum, (nombre, concentracion, forma, unidad, precio) in esenciales_cum.items():
+            if cum not in cats_cum and cum not in existentes:
+                nuevos.append(MedicamentoFarmacia(
+                    nombre_generico    = nombre,
+                    cum                = cum,
+                    concentracion      = concentracion,
+                    forma_farmaceutica = forma,
+                    unidad_medida      = unidad,
+                    precio_unitario    = precio,
+                    stock_actual       = 0,
+                    stock_minimo       = 5,
+                    activo             = True,
+                ))
+
+        # Insertar en lotes de 500
+        BATCH = 500
+        creados = 0
+        for i in range(0, len(nuevos), BATCH):
+            lote = nuevos[i:i + BATCH]
+            MedicamentoFarmacia.objects.bulk_create(lote, ignore_conflicts=True)
+            creados += len(lote)
+            self.stdout.write(f'  → {creados}/{len(nuevos)} insertados...')
 
         self.stdout.write(self.style.SUCCESS(
             f'  ✓ Creados: {creados}  |  Omitidos (ya existían): {omitidos}'
