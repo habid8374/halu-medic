@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { prefacturaAPI, mensajeError } from '@/lib/api'
-import { BuscadorPacienteIngreso } from '@/components/ui/BuscadorPacienteIngreso'
+import BuscadorPacienteIngreso from '@/components/ui/BuscadorPacienteIngreso'
 import type { PacienteResumen, IngresoResumen } from '@/components/ui/BuscadorPacienteIngreso'
 import toast from 'react-hot-toast'
 import { ArrowLeft, User, BedDouble, Search, FileText, Loader2 } from 'lucide-react'
