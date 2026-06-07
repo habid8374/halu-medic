@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import api, { mensajeError } from '@/lib/api'
-import { PageHeader, Button, Badge, EmptyState, Card } from '@/components/ui'
-import { Plus, Droplets, X, AlertTriangle } from 'lucide-react'
+import { PageHeader, Button, Badge, EmptyState, Card, BuscadorPacienteIngreso } from '@/components/ui'
+import { Plus, Droplets, X, AlertTriangle, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 
@@ -340,6 +340,8 @@ function NuevaSolicitudModal({ onClose, onSaved }: { onClose: () => void; onSave
     grupo_requerido: '', rh_requerido: '', indicacion_clinica: '', urgente: false,
   })
   const [saving, setSaving] = useState(false)
+  const [showBuscador, setShowBuscador] = useState(false)
+  const [pacienteNombre, setPacienteNombre] = useState('')
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
