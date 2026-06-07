@@ -22,6 +22,7 @@ from config.api import (
     CodigoCUPSViewSet,
     CodigoCIE10ViewSet,
     OrdenMedicaViewSet,
+    MedicamentoConsultaViewSet,
     AseguradoraViewSet,
     ConvenioEPSViewSet,
     IngresoViewSet,
@@ -113,7 +114,8 @@ router.register(r'usuarios',              UsuarioViewSet,   basename='usuario')
 router.register(r'cups',                  CodigoCUPSViewSet,  basename='cups')
 router.register(r'cie10',                 CodigoCIE10ViewSet, basename='cie10')
 router.register(r'tarifas',              ManualTarifarioViewSet, basename='tarifa')
-router.register(r'ordenes-medicas',      OrdenMedicaViewSet,     basename='orden-medica')
+router.register(r'ordenes-medicas',      OrdenMedicaViewSet,          basename='orden-medica')
+router.register(r'consultas/medicamentos', MedicamentoConsultaViewSet, basename='consulta-medicamento')
 router.register(r'admin/suscripciones', SuscripcionViewSet,     basename='suscripcion')
 router.register(r'aseguradoras',        AseguradoraViewSet,     basename='aseguradora')
 router.register(r'convenios-eps',       ConvenioEPSViewSet,     basename='convenio-eps')

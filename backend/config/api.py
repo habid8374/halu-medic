@@ -166,7 +166,7 @@ class CitaViewSet(viewsets.ModelViewSet):
 
 # ── CONSULTAS ─────────────────────────────────────────────────────────────────
 
-from apps.consultas.models import Consulta, Procedimiento, OrdenMedica
+from apps.consultas.models import Consulta, Procedimiento, OrdenMedica, Medicamento as MedicamentoConsulta
 from apps.citas.models import Medico as MedicoModel
 
 
@@ -757,6 +757,39 @@ class OrdenMedicaViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return OrdenMedica.objects.select_related('consulta__paciente').all()
+
+
+# ── MEDICAMENTOS DE CONSULTA (para RIPS AM) ───────────────────────────────────
+
+class MedicamentoConsultaSerializer(serializers.ModelSerializer):
+    valor_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    class Meta:
+        model  = MedicamentoConsulta
+        fields = [
+            'id', 'consulta', 'nombre', 'cum', 'tipo',
+            'concentracion', 'unidad_medida', 'forma_farmaceutica',
+            'unidades', 'dias_tratamiento',
+            'valor_unitario', 'valor_dispensacion', 'valor_total', 'fecha',
+        ]
+        read_only_fields = ['id', 'valor_total']
+
+
+class MedicamentoConsultaViewSet(viewsets.ModelViewSet):
+    serializer_class = MedicamentoConsultaSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['consulta']
+
+    def get_queryset(self):
+        qs = MedicamentoConsulta.objects.all()
+        consulta = self.request.query_params.get('consulta')
+        if consulta:
+            qs = qs.filter(consulta=consulta)
+        return qs
+
+    def perform_create(self, serializer):
+        from django.utils import timezone
+        serializer.save(fecha=serializer.validated_data.get('fecha') or timezone.now())
 
 
 # ── CATÁLOGO CUPS (homologador nacional, schema público compartido) ───────────

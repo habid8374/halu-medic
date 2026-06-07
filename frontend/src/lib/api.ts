@@ -293,6 +293,21 @@ export const catalogoMedicamentosAPI = {
     api.get('/api/catalogos/medicamentos/', { params: { search: q, vigentes: vigentes ? 'true' : 'false' } }),
 }
 
+export const consultaMedicamentosAPI = {
+  list:   (consultaId: string) => api.get('/api/consultas/medicamentos/', { params: { consulta: consultaId } }),
+  create: (data: Record<string, unknown>) => api.post('/api/consultas/medicamentos/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/consultas/medicamentos/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/consultas/medicamentos/${id}/`),
+}
+
+export const farmaciaInventarioAPI = {
+  search: (q: string) => api.get('/api/farmacia/medicamentos/', { params: { search: q, activo: 'true' } }),
+  list:   (params?: Record<string, unknown>) => api.get('/api/farmacia/medicamentos/', { params }),
+  create: (data: Record<string, unknown>) => api.post('/api/farmacia/medicamentos/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/farmacia/medicamentos/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/farmacia/medicamentos/${id}/`),
+}
+
 export const tarifaMedicamentosAPI = {
   list:   (params?: Record<string, unknown>) => api.get('/api/tarifas/medicamentos/', { params }),
   get:    (id: string) => api.get(`/api/tarifas/medicamentos/${id}/`),

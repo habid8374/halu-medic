@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
-import api, { mensajeError } from '@/lib/api'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import api, { mensajeError, catalogoMedicamentosAPI } from '@/lib/api'
 import { PageHeader, Button, Badge, EmptyState, Card, BuscadorPacienteIngreso } from '@/components/ui'
-import { Plus, Search, Package, AlertTriangle, Pill, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { Plus, Search, Package, AlertTriangle, Pill, ChevronDown, ChevronUp, X, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 
@@ -324,6 +324,34 @@ function NuevoMedicamentoModal({ onClose, onSaved }: { onClose: () => void; onSa
     requiere_formula: false, medicamento_alto_riesgo: false,
   })
   const [saving, setSaving] = useState(false)
+  const [cumQuery, setCumQuery] = useState('')
+  const [cumSugs, setCumSugs] = useState<{cum:string; principio_activo:string; concentracion:string; forma_farmaceutica:string}[]>([])
+  const [cumBuscando, setCumBuscando] = useState(false)
+  const [showCumSugs, setShowCumSugs] = useState(false)
+  const debRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const buscarCUM = (q: string) => {
+    setCumQuery(q)
+    setForm(f => ({ ...f, nombre_generico: q }))
+    if (debRef.current) clearTimeout(debRef.current)
+    if (q.length < 2) { setCumSugs([]); setShowCumSugs(false); return }
+    debRef.current = setTimeout(async () => {
+      setCumBuscando(true)
+      try {
+        const { data } = await catalogoMedicamentosAPI.search(q)
+        setCumSugs((data.results ?? data).slice(0, 8))
+        setShowCumSugs(true)
+      } catch { /* silencioso */ }
+      finally { setCumBuscando(false) }
+    }, 300)
+  }
+
+  const seleccionarCUM = (s: {cum:string; principio_activo:string; concentracion:string; forma_farmaceutica:string}) => {
+    setForm(f => ({ ...f, nombre_generico: s.principio_activo, cum: s.cum, concentracion: s.concentracion, forma_farmaceutica: s.forma_farmaceutica }))
+    setCumQuery(s.principio_activo)
+    setShowCumSugs(false)
+  }
+
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
   const setCheck = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -357,9 +385,25 @@ function NuevoMedicamentoModal({ onClose, onSaved }: { onClose: () => void; onSa
         </div>
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="text-xs font-medium text-slate-600 block mb-1">Nombre genérico *</label>
-              <input value={form.nombre_generico} onChange={set('nombre_generico')} className={INPUT} placeholder="Ej. Amoxicilina" />
+            <div className="col-span-2 relative">
+              <label className="text-xs font-medium text-slate-600 block mb-1">Nombre genérico / CUM *</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input value={cumQuery} onChange={e => buscarCUM(e.target.value)}
+                  className={`${INPUT} pl-9`} placeholder="Buscar en catálogo INVIMA..." />
+                {cumBuscando && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 animate-spin" />}
+              </div>
+              {showCumSugs && cumSugs.length > 0 && (
+                <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                  {cumSugs.map((s, i) => (
+                    <button key={i} type="button" onClick={() => seleccionarCUM(s)}
+                      className="w-full px-4 py-2.5 text-left hover:bg-halu-50 border-b border-slate-100 last:border-0">
+                      <p className="text-sm font-medium text-slate-800">{s.principio_activo}</p>
+                      <p className="text-xs text-slate-500">CUM: {s.cum} · {s.concentracion} · {s.forma_farmaceutica}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 block mb-1">Concentración</label>
