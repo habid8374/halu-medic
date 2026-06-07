@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import api, { mensajeError } from '@/lib/api'
 import { PageHeader, Button, Badge, EmptyState, BuscadorPacienteIngreso } from '@/components/ui'
+import { Cie10Autocomplete } from '@/components/ui/Cie10Autocomplete'
 import { Plus, Activity, BedDouble, X, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -9,6 +10,8 @@ import clsx from 'clsx'
 interface CamaUCI {
   id: string
   numero_cama: string
+  tipo: string
+  tipo_label: string
   estado: 'libre' | 'ocupada' | 'mantenimiento' | 'reservada'
   estado_display: string
   admision_activa?: AdmisionUCI
@@ -59,6 +62,15 @@ const CAMA_TEXT: Record<string, string> = {
   ocupada:       'text-red-700',
   mantenimiento: 'text-slate-500',
   reservada:     'text-amber-700',
+}
+
+const TIPO_BADGE: Record<string, string> = {
+  uci_adulto:   'bg-blue-100 text-blue-700',
+  uci_neo:      'bg-pink-100 text-pink-700',
+  uci_ped:      'bg-purple-100 text-purple-700',
+  ucc:          'bg-red-100 text-red-700',
+  ucin:         'bg-rose-100 text-rose-700',
+  intermedia:   'bg-teal-100 text-teal-700',
 }
 
 const INPUT = 'w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/20 bg-white'
@@ -164,13 +176,19 @@ export default function UCIPage() {
                 key={cama.id}
                 onClick={() => handleCamaClick(cama)}
                 className={clsx(
-                  'rounded-xl border-2 p-3 text-center transition-all',
+                  'rounded-xl border-2 p-3 text-center transition-all relative',
                   CAMA_COLORS[cama.estado]
                 )}
               >
                 <BedDouble className={clsx('w-5 h-5 mx-auto mb-1', CAMA_TEXT[cama.estado])} />
                 <p className={clsx('text-xs font-bold', CAMA_TEXT[cama.estado])}>{cama.numero_cama}</p>
                 <p className={clsx('text-xs mt-0.5', CAMA_TEXT[cama.estado])}>{cama.estado_display}</p>
+                <span className={clsx(
+                  'inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded-full mt-1 leading-tight',
+                  TIPO_BADGE[cama.tipo] ?? 'bg-slate-100 text-slate-600'
+                )}>
+                  {cama.tipo_label || cama.tipo}
+                </span>
                 {cama.estado === 'ocupada' && cama.admision_activa && (
                   <p className="text-xs text-slate-500 truncate mt-1 text-left leading-tight">
                     {cama.admision_activa.paciente_nombre?.split(' ')[0]}
@@ -423,7 +441,7 @@ function AdmisionModal({ cama, onClose, onSaved }: {
   onSaved: () => void
 }) {
   const [form, setForm] = useState({
-    paciente: '', diagnostico_ingreso_uci: '', motivo_ingreso: '',
+    paciente: '', diagnostico_ingreso_uci: '', diagnostico_nombre: '', motivo_ingreso: '',
     apache_ii_score: '', sofa_score: '',
     ventilacion_mecanica: false, drogas_vasoactivas: false, dialisis: false,
   })
@@ -441,8 +459,9 @@ function AdmisionModal({ cama, onClose, onSaved }: {
     }
     setSaving(true)
     try {
+      const { diagnostico_nombre, ...payload } = form
       await api.post('/api/salud/uci/admisiones/', {
-        ...form, cama: cama.id,
+        ...payload, cama: cama.id,
         apache_ii_score: form.apache_ii_score ? Number(form.apache_ii_score) : null,
         sofa_score: form.sofa_score ? Number(form.sofa_score) : null,
       })
@@ -479,8 +498,14 @@ function AdmisionModal({ cama, onClose, onSaved }: {
             </button>
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 block mb-1">Diagnóstico de ingreso UCI *</label>
-            <input value={form.diagnostico_ingreso_uci} onChange={set('diagnostico_ingreso_uci')} className={INPUT} placeholder="Diagnóstico principal" />
+            <Cie10Autocomplete
+              label="Diagnóstico de ingreso UCI"
+              required
+              value={form.diagnostico_ingreso_uci}
+              onChange={(codigo, nombre) =>
+                setForm(f => ({ ...f, diagnostico_ingreso_uci: codigo, diagnostico_nombre: nombre }))
+              }
+            />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Motivo de ingreso</label>
