@@ -77,9 +77,9 @@ export default function FarmaciaPage() {
 
   const cargarMovimientos = async () => {
     try {
-      const { data } = await api.get('/api/farmacia/movimientos/')
+      const { data } = await api.get('/api/farmacia/lotes/')
       setMovimientos(data.results ?? data)
-    } catch (e) { toast.error(mensajeError(e)) }
+    } catch { /* silencioso si no hay lotes */ }
   }
 
   useEffect(() => {
