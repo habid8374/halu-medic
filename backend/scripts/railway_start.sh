@@ -38,14 +38,18 @@ with schema_context('demo'):
     print('Usuario demo OK:', u.username)
 " || echo "setup usuario demo: no crítico"
 
-echo "→ Importar CUPS (si la tabla está vacía)..."
-python manage.py importar_cups || echo "CUPS ya importados o error no crítico"
-
-echo "→ Importar CIE-10 (si la tabla está vacía)..."
-python manage.py importar_cie10 || echo "CIE-10 ya importados o error no crítico"
-
 echo "→ Archivos estáticos..."
 python manage.py collectstatic --noinput
+
+# Importar catálogos en background — no bloquean el arranque
+(
+  sleep 10
+  echo "→ [BG] Importar CUPS..."
+  python manage.py importar_cups || echo "CUPS ya importados"
+  echo "→ [BG] Importar CIE-10..."
+  python manage.py importar_cie10 || echo "CIE-10 ya importados"
+  echo "→ [BG] Catálogos completados."
+) &
 
 echo "→ Levantando gunicorn..."
 exec gunicorn config.wsgi:application \
