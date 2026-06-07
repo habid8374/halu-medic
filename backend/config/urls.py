@@ -203,15 +203,15 @@ urlpatterns = [
     # ── Webhook Factus (sin autenticación JWT) ────────────────────────────────
     path('api/facturacion/webhook/factus/', FactusWebhookView.as_view(), name='webhook_factus'),
 
+    # ── CUPS RIPS plantilla / importación (ANTES del router para evitar que /api/cups/ lo capture) ──
+    path('api/cups/plantilla/',     views_catalogos.plantilla_cups_rips, name='cups-plantilla'),
+    path('api/cups/importar-rips/', views_catalogos.importar_cups_rips,  name='cups-importar-rips'),
+
     # ── API REST ──────────────────────────────────────────────────────────────
     path('api/', include(router.urls)),
 
     # ── FHIR R4 ──────────────────────────────────────────────────────────────
     path('api/fhir/r4/', include('apps.fhir.urls')),
-
-    # ── CUPS RIPS plantilla / importación ────────────────────────────────────
-    path('api/cups/plantilla/',     views_catalogos.plantilla_cups_rips, name='cups-plantilla'),
-    path('api/cups/importar-rips/', views_catalogos.importar_cups_rips,  name='cups-importar-rips'),
 
     # ── Reportes ──────────────────────────────────────────────────────────────
     path('api/reportes/', ReportesView.as_view(), name='reportes'),
