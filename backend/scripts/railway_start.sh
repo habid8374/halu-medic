@@ -3,26 +3,23 @@ set -e
 
 echo "=== Halu Medic — Railway startup ==="
 
-# Solo las migraciones del schema público (rápido — no itera tenants)
+# 1. Migraciones schema público (solo tablas compartidas — rápido)
 echo "→ Migraciones shared..."
 python manage.py migrate_schemas --shared --noinput
 
-# Archivos estáticos (rápido)
-echo "→ Collectstatic..."
-python manage.py collectstatic --noinput
+# 2. Registrar dominio Railway
+echo "→ Registrar dominio..."
+python manage.py setup_railway_domain \
+  --domain "${RAILWAY_PUBLIC_DOMAIN:-halu-medic-production.up.railway.app}" \
+  || echo "setup_railway_domain: no crítico"
 
-# Todo lo lento corre en background DESPUÉS de que gunicorn arranque
-(
-  echo "→ [BG] Registrar dominio Railway..."
-  python manage.py setup_railway_domain \
-    --domain "${RAILWAY_PUBLIC_DOMAIN:-halu-medic-production.up.railway.app}" \
-    || echo "[BG] setup_railway_domain: no crítico"
+# 3. Migraciones de TODOS los tenant schemas (necesario antes de servir requests)
+echo "→ Migraciones tenant schemas..."
+python manage.py migrate_schemas --noinput
 
-  echo "→ [BG] Migraciones tenant schemas..."
-  python manage.py migrate_schemas --noinput || echo "[BG] migrate_schemas: error"
-
-  echo "→ [BG] Crear usuario admin..."
-  python manage.py shell -c "
+# 4. Crear usuario admin en tenant demo
+echo "→ Crear usuario admin..."
+python manage.py shell -c "
 from django_tenants.utils import schema_context
 from apps.usuarios.models import Usuario
 with schema_context('demo'):
@@ -42,18 +39,25 @@ with schema_context('demo'):
     u.is_staff = True
     u.is_superuser = True
     u.save()
-    print('[BG] Usuario demo OK:', u.username)
-" || echo "[BG] usuario: no crítico"
+    print('Usuario demo OK:', u.username)
+" || echo "setup usuario demo: no crítico"
 
-  echo "→ [BG] Importar CUPS..."
-  python manage.py importar_cups || echo "[BG] CUPS ya importados"
+# 5. Archivos estáticos (rápido)
+echo "→ Collectstatic..."
+python manage.py collectstatic --noinput
 
-  echo "→ [BG] Importar CIE-10..."
-  python manage.py importar_cie10 || echo "[BG] CIE-10 ya importados"
+# 6. Importaciones de catálogos en BACKGROUND — no bloquean gunicorn
+#    Usan nohup para sobrevivir al exec que sigue
+nohup bash -c "
+  sleep 5
+  echo '→ [BG] Importar CUPS...'
+  python manage.py importar_cups || echo '[BG] CUPS ya importados'
+  echo '→ [BG] Importar CIE-10...'
+  python manage.py importar_cie10 || echo '[BG] CIE-10 ya importados'
+  echo '→ [BG] Catálogos listos.'
+" > /tmp/catalogos.log 2>&1 &
 
-  echo "→ [BG] Tareas de fondo completadas."
-) &
-
+# 7. Levantar gunicorn (reemplaza este proceso)
 echo "→ Levantando gunicorn..."
 exec gunicorn config.wsgi:application \
   --bind 0.0.0.0:${PORT:-8000} \
