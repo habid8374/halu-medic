@@ -9,8 +9,7 @@ Los datos vienen del catálogo INVIMA (CatalogoMedicamento) si existe,
 o de la lista esencial embebida si el catálogo está vacío.
 """
 from django.core.management.base import BaseCommand
-from django_tenants.utils import schema_context
-from django_tenants.models import get_tenant_model
+from django_tenants.utils import schema_context, get_tenant_model
 
 
 # Medicamentos esenciales con CUM reales INVIMA Colombia
