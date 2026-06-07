@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import api, { mensajeError, catalogoMedicamentosAPI } from '@/lib/api'
 import { PageHeader, Button, Badge, EmptyState, Card, BuscadorPacienteIngreso } from '@/components/ui'
 import { Plus, Search, Package, AlertTriangle, Pill, ChevronDown, ChevronUp, X, Loader2 } from 'lucide-react'
@@ -54,6 +54,7 @@ const INPUT = 'w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus
 export default function FarmaciaPage() {
   const [tab, setTab] = useState<'inventario' | 'dispensaciones' | 'movimientos'>('inventario')
   const [medicamentos, setMedicamentos] = useState<Medicamento[]>([])
+  const [totalMeds, setTotalMeds] = useState(0)
   const [dispensaciones, setDispensaciones] = useState<Dispensacion[]>([])
   const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,20 +62,24 @@ export default function FarmaciaPage() {
   const [showNuevoMed, setShowNuevoMed] = useState(false)
   const [showNuevoDisp, setShowNuevoDisp] = useState(false)
   const [editando, setEditando] = useState<Medicamento | null>(null)
+  const debRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const cargarMedicamentos = async () => {
+  const cargarMedicamentos = async (search = '') => {
+    setLoading(true)
     try {
-      let todos: Medicamento[] = []
-      let url = '/api/farmacia/medicamentos/'
-      let params: Record<string, unknown> = { page_size: 1000 }
-      while (url) {
-        const { data } = await api.get(url, { params })
-        todos = [...todos, ...(data.results ?? data)]
-        url = data.next ? data.next.replace(/^https?:\/\/[^/]+/, '') : ''
-        params = {}
-      }
-      setMedicamentos(todos)
+      const params: Record<string, unknown> = { page_size: 50 }
+      if (search) params.search = search
+      const { data } = await api.get('/api/farmacia/medicamentos/', { params })
+      setMedicamentos(data.results ?? data)
+      setTotalMeds(data.count ?? (data.results ?? data).length)
     } catch (e) { toast.error(mensajeError(e)) }
+    finally { setLoading(false) }
+  }
+
+  const handleBusqueda = (q: string) => {
+    setBusqueda(q)
+    if (debRef.current) clearTimeout(debRef.current)
+    debRef.current = setTimeout(() => cargarMedicamentos(q), 350)
   }
 
   const cargarDispensaciones = async () => {
@@ -92,13 +97,12 @@ export default function FarmaciaPage() {
   }
 
   useEffect(() => {
-    setLoading(true)
     Promise.all([cargarMedicamentos(), cargarDispensaciones(), cargarMovimientos()])
-      .finally(() => setLoading(false))
   }, [])
 
   const medicamentosFiltrados = useMemo(() =>
     medicamentos.filter(m =>
+      !busqueda ||
       m.nombre_generico.toLowerCase().includes(busqueda.toLowerCase()) ||
       m.cum?.includes(busqueda)
     ), [medicamentos, busqueda])
@@ -157,7 +161,7 @@ export default function FarmaciaPage() {
                 <Pill className="w-5 h-5 text-halu-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-900">{medicamentos.length}</p>
+                <p className="text-2xl font-bold text-slate-900">{totalMeds}</p>
                 <p className="text-xs text-slate-500">Total medicamentos</p>
               </div>
             </Card>
@@ -204,7 +208,7 @@ export default function FarmaciaPage() {
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/20"
               placeholder="Buscar por nombre genérico o CUM..."
               value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
+              onChange={e => handleBusqueda(e.target.value)}
             />
           </div>
           {loading ? (
