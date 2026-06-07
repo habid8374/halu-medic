@@ -64,11 +64,17 @@ export default function CupsPage() {
   const descargarPlantilla = async () => {
     try {
       const { data } = await cupsRipsAPI.descargarPlantilla()
-      const url = URL.createObjectURL(new Blob([data], { type: 'text/csv' }))
-      const a = document.createElement('a'); a.href = url; a.download = 'plantilla_cups_rips.csv'; a.click()
+      const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'plantilla_cups_rips.csv'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
       toast.success('Plantilla descargada')
-    } catch { toast.error('Error al descargar plantilla') }
+    } catch (e) { toast.error(mensajeError(e)) }
   }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

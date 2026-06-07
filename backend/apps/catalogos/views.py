@@ -10,28 +10,22 @@ from rest_framework.response import Response
 @permission_classes([IsAuthenticated])
 def plantilla_cups_rips(request):
     """Descarga plantilla CSV para carga masiva de CUPS con campos RIPS."""
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        'codigo_cups', 'descripcion',
-        'modalidad_rips',       # 01=Intramural, 02=Extramural, 05=Telemedicina
-        'grupo_servicios_rips', # 01=Consulta, 02=Urgencias, 04=Cirugía, 05=Procedimientos
-        'finalidad_rips',       # 10=Dx, 11=Tto, 13=Dx+Tto
-        'via_ingreso_rips',     # 1=Urgencias, 2=Consulta externa, 5=Electiva
-        'cod_servicio_rips',    # Código REPS del servicio habilitado
-        'personal_atiende',     # 01=Med esp, 02=Med gral
-        'ambito_rips',          # 1=Ambulatorio, 2=Hospitalario
-    ])
-    # Filas de ejemplo
-    examples = [
-        ['890201', 'CONSULTA DE PRIMERA VEZ POR MEDICINA GENERAL', '01', '01', '13', '2', '1', '02', '1'],
-        ['890202', 'CONSULTA DE CONTROL O DE SEGUIMIENTO POR MEDICINA GENERAL', '01', '01', '13', '2', '1', '02', '1'],
-        ['890401', 'CONSULTA DE PRIMERA VEZ POR MEDICINA ESPECIALIZADA', '01', '01', '13', '2', '1', '01', '1'],
+    rows = [
+        ['codigo_cups', 'descripcion', 'modalidad_rips', 'grupo_servicios_rips',
+         'finalidad_rips', 'via_ingreso_rips', 'cod_servicio_rips', 'personal_atiende', 'ambito_rips'],
+        ['890201', 'CONSULTA DE PRIMERA VEZ POR MEDICINA GENERAL',               '01', '01', '13', '2', '1', '02', '1'],
+        ['890202', 'CONSULTA DE CONTROL O DE SEGUIMIENTO POR MEDICINA GENERAL',  '01', '01', '13', '2', '1', '02', '1'],
+        ['890401', 'CONSULTA DE PRIMERA VEZ POR MEDICINA ESPECIALIZADA',          '01', '01', '13', '2', '1', '01', '1'],
         ['890402', 'CONSULTA DE CONTROL O DE SEGUIMIENTO POR MEDICINA ESPECIALIZADA', '01', '01', '13', '2', '1', '01', '1'],
     ]
-    writer.writerows(examples)
-    response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8')
+    output = io.StringIO()
+    csv.writer(output).writerows(rows)
+    response = HttpResponse(
+        '﻿' + output.getvalue(),
+        content_type='text/csv; charset=utf-8-sig',
+    )
     response['Content-Disposition'] = 'attachment; filename="plantilla_cups_rips.csv"'
+    response['Access-Control-Expose-Headers'] = 'Content-Disposition'
     return response
 
 
