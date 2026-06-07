@@ -5,6 +5,7 @@ import { ingresosAPI, historiaAPI, medicamentosHCAPI, catalogoMedicamentosAPI, c
 import { Ingreso, HistoriaClinica } from '@/types'
 import { Button, Card, Spinner } from '@/components/ui'
 import { CupsAutocomplete } from '@/components/ui/CupsAutocomplete'
+import { EpicrisisModal } from '@/components/ui/EpicrisisModal'
 import {
   ArrowLeft, UserCheck, UserMinus, PlusCircle, ClipboardList,
   Heart, Thermometer, Activity, Scale, CheckCircle2, Pill, Trash2, Search, X,
@@ -630,6 +631,7 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
   const [loading, setLoading]     = useState(true)
   const [showEgreso, setShowEgreso]   = useState(false)
   const [showNuevaHC, setShowNuevaHC] = useState(false)
+  const [showEpicrisis, setShowEpicrisis] = useState(false)
 
   const cargar = () => {
     Promise.all([
@@ -663,6 +665,14 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
           ingresoId={id} pacienteId={ingreso.paciente}
           onClose={() => setShowNuevaHC(false)}
           onCreated={() => { setShowNuevaHC(false); cargar() }}
+        />
+      )}
+      {showEpicrisis && (
+        <EpicrisisModal
+          ingresoId={id}
+          pacienteNombre={ingreso?.paciente_nombre}
+          onClose={() => setShowEpicrisis(false)}
+          onSaved={() => { setShowEpicrisis(false); cargar() }}
         />
       )}
 
@@ -737,6 +747,10 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
         <button onClick={() => setShowNuevaHC(true)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
           <PlusCircle className="w-4 h-4" />Nuevo Registro HC
+        </button>
+        <button onClick={() => setShowEpicrisis(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <FileText className="w-4 h-4" />Epicrisis
         </button>
         {ingreso.activo && (
           <button onClick={() => setShowEgreso(true)}
