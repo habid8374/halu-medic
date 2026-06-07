@@ -60,10 +60,11 @@ export default function FarmaciaPage() {
   const [busqueda, setBusqueda] = useState('')
   const [showNuevoMed, setShowNuevoMed] = useState(false)
   const [showNuevoDisp, setShowNuevoDisp] = useState(false)
+  const [editando, setEditando] = useState<Medicamento | null>(null)
 
   const cargarMedicamentos = async () => {
     try {
-      const { data } = await api.get('/api/farmacia/medicamentos/')
+      const { data } = await api.get('/api/farmacia/medicamentos/', { params: { page_size: 500 } })
       setMedicamentos(data.results ?? data)
     } catch (e) { toast.error(mensajeError(e)) }
   }
@@ -233,11 +234,15 @@ export default function FarmaciaPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
+                      <div className="text-right flex-shrink-0 flex flex-col items-end gap-1">
                         <p className="text-sm font-bold text-slate-800">
                           ${parseFloat(m.precio_unitario || '0').toLocaleString('es-CO')}
                         </p>
                         <p className="text-xs text-slate-400">por {m.unidad_medida}</p>
+                        <button onClick={() => setEditando(m)}
+                          className="text-xs text-halu-600 hover:text-halu-800 font-medium mt-1 underline">
+                          Editar
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -310,6 +315,13 @@ export default function FarmaciaPage() {
           medicamentos={medicamentos}
           onClose={() => setShowNuevoDisp(false)}
           onSaved={() => { setShowNuevoDisp(false); cargarDispensaciones() }}
+        />
+      )}
+      {editando && (
+        <EditarMedicamentoModal
+          medicamento={editando}
+          onClose={() => setEditando(null)}
+          onSaved={() => { setEditando(null); cargarMedicamentos() }}
         />
       )}
     </div>
@@ -458,6 +470,120 @@ function NuevoMedicamentoModal({ onClose, onSaved }: { onClose: () => void; onSa
         <div className="p-5 border-t flex gap-2 justify-end">
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button onClick={guardar} loading={saving}>Guardar medicamento</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EditarMedicamentoModal({ medicamento, onClose, onSaved }: {
+  medicamento: Medicamento; onClose: () => void; onSaved: () => void
+}) {
+  const [form, setForm] = useState({
+    nombre_generico:       medicamento.nombre_generico,
+    concentracion:         medicamento.concentracion,
+    forma_farmaceutica:    medicamento.forma_farmaceutica,
+    stock_actual:          String(medicamento.stock_actual),
+    stock_minimo:          String(medicamento.stock_minimo),
+    precio_unitario:       medicamento.precio_unitario,
+    unidad_medida:         medicamento.unidad_medida,
+    cum:                   medicamento.cum,
+    requiere_formula:      medicamento.requiere_formula,
+    medicamento_alto_riesgo: medicamento.medicamento_alto_riesgo,
+  })
+  const [saving, setSaving] = useState(false)
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }))
+  const setCheck = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.checked }))
+
+  const guardar = async () => {
+    setSaving(true)
+    try {
+      await api.patch(`/api/farmacia/medicamentos/${medicamento.id}/`, {
+        ...form,
+        stock_actual:  Number(form.stock_actual),
+        stock_minimo:  Number(form.stock_minimo),
+        precio_unitario: form.precio_unitario || '0',
+      })
+      toast.success('Medicamento actualizado')
+      onSaved()
+    } catch (e) { toast.error(mensajeError(e)) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-5 border-b flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-slate-900">Editar medicamento</h2>
+            <p className="text-xs text-slate-500">{medicamento.nombre_generico}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-slate-600 block mb-1">Nombre genérico *</label>
+              <input value={form.nombre_generico} onChange={set('nombre_generico')} className={INPUT} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">CUM</label>
+              <input value={form.cum} onChange={set('cum')} className={INPUT} placeholder="Código único de medicamentos" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Concentración</label>
+              <input value={form.concentracion} onChange={set('concentracion')} className={INPUT} placeholder="Ej. 500mg" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Forma farmacéutica</label>
+              <select value={form.forma_farmaceutica} onChange={set('forma_farmaceutica')} className={INPUT}>
+                <option value="">Seleccionar...</option>
+                {['Tableta','Cápsula','Jarabe','Inyectable','Solución','Crema','Gotas','Parche','Supositorio','Polvo','Ampolla','Frasco'].map(f =>
+                  <option key={f}>{f}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Unidad de medida</label>
+              <select value={form.unidad_medida} onChange={set('unidad_medida')} className={INPUT}>
+                {['tableta','cápsula','ml','ampolla','frasco','sobre','parche','und'].map(u =>
+                  <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Stock actual *</label>
+              <input type="number" min="0" value={form.stock_actual} onChange={set('stock_actual')} className={INPUT} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Stock mínimo</label>
+              <input type="number" min="0" value={form.stock_minimo} onChange={set('stock_minimo')} className={INPUT} />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-slate-600 block mb-1">Precio unitario (COP)</label>
+              <input type="number" min="0" value={form.precio_unitario} onChange={set('precio_unitario')} className={INPUT} />
+            </div>
+          </div>
+          <div className="flex gap-6">
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <input type="checkbox" checked={form.requiere_formula} onChange={setCheck('requiere_formula')} className="rounded" />
+              Requiere fórmula médica
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <input type="checkbox" checked={form.medicamento_alto_riesgo} onChange={setCheck('medicamento_alto_riesgo')} className="rounded" />
+              Medicamento de alto riesgo
+            </label>
+          </div>
+        </div>
+        <div className="p-5 border-t flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">
+            Cancelar
+          </button>
+          <button onClick={guardar} disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-halu-600 text-white text-sm font-semibold hover:bg-halu-700 disabled:opacity-50">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Guardar cambios
+          </button>
         </div>
       </div>
     </div>
