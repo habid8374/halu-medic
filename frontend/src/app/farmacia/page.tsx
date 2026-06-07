@@ -64,8 +64,16 @@ export default function FarmaciaPage() {
 
   const cargarMedicamentos = async () => {
     try {
-      const { data } = await api.get('/api/farmacia/medicamentos/', { params: { page_size: 500 } })
-      setMedicamentos(data.results ?? data)
+      let todos: Medicamento[] = []
+      let url = '/api/farmacia/medicamentos/'
+      let params: Record<string, unknown> = { page_size: 1000 }
+      while (url) {
+        const { data } = await api.get(url, { params })
+        todos = [...todos, ...(data.results ?? data)]
+        url = data.next ? data.next.replace(/^https?:\/\/[^/]+/, '') : ''
+        params = {}
+      }
+      setMedicamentos(todos)
     } catch (e) { toast.error(mensajeError(e)) }
   }
 
