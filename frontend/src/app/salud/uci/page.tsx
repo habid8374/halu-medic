@@ -63,6 +63,14 @@ const CAMA_TEXT: Record<string, string> = {
 
 const INPUT = 'w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/20 bg-white'
 
+const TIPOS_UCI = [
+  { v: 'uci_adulto', l: 'UCI Adulto' },
+  { v: 'uci_neonatal', l: 'UCI Neonatal' },
+  { v: 'uci_pediatrica', l: 'UCI Pediátrica' },
+  { v: 'ucc', l: 'Unidad Coronaria (UCC)' },
+  { v: 'intermedia', l: 'Cuidados intermedios' },
+]
+
 export default function UCIPage() {
   const [camas, setCamas] = useState<CamaUCI[]>([])
   const [loading, setLoading] = useState(true)
@@ -70,6 +78,7 @@ export default function UCIPage() {
   const [showAdmision, setShowAdmision] = useState(false)
   const [showMonitoreo, setShowMonitoreo] = useState(false)
   const [admisionDetalle, setAdmisionDetalle] = useState<AdmisionUCI | null>(null)
+  const [showNuevaCama, setShowNuevaCama] = useState(false)
 
   const cargar = async () => {
     setLoading(true)
@@ -106,6 +115,11 @@ export default function UCIPage() {
       <PageHeader
         title="UCI · Cuidados intensivos"
         description="Mapa de camas, admisiones y monitoreo horario"
+        action={
+          <Button onClick={() => setShowNuevaCama(true)}>
+            <Plus className="w-4 h-4" /> Nueva cama
+          </Button>
+        }
       />
 
       {/* KPIs */}
@@ -138,7 +152,11 @@ export default function UCIPage() {
             ))}
           </div>
         ) : camas.length === 0 ? (
-          <EmptyState title="Sin camas UCI configuradas" description="Configura las camas UCI en el módulo de configuración" />
+          <EmptyState
+            title="Sin camas UCI configuradas"
+            description="Crea las camas de la unidad para comenzar a gestionar admisiones"
+            action={<Button onClick={() => setShowNuevaCama(true)}><Plus className="w-4 h-4" /> Crear primera cama</Button>}
+          />
         ) : (
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3">
             {camas.map(cama => (
@@ -263,6 +281,138 @@ export default function UCIPage() {
           onSaved={() => { setShowMonitoreo(false); cargar() }}
         />
       )}
+
+      {showNuevaCama && (
+        <NuevaCamaModal
+          onClose={() => setShowNuevaCama(false)}
+          onSaved={() => { setShowNuevaCama(false); cargar() }}
+        />
+      )}
+    </div>
+  )
+}
+
+function NuevaCamaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [modo, setModo] = useState<'individual' | 'rango'>('individual')
+  const [form, setForm] = useState({ numero: '', tipo: 'uci_adulto', estado: 'libre' })
+  const [rango, setRango] = useState({ prefijo: 'UCI-', desde: '1', hasta: '10', tipo: 'uci_adulto' })
+  const [saving, setSaving] = useState(false)
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }))
+  const setR = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setRango(r => ({ ...r, [k]: e.target.value }))
+
+  const guardar = async () => {
+    setSaving(true)
+    try {
+      if (modo === 'individual') {
+        if (!form.numero) { toast.error('El número de cama es requerido'); setSaving(false); return }
+        await api.post('/api/salud/uci/camas/', form)
+        toast.success(`Cama ${form.numero} creada`)
+      } else {
+        const desde = parseInt(rango.desde)
+        const hasta = parseInt(rango.hasta)
+        if (isNaN(desde) || isNaN(hasta) || desde > hasta || hasta - desde > 49) {
+          toast.error('Rango inválido (máx. 50 camas)'); setSaving(false); return
+        }
+        const promesas = []
+        for (let i = desde; i <= hasta; i++) {
+          promesas.push(api.post('/api/salud/uci/camas/', {
+            numero: `${rango.prefijo}${i}`,
+            tipo: rango.tipo,
+            estado: 'libre',
+          }))
+        }
+        await Promise.all(promesas)
+        toast.success(`${hasta - desde + 1} camas creadas`)
+      }
+      onSaved()
+    } catch (e) { toast.error(mensajeError(e)) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="p-5 border-b flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-slate-900">Configurar camas UCI</h2>
+            <p className="text-xs text-slate-500">Crea una o varias camas de la unidad</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          {/* Toggle modo */}
+          <div className="flex gap-2">
+            {[{ v: 'individual', l: 'Una cama' }, { v: 'rango', l: 'Varias camas' }].map(m => (
+              <button
+                key={m.v}
+                onClick={() => setModo(m.v as 'individual' | 'rango')}
+                className={clsx('flex-1 py-2 rounded-lg text-sm font-medium border transition-colors',
+                  modo === m.v
+                    ? 'bg-halu-600 text-white border-halu-600'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                )}
+              >
+                {m.l}
+              </button>
+            ))}
+          </div>
+
+          {modo === 'individual' ? (
+            <>
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1">Número / Identificador *</label>
+                <input value={form.numero} onChange={set('numero')} className={INPUT} placeholder="Ej: UCI-01, CAMA-5, UCC-A1" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1">Tipo de unidad</label>
+                <select value={form.tipo} onChange={set('tipo')} className={INPUT}>
+                  {TIPOS_UCI.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1">Estado inicial</label>
+                <select value={form.estado} onChange={set('estado')} className={INPUT}>
+                  <option value="libre">Libre</option>
+                  <option value="mantenimiento">En mantenimiento</option>
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className="text-xs font-medium text-slate-600 block mb-1">Prefijo</label>
+                  <input value={rango.prefijo} onChange={setR('prefijo')} className={INPUT} placeholder="UCI-" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-1">Desde</label>
+                  <input type="number" min="1" value={rango.desde} onChange={setR('desde')} className={INPUT} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-1">Hasta</label>
+                  <input type="number" min="1" value={rango.hasta} onChange={setR('hasta')} className={INPUT} />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1">Tipo de unidad</label>
+                <select value={rango.tipo} onChange={setR('tipo')} className={INPUT}>
+                  {TIPOS_UCI.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
+                </select>
+              </div>
+              <p className="text-xs text-slate-400">
+                Se crearán camas {rango.prefijo}{rango.desde} a {rango.prefijo}{rango.hasta}
+                {' '}({Math.max(0, parseInt(rango.hasta || '0') - parseInt(rango.desde || '0') + 1)} camas)
+              </p>
+            </>
+          )}
+        </div>
+        <div className="p-5 border-t flex gap-2 justify-end">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button onClick={guardar} loading={saving}>Crear cama{modo === 'rango' ? 's' : ''}</Button>
+        </div>
+      </div>
     </div>
   )
 }
