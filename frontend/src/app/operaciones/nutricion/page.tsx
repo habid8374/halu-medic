@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import api, { mensajeError } from '@/lib/api'
-import { PageHeader, Button, Badge, EmptyState } from '@/components/ui'
-import { Plus, X, ToggleLeft, ToggleRight } from 'lucide-react'
+import { PageHeader, Button, Badge, EmptyState, BuscadorPacienteIngreso } from '@/components/ui'
+import { Plus, X, ToggleLeft, ToggleRight, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 
@@ -159,6 +159,8 @@ function NuevaDietaModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
     fecha_inicio: new Date().toISOString().slice(0, 10),
   })
   const [saving, setSaving] = useState(false)
+  const [showBuscador, setShowBuscador] = useState(false)
+  const [pacienteNombre, setPacienteNombre] = useState('')
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
@@ -187,13 +189,20 @@ function NuevaDietaModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
         </div>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">ID del paciente *</label>
-              <input value={form.paciente} onChange={set('paciente')} className={INPUT} placeholder="UUID" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">ID del ingreso</label>
-              <input value={form.ingreso} onChange={set('ingreso')} className={INPUT} placeholder="UUID ingreso" />
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-slate-600 block mb-1">Paciente *</label>
+              <button
+                type="button"
+                onClick={() => setShowBuscador(true)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-left flex items-center justify-between hover:border-halu-400 transition-colors"
+              >
+                {pacienteNombre ? (
+                  <span className="text-slate-900 font-medium">{pacienteNombre}</span>
+                ) : (
+                  <span className="text-slate-400">Buscar paciente por nombre o documento...</span>
+                )}
+                <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              </button>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 block mb-1">Tipo de dieta *</label>
@@ -247,6 +256,16 @@ function NuevaDietaModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
           <Button onClick={guardar} loading={saving}>Prescribir dieta</Button>
         </div>
       </div>
+      {showBuscador && (
+        <BuscadorPacienteIngreso
+          onSelect={(p, ing) => {
+            setForm(f => ({ ...f, paciente: p.id, ingreso: ing?.id || f.ingreso || '' }))
+            setPacienteNombre(p.nombre_completo)
+            setShowBuscador(false)
+          }}
+          onClose={() => setShowBuscador(false)}
+        />
+      )}
     </div>
   )
 }

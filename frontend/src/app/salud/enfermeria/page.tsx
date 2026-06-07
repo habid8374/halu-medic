@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { enfermeriaAPI, mensajeError } from '@/lib/api'
-import { PageHeader, Button, Badge, EmptyState } from '@/components/ui'
-import { Plus, Moon, Sun, Sunset, Lock } from 'lucide-react'
+import { PageHeader, Button, Badge, EmptyState, BuscadorPacienteIngreso } from '@/components/ui'
+import { Plus, Moon, Sun, Sunset, Lock, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 
@@ -140,7 +140,7 @@ export default function EnfermeriaPage() {
 
 function NuevoNotaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
-    ingreso: '', turno: 'manana', fecha_hora: new Date().toISOString().slice(0, 16),
+    paciente: '', ingreso: '', turno: 'manana', fecha_hora: new Date().toISOString().slice(0, 16),
     tension_arterial: '', frecuencia_cardiaca: '', frecuencia_resp: '',
     temperatura: '', spo2: '', glasgow: '', dolor_escala: '', peso_kg: '',
     curaciones: '', sondas_catéteres: '', movilizacion: '', observaciones: '',
@@ -149,6 +149,8 @@ function NuevoNotaModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     medicamentos_administrados: [] as { medicamento: string; dosis: string; via: string; hora: string }[],
   })
   const [saving, setSaving] = useState(false)
+  const [showBuscador, setShowBuscador] = useState(false)
+  const [pacienteNombre, setPacienteNombre] = useState('')
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))

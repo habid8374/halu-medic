@@ -277,6 +277,8 @@ function NuevaNotificacionModal({ onClose, onSaved }: { onClose: () => void; onS
     municipio_residencia: '', observaciones: '',
   })
   const [saving, setSaving] = useState(false)
+  const [showBuscador, setShowBuscador] = useState(false)
+  const [pacienteNombre, setPacienteNombre] = useState('')
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
   const setCheck = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -302,8 +304,19 @@ function NuevaNotificacionModal({ onClose, onSaved }: { onClose: () => void; onS
         </div>
         <div className="p-5 space-y-3">
           <div>
-            <label className="text-xs font-medium text-slate-600 block mb-1">ID del paciente *</label>
-            <input value={form.paciente} onChange={set('paciente')} className={INPUT} placeholder="UUID del paciente" />
+            <label className="text-xs font-medium text-slate-600 block mb-1">Paciente *</label>
+            <button
+              type="button"
+              onClick={() => setShowBuscador(true)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-left flex items-center justify-between hover:border-halu-400 transition-colors"
+            >
+              {pacienteNombre ? (
+                <span className="text-slate-900 font-medium">{pacienteNombre}</span>
+              ) : (
+                <span className="text-slate-400">Buscar paciente por nombre o documento...</span>
+              )}
+              <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
@@ -358,6 +371,16 @@ function NuevaNotificacionModal({ onClose, onSaved }: { onClose: () => void; onS
           <Button onClick={guardar} loading={saving}>Registrar notificación</Button>
         </div>
       </div>
+      {showBuscador && (
+        <BuscadorPacienteIngreso
+          onSelect={(p, ing) => {
+            setForm(f => ({ ...f, paciente: p.id }))
+            setPacienteNombre(p.nombre_completo)
+            setShowBuscador(false)
+          }}
+          onClose={() => setShowBuscador(false)}
+        />
+      )}
     </div>
   )
 }

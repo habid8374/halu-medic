@@ -1,7 +1,7 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import api, { mensajeError } from '@/lib/api'
-import { PageHeader, Button, Badge, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Badge, EmptyState, BuscadorPacienteIngreso } from '@/components/ui'
 import { Search, X, Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -41,30 +41,15 @@ const estadoBadge = (e: string): 'default' | 'info' | 'success' | 'danger' => {
 const INPUT = 'w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/20 bg-white'
 
 export default function OdontologiaPage() {
-  const [pacienteBusqueda, setPacienteBusqueda] = useState('')
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<Paciente | null>(null)
   const [procedimientos, setProcedimientos] = useState<ProcedimientoDental[]>([])
   const [loading, setLoading] = useState(false)
-  const [buscando, setBuscando] = useState(false)
-  const [resultadosBusqueda, setResultadosBusqueda] = useState<Paciente[]>([])
   const [dienteModal, setDienteModal] = useState<number | null>(null)
-  const [showBusqueda, setShowBusqueda] = useState(false)
-
-  const buscarPaciente = async (q: string) => {
-    if (q.length < 2) { setResultadosBusqueda([]); return }
-    setBuscando(true)
-    try {
-      const { data } = await api.get('/api/pacientes/', { params: { search: q } })
-      setResultadosBusqueda((data.results ?? data).slice(0, 8))
-    } catch { setResultadosBusqueda([]) }
-    finally { setBuscando(false) }
-  }
+  const [showBuscador, setShowBuscador] = useState(false)
 
   const seleccionarPaciente = async (p: Paciente) => {
     setPacienteSeleccionado(p)
-    setResultadosBusqueda([])
-    setPacienteBusqueda('')
-    setShowBusqueda(false)
+    setShowBuscador(false)
     setLoading(true)
     try {
       const { data } = await api.get(`/api/salud/odontologia/procedimientos/?paciente=${p.id}`)
@@ -72,11 +57,6 @@ export default function OdontologiaPage() {
     } catch (e) { toast.error(mensajeError(e)) }
     finally { setLoading(false) }
   }
-
-  useEffect(() => {
-    const t = setTimeout(() => buscarPaciente(pacienteBusqueda), 300)
-    return () => clearTimeout(t)
-  }, [pacienteBusqueda])
 
   // Obtiene el color del diente según procedimientos
   const dienteColor = (diente: number) => {
@@ -129,34 +109,21 @@ export default function OdontologiaPage() {
 
       {/* Búsqueda de paciente */}
       <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-5">
-        <label className="text-xs font-semibold text-slate-600 block mb-2">Buscar paciente</label>
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/20"
-            placeholder="Nombre o número de documento..."
-            value={pacienteBusqueda}
-            onChange={e => { setPacienteBusqueda(e.target.value); setShowBusqueda(true) }}
-            onFocus={() => setShowBusqueda(true)}
-          />
-          {showBusqueda && resultadosBusqueda.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden">
-              {buscando ? (
-                <p className="text-xs text-slate-400 p-3">Buscando...</p>
-              ) : (
-                resultadosBusqueda.map(p => (
-                  <button key={p.id} onClick={() => seleccionarPaciente(p)}
-                    className="w-full text-left px-4 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0">
-                    <p className="text-sm font-medium text-slate-800">{p.nombre_completo}</p>
-                    <p className="text-xs text-slate-500">{p.numero_documento}</p>
-                  </button>
-                ))
-              )}
-            </div>
+        <label className="text-xs font-semibold text-slate-600 block mb-2">Paciente</label>
+        <button
+          type="button"
+          onClick={() => setShowBuscador(true)}
+          className="w-full max-w-md px-3 py-2 rounded-lg border border-slate-200 text-sm text-left flex items-center justify-between hover:border-halu-400 transition-colors"
+        >
+          {pacienteSeleccionado ? (
+            <span className="text-slate-900 font-medium">{pacienteSeleccionado.nombre_completo}</span>
+          ) : (
+            <span className="text-slate-400">Buscar paciente por nombre o documento...</span>
           )}
-        </div>
+          <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+        </button>
         {pacienteSeleccionado && (
-          <div className="flex items-center gap-3 mt-3 p-3 bg-halu-50 rounded-xl border border-halu-100">
+          <div className="flex items-center gap-3 mt-3 p-3 bg-halu-50 rounded-xl border border-halu-100 max-w-md">
             <div className="flex-1">
               <p className="text-sm font-semibold text-halu-800">{pacienteSeleccionado.nombre_completo}</p>
               <p className="text-xs text-halu-600">{pacienteSeleccionado.numero_documento}</p>
@@ -166,6 +133,12 @@ export default function OdontologiaPage() {
               <X className="w-4 h-4" />
             </button>
           </div>
+        )}
+        {showBuscador && (
+          <BuscadorPacienteIngreso
+            onSelect={(p) => seleccionarPaciente(p)}
+            onClose={() => setShowBuscador(false)}
+          />
         )}
       </div>
 

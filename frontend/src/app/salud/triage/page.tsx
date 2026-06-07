@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { triageAPI, mensajeError } from '@/lib/api'
-import { PageHeader, Button, Badge, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Badge, EmptyState, BuscadorPacienteIngreso } from '@/components/ui'
 import { AlertTriangle, Clock, CheckCircle, Plus, Search, ArrowRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -197,6 +197,8 @@ function NuevoTriageModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
     alergias: '', medicamentos_actuales: '', mecanismo_trauma: '',
   })
   const [saving, setSaving] = useState(false)
+  const [showBuscador, setShowBuscador] = useState(false)
+  const [pacienteNombre, setPacienteNombre] = useState('')
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
@@ -229,11 +231,22 @@ function NuevoTriageModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
           <p className="text-xs text-slate-500">Clasificación Res. 5596/2015</p>
         </div>
         <div className="p-5 space-y-4">
-          {/* ID paciente + nivel */}
+          {/* Paciente + nivel */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">Documento/ID Paciente *</label>
-              <input value={form.paciente} onChange={set('paciente')} placeholder="Busca por documento..." className={INPUT} />
+              <label className="text-xs font-medium text-slate-600 block mb-1">Paciente *</label>
+              <button
+                type="button"
+                onClick={() => setShowBuscador(true)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-left flex items-center justify-between hover:border-halu-400 transition-colors"
+              >
+                {pacienteNombre ? (
+                  <span className="text-slate-900 font-medium">{pacienteNombre}</span>
+                ) : (
+                  <span className="text-slate-400">Buscar paciente por nombre o documento...</span>
+                )}
+                <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              </button>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 block mb-1">Nivel de triage *</label>
@@ -295,6 +308,16 @@ function NuevoTriageModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
           <Button onClick={guardar} loading={saving}>Registrar triage</Button>
         </div>
       </div>
+      {showBuscador && (
+        <BuscadorPacienteIngreso
+          onSelect={(p, ing) => {
+            setForm(f => ({ ...f, paciente: p.id }))
+            setPacienteNombre(p.nombre_completo)
+            setShowBuscador(false)
+          }}
+          onClose={() => setShowBuscador(false)}
+        />
+      )}
     </div>
   )
 }

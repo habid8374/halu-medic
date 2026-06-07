@@ -287,6 +287,16 @@ function NuevoPlanModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
           <Button onClick={guardar} loading={saving}>Crear plan</Button>
         </div>
       </div>
+      {showBuscador && (
+        <BuscadorPacienteIngreso
+          onSelect={(p, ing) => {
+            setForm(f => ({ ...f, paciente: p.id, ingreso: ing?.id || '' }))
+            setPacienteNombre(p.nombre_completo)
+            setShowBuscador(false)
+          }}
+          onClose={() => setShowBuscador(false)}
+        />
+      )}
     </div>
   )
 }
