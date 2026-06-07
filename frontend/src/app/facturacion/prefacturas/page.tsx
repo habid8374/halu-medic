@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { prefacturaAPI } from '@/lib/api'
+import { prefacturaAPI, mensajeError } from '@/lib/api'
 import type { Prefactura, EstadoPrefactura } from '@/types'
 import toast from 'react-hot-toast'
 import { FileText, Search, Plus, Loader2, ChevronRight } from 'lucide-react'
@@ -36,8 +36,8 @@ export default function PrefacturasPage() {
       if (filtroEstado) params.estado = filtroEstado
       const res = await prefacturaAPI.list(params)
       setPrefacturas(res.data.results ?? res.data)
-    } catch {
-      toast.error('Error al cargar prefacturas')
+    } catch (e) {
+      toast.error(mensajeError(e))
     } finally {
       setLoading(false)
     }
