@@ -1,9 +1,11 @@
 """
 Pobla la tabla de Aseguradoras con las entidades oficiales del SGSSS Colombia
 (fuente: ADRES 2022). Se pueden ejecutar múltiples veces (upsert por código).
+Itera todos los tenants activos para cargar en cada schema.
 """
 from django.core.management.base import BaseCommand
-from apps.pacientes.models import Aseguradora
+from django_tenants.utils import schema_context
+from apps.tenants.models import Consultorio
 
 # (codigo_adres, nombre, tipo)
 ENTIDADES = [
@@ -94,30 +96,34 @@ ENTIDADES = [
 
 
 class Command(BaseCommand):
-    help = "Importa aseguradoras SGSSS Colombia (fuente: ADRES 2022)"
+    help = "Importa aseguradoras SGSSS Colombia (fuente: ADRES 2022) en todos los tenants"
 
     def handle(self, *args, **options):
-        creadas = actualizadas = 0
-        for codigo, nombre, tipo in ENTIDADES:
-            # NIT provisional = código ADRES (sin NIT real en el catálogo público)
-            nit_provisional = f"ADRES-{codigo}"
-            obj, created = Aseguradora.objects.update_or_create(
-                codigo=codigo,
-                defaults={
-                    "nombre": nombre,
-                    "tipo": tipo,
-                    "nit": nit_provisional,
-                    "activa": True,
-                },
-            )
-            if created:
-                creadas += 1
-            else:
-                actualizadas += 1
+        tenants = Consultorio.objects.exclude(schema_name='public')
+        if not tenants.exists():
+            self.stdout.write(self.style.WARNING("Sin tenants — nada que hacer"))
+            return
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Aseguradoras: {creadas} creadas, {actualizadas} actualizadas "
-                f"({creadas + actualizadas} total)"
-            )
-        )
+        for tenant in tenants:
+            self.stdout.write(f"→ Schema: {tenant.schema_name}")
+            creadas = actualizadas = 0
+            with schema_context(tenant.schema_name):
+                from apps.pacientes.models import Aseguradora
+                for codigo, nombre, tipo in ENTIDADES:
+                    nit_provisional = f"ADRES-{codigo}"
+                    _, created = Aseguradora.objects.update_or_create(
+                        codigo=codigo,
+                        defaults={
+                            "nombre": nombre,
+                            "tipo": tipo,
+                            "nit": nit_provisional,
+                            "activa": True,
+                        },
+                    )
+                    if created:
+                        creadas += 1
+                    else:
+                        actualizadas += 1
+            self.stdout.write(self.style.SUCCESS(
+                f"  {tenant.schema_name}: {creadas} creadas, {actualizadas} actualizadas"
+            ))
