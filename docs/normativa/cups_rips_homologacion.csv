@@ -1,0 +1,52 @@
+codigo_cups,descripcion,modalidad_rips,grupo_servicios_rips,finalidad_rips,via_ingreso_rips,cod_servicio_rips,personal_atiende,ambito_rips
+890201,Consulta de primera vez por medicina general,01,01,10,2,1,02,1
+890202,Consulta de primera vez por medicina especializada,01,01,10,2,1,01,1
+890203,Consulta de primera vez por odontología general,01,02,10,2,1,05,1
+890205,Consulta de primera vez por enfermería,01,01,10,2,1,03,1
+890401,Interconsulta ambulatoria,01,01,10,2,1,01,1
+890402,Interconsulta intrahospitalaria,01,01,10,3,1,01,2
+890403,Consulta de control o seguimiento por medicina general,01,01,11,2,1,02,1
+890406,Consulta de control o seguimiento por medicina especializada,01,01,11,2,1,01,1
+890301,Consulta de urgencias por medicina general,01,05,10,1,1,02,3
+891101,Consulta de primera vez por odontología general,01,02,10,2,1,05,1
+891102,Consulta de control o seguimiento odontológico,01,02,11,2,1,05,1
+891103,Consulta de urgencias odontológica,01,02,10,1,1,05,3
+891104,Consulta de primera vez por odontología especializada,01,02,10,2,1,05,1
+891105,Consulta de control o seguimiento por odontología especializada,01,02,11,2,1,05,1
+841000,Electrocardiograma,01,07,10,2,1,09,1
+841001,Monitoreo electrocardiográfico continuo (Holter),01,07,10,2,1,09,1
+841100,Espirometría simple,01,07,10,2,1,09,1
+841101,Espirometría con broncodilatador,01,07,10,2,1,09,1
+841102,Prueba de esfuerzo (ergometría),01,07,10,2,1,09,1
+881501,Ecografía de próstata transabdominal,01,07,10,2,1,09,1
+881502,Ecografía de próstata transrectal,01,07,10,2,1,09,1
+881503,Ecografía pélvica transvaginal,01,07,10,2,1,09,1
+881601,Ecografía de tejidos blandos en extremidades superiores,01,07,10,2,1,09,1
+903801,Ácido úrico en suero,01,07,10,2,1,08,1
+903802,Ácido úrico en orina de 24 horas,01,07,10,2,1,08,1
+903803,Albúmina en suero,01,07,10,2,1,08,1
+904200,Hemograma tipo IV (cuadro hemático automatizado),01,07,10,2,1,08,1
+904201,Hemograma con extendido de sangre periférica,01,07,10,2,1,08,1
+904202,Hemoglobina,01,07,10,2,1,08,1
+904203,Hematocrito,01,07,10,2,1,08,1
+904210,Glucosa en ayunas,01,07,10,2,1,08,1
+904211,Glucosa post-carga (prueba tolerancia oral),01,07,10,2,1,08,1
+904214,Creatinina en suero,01,07,10,2,1,08,1
+904215,Nitrógeno ureico (BUN),01,07,10,2,1,08,1
+904221,Parcial de orina (uroanálisis),01,07,10,2,1,08,1
+874000,Radiografía de tórax anteroposterior,01,07,10,2,1,09,1
+874001,Radiografía de tórax anteroposterior y lateral,01,07,10,2,1,09,1
+874100,Ecografía abdominal total,01,07,10,2,1,09,1
+874101,Ecografía abdominal superior,01,07,10,2,1,09,1
+874200,Mamografía bilateral,01,07,14,2,1,09,1
+874201,Mamografía unilateral,01,07,10,2,1,09,1
+441300,Apendicectomía convencional (abierta),01,04,11,1,1,01,2
+441301,Apendicectomía laparoscópica,01,04,11,5,1,01,2
+441302,Apendicectomía laparoscópica por incisión única,01,04,11,5,1,01,2
+531400,Colecistectomía laparoscópica,01,04,11,5,1,01,2
+531401,Reparación laparoscópica de hernia inguinal,01,04,11,5,1,01,2
+890701,Estancia hospitalaria — medicina general (día cama),01,06,11,3,1,02,2
+890702,Estancia hospitalaria — medicina especializada (día cama),01,06,11,3,1,01,2
+890703,Estancia en unidad de cuidados intensivos adultos (UCI),01,06,11,3,1,01,2
+890704,Estancia en unidad de cuidados intermedios,01,06,11,3,1,01,2
+890705,Estancia neonatal (recién nacido),01,06,11,4,1,01,2
