@@ -9,7 +9,7 @@ import { EpicrisisModal } from '@/components/ui/EpicrisisModal'
 import {
   ArrowLeft, UserCheck, UserMinus, PlusCircle, ClipboardList,
   Heart, Thermometer, Activity, Scale, CheckCircle2, Pill, Trash2, Search, X,
-  FlaskConical, Stethoscope, Scissors, FileText, AlertCircle,
+  FlaskConical, Stethoscope, Scissors, FileText, AlertCircle, Printer,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
