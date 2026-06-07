@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import api, { mensajeError } from '@/lib/api'
 import { PageHeader, Button, Badge, EmptyState, Card, BuscadorPacienteIngreso } from '@/components/ui'
 import { Plus, FlaskConical, Clock, CheckCircle2, X, ChevronDown, ChevronUp, Trash2, Search } from 'lucide-react'
@@ -304,28 +304,24 @@ function NuevaSolicitudModal({ onClose, onSaved }: { onClose: () => void; onSave
                 <Plus className="w-3 h-3" /> Agregar examen
               </Button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {examenes.map((ex, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-start">
-                  <div className="col-span-3">
-                    <input value={ex.cups} onChange={e => setExamen(i, 'cups', e.target.value)}
-                      className={INPUT} placeholder="CUPS" />
-                  </div>
-                  <div className="col-span-4">
-                    <input value={ex.nombre} onChange={e => setExamen(i, 'nombre', e.target.value)}
-                      className={INPUT} placeholder="Nombre del examen *" />
-                  </div>
-                  <div className="col-span-4">
-                    <input value={ex.indicacion} onChange={e => setExamen(i, 'indicacion', e.target.value)}
-                      className={INPUT} placeholder="Indicación específica" />
-                  </div>
-                  <div className="col-span-1 flex justify-center pt-1">
-                    {examenes.length > 1 && (
-                      <button onClick={() => removeExamen(i)} className="p-1 text-red-400 hover:text-red-600 rounded">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
+                <div key={i} className="border border-slate-100 rounded-xl p-3 space-y-2 bg-slate-50">
+                  <CupsAutocomplete
+                    value={ex.cups}
+                    nombre={ex.nombre}
+                    onSelect={(cups, nombre) => {
+                      setExamenes(prev => prev.map((e, idx) => idx === i ? { ...e, cups, nombre } : e))
+                    }}
+                    inputClass={INPUT}
+                  />
+                  <input value={ex.indicacion} onChange={e => setExamen(i, 'indicacion', e.target.value)}
+                    className={INPUT} placeholder="Indicación específica (opcional)" />
+                  {examenes.length > 1 && (
+                    <button onClick={() => removeExamen(i)} className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1">
+                      <Trash2 className="w-3 h-3" /> Quitar examen
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -345,6 +341,59 @@ function NuevaSolicitudModal({ onClose, onSaved }: { onClose: () => void; onSave
           }}
           onClose={() => setShowBuscador(false)}
         />
+      )}
+    </div>
+  )
+}
+
+function CupsAutocomplete({ value, nombre, onSelect, inputClass }: {
+  value: string
+  nombre: string
+  onSelect: (cups: string, nombre: string) => void
+  inputClass: string
+}) {
+  const [query, setQuery] = useState(nombre || value)
+  const [sugs, setSugs]   = useState<{codigo: string; descripcion: string}[]>([])
+  const [open, setOpen]   = useState(false)
+  const [busy, setBusy]   = useState(false)
+  const debRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const buscar = (q: string) => {
+    setQuery(q)
+    if (debRef.current) clearTimeout(debRef.current)
+    if (q.length < 2) { setSugs([]); setOpen(false); return }
+    debRef.current = setTimeout(async () => {
+      setBusy(true)
+      try {
+        const { data } = await api.get('/api/cups/', { params: { search: q, page_size: 10 } })
+        setSugs(data.results ?? data)
+        setOpen(true)
+      } catch { /* silencioso */ }
+      finally { setBusy(false) }
+    }, 300)
+  }
+
+  return (
+    <div className="relative">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="relative">
+          <input value={query} onChange={e => buscar(e.target.value)}
+            className={inputClass} placeholder="Buscar examen por nombre o CUPS..." />
+          {busy && <span className="absolute right-2 top-2 text-xs text-slate-400">...</span>}
+        </div>
+        <input value={value} readOnly className={`${inputClass} bg-slate-50 text-slate-500`} placeholder="Código CUPS" />
+      </div>
+      {open && sugs.length > 0 && (
+        <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          {sugs.map(s => (
+            <button key={s.codigo} type="button"
+              onClick={() => { onSelect(s.codigo, s.descripcion); setQuery(s.descripcion); setOpen(false) }}
+              className="w-full px-4 py-2.5 text-left hover:bg-halu-50 border-b border-slate-100 last:border-0">
+              <span className="text-xs font-bold text-halu-700 mr-2">{s.codigo}</span>
+              <span className="text-sm text-slate-800">{s.descripcion}</span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )
