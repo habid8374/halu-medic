@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { consentimientosAPI, mensajeError } from '@/lib/api'
-import { PageHeader, Button, Badge, EmptyState } from '@/components/ui'
-import { FileText, Plus, Check, X, Clock } from 'lucide-react'
+import { PageHeader, Button, Badge, EmptyState, BuscadorPacienteIngreso } from '@/components/ui'
+import { FileText, Plus, Check, X, Clock, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 

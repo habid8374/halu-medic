@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import api, { mensajeError } from '@/lib/api'
-import { PageHeader, Button, Badge, EmptyState, Card } from '@/components/ui'
-import { Plus, Activity, X, CheckSquare } from 'lucide-react'
+import { PageHeader, Button, Badge, EmptyState, Card, BuscadorPacienteIngreso } from '@/components/ui'
+import { Plus, Activity, X, CheckSquare, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 
@@ -200,6 +200,8 @@ function NuevoPlanModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     frecuencia_semanal: '3', fecha_inicio: new Date().toISOString().slice(0, 10),
   })
   const [saving, setSaving] = useState(false)
+  const [showBuscador, setShowBuscador] = useState(false)
+  const [pacienteNombre, setPacienteNombre] = useState('')
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
@@ -232,8 +234,19 @@ function NuevoPlanModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
         </div>
         <div className="p-5 space-y-3">
           <div>
-            <label className="text-xs font-medium text-slate-600 block mb-1">ID del paciente *</label>
-            <input value={form.paciente} onChange={set('paciente')} className={INPUT} placeholder="UUID del paciente" />
+            <label className="text-xs font-medium text-slate-600 block mb-1">Paciente *</label>
+            <button
+              type="button"
+              onClick={() => setShowBuscador(true)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-left flex items-center justify-between hover:border-halu-400 transition-colors"
+            >
+              {pacienteNombre ? (
+                <span className="text-slate-900 font-medium">{pacienteNombre}</span>
+              ) : (
+                <span className="text-slate-400">Buscar paciente por nombre o documento...</span>
+              )}
+              <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            </button>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Tipo de terapia *</label>

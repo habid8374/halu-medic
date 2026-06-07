@@ -206,3 +206,5 @@ export function SearchBar({ value, onChange, placeholder = 'Buscar...', classNam
 
 export { CupsAutocomplete } from './CupsAutocomplete'
 export { Cie10Autocomplete } from './Cie10Autocomplete'
+export { default as BuscadorPacienteIngreso } from './BuscadorPacienteIngreso'
+export type { PacienteResumen, IngresoResumen } from './BuscadorPacienteIngreso'
