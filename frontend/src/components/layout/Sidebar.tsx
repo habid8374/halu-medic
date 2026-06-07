@@ -112,12 +112,14 @@ export default function Sidebar() {
   const [open, setOpen] = useState(false)
   const [consultorioNombre, setConsultorioNombre] = useState('')
   const [consultorioDominio, setConsultorioDominio] = useState('')
+  const [consultorioLogo, setConsultorioLogo] = useState('')
 
   useEffect(() => {
     consultorioAPI.get()
       .then(({ data }) => {
         setConsultorioNombre(data.nombre || '')
         setConsultorioDominio(data.dominio || '')
+        setConsultorioLogo(data.logo_url || '')
       })
       .catch(() => {/* silencioso */})
   }, [])
@@ -171,8 +173,11 @@ export default function Sidebar() {
 
       {/* Consultorio activo */}
       <div className="mx-3 mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5 flex-shrink-0">
-        <div className="w-7 h-7 bg-halu-100 rounded-lg flex items-center justify-center flex-shrink-0">
-          <Building2 className="w-3.5 h-3.5 text-halu-600" />
+        <div className="w-7 h-7 bg-halu-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+          {consultorioLogo
+            ? <img src={consultorioLogo} alt="" className="w-full h-full object-contain" />
+            : <Building2 className="w-3.5 h-3.5 text-halu-600" />
+          }
         </div>
         <div className="min-w-0">
           <p className="text-xs font-medium text-slate-700 truncate">{consultorioNombre || 'Mi Consultorio'}</p>
