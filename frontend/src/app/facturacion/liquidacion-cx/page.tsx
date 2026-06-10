@@ -276,49 +276,39 @@ export default function LiquidacionCXPage() {
         </div>
       )}
 
-      {/* Search results */}
+      {/* Search results — tarjetas clickeables (mobile-friendly) */}
       {results.length > 0 && (
         <div className="border rounded-lg overflow-hidden">
           <div className="bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600 border-b">
-            {results.length} resultado(s) encontrado(s)
+            {results.length} resultado(s) encontrado(s) — toca para abrir
           </div>
-          <table className="w-full text-xs">
-            <thead className="bg-slate-50">
-              <tr>
-                {['DQX','CUPS','Descripción','Cirujano','Fecha','Paciente','Documento','Ingreso','Liquidación'].map(h => (
-                  <th key={h} className="px-2 py-1.5 text-left text-slate-600 font-medium">{h}</th>
-                ))}
-                <th className="px-2 py-1.5" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {results.map(r => (
-                <tr key={r.dqx_id} className="hover:bg-slate-50">
-                  <td className="px-2 py-1.5 font-mono font-medium text-slate-700">{r.dqx_numero}</td>
-                  <td className="px-2 py-1.5 font-mono">{r.cups}</td>
-                  <td className="px-2 py-1.5 text-slate-600 max-w-[160px] truncate">{r.descripcion}</td>
-                  <td className="px-2 py-1.5">{r.cirujano}</td>
-                  <td className="px-2 py-1.5">{r.fecha}</td>
-                  <td className="px-2 py-1.5">{r.paciente_nombre}</td>
-                  <td className="px-2 py-1.5 font-mono">{r.paciente_doc}</td>
-                  <td className="px-2 py-1.5">{r.numero_ingreso}</td>
-                  <td className="px-2 py-1.5">
+          <div className="divide-y divide-slate-100">
+            {results.map(r => (
+              <button
+                key={r.dqx_id}
+                onClick={() => handleSelectDQX(r)}
+                className="w-full text-left px-3 py-3 hover:bg-halu-50 active:bg-halu-100 transition-colors flex items-start justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-semibold text-slate-800 text-sm">{r.dqx_numero}</span>
+                    <span className="font-mono text-halu-700 text-sm font-medium">{r.cups}</span>
                     {r.liquidacion_id
-                      ? <span className="text-green-600 font-medium">Existente</span>
-                      : <span className="text-amber-600">Nueva</span>}
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <button
-                      onClick={() => handleSelectDQX(r)}
-                      className="px-2 py-1 bg-halu-600 text-white rounded text-xs hover:bg-halu-700"
-                    >
-                      {r.liquidacion_id ? 'Ver' : 'Crear'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      ? <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Existente</span>
+                      : <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">Nueva</span>}
+                  </div>
+                  <div className="text-xs text-slate-600 mt-0.5 truncate">{r.descripcion}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    {r.paciente_nombre} · {r.paciente_doc} · Ingreso {r.numero_ingreso} · {r.fecha}
+                  </div>
+                  {r.cirujano && <div className="text-xs text-slate-400">{r.cirujano}</div>}
+                </div>
+                <span className="shrink-0 px-3 py-1.5 bg-halu-600 text-white rounded-lg text-xs font-medium mt-0.5">
+                  {r.liquidacion_id ? 'Ver' : 'Crear'}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
