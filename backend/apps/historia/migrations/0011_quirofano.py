@@ -1,3 +1,4 @@
+# Generated migration for Quirofano model
 from django.db import migrations, models
 import uuid
 
