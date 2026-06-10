@@ -4028,6 +4028,29 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
             )
         return qs
 
+    def perform_create(self, serializer):
+        liq = serializer.save()
+        dqx = liq.descripcion_qx
+        if dqx and dqx.cups_principal and not liq.procedimientos.exists():
+            from apps.tarifas.models import ManualTarifario
+            valor = 0
+            desc  = dqx.descripcion_procedimiento or ''
+            tar   = ManualTarifario.objects.filter(es_predeterminado=True).first()
+            if tar:
+                item = tar.items.filter(cups=dqx.cups_principal).first()
+                if item:
+                    valor = float(item.valor_base)
+                    desc  = desc or item.descripcion
+            proc = ProcedimientoLiquidacion(
+                liquidacion=liq, orden=1,
+                cups=dqx.cups_principal,
+                descripcion=desc,
+                valor_base=valor,
+            )
+            proc.aplicar_porcentajes()
+            proc.save()
+            liq.calcular_totales()
+
     @action(detail=True, methods=['post'], url_path='agregar-procedimiento')
     def agregar_procedimiento(self, request, pk=None):
         liq = self.get_object()
