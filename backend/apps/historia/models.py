@@ -1400,3 +1400,151 @@ class SolicitudHemoderivado(models.Model):
 
     def __str__(self):
         return f'{self.get_tipo_solicitado_display()} x{self.cantidad_unidades} — {self.paciente}'
+
+
+# ── Liquidación de Cirugías (ISS/SOAT) ────────────────────────────────────────
+
+TABLA_PCT_LIQUIDACION = {
+    'bilateral': {
+        'ISS_2001': {'cirujano':[100,75,None],'anestesiologo':[100,75,None],'ayudante':[100,75,None],'quirofano':[100,75,None],'materiales':[100,75,None]},
+        'ISS_2004': {'cirujano':[100,75,None],'anestesiologo':[100,75,None],'ayudante':[100,75,None],'quirofano':[100,75,None],'materiales':[100,75,None]},
+        'SOAT':     {'cirujano':[100,75,None],'anestesiologo':[100,75,None],'ayudante':[100,75,None],'quirofano':[100,50,None],'materiales':[100,75,None]},
+    },
+    'misma_via': {
+        'ISS_2001': {'cirujano':[100,60,None],'anestesiologo':[100,60,None],'ayudante':[100,60,None],'quirofano':[100,50,None],'materiales':[100,50,None]},
+        'ISS_2004': {'cirujano':[100,55,55],'anestesiologo':[100,55,55],'ayudante':[100,55,55],'quirofano':[100,55,55],'materiales':[100,50,None]},
+        'SOAT':     {'cirujano':[100,50,50],'anestesiologo':[100,50,50],'ayudante':[100,50,50],'quirofano':[100,None,None],'materiales':[100,None,None]},
+    },
+    'diferente_via': {
+        'ISS_2001': {'cirujano':[100,75,75],'anestesiologo':[100,75,75],'ayudante':[100,75,75],'quirofano':[100,50,50],'materiales':[100,50,50]},
+        'ISS_2004': {'cirujano':[100,65,65],'anestesiologo':[100,65,65],'ayudante':[100,65,65],'quirofano':[100,65,65],'materiales':[100,50,None]},
+        'SOAT':     {'cirujano':[100,75,75],'anestesiologo':[100,75,75],'ayudante':[100,75,75],'quirofano':[100,50,50],'materiales':[100,75,75]},
+    },
+    'multiple_misma_a': {
+        'ISS_2001': {'cirujano':[100,60,None],'anestesiologo':[100,None,None],'ayudante':[100,None,None],'quirofano':[100,50,None],'materiales':[100,50,None]},
+        'ISS_2004': {'cirujano':[100,40,40],'anestesiologo':[100,40,40],'ayudante':[100,40,40],'quirofano':[100,40,40],'materiales':[100,50,50]},
+        'SOAT':     {'cirujano':[100,50,50],'anestesiologo':[100,75,75],'ayudante':[100,None,None],'quirofano':[100,50,None],'materiales':[100,None,None]},
+    },
+    'multiple_misma_b': {
+        'ISS_2001': {'cirujano':[100,60,None],'anestesiologo':[75,None,None],'ayudante':[50,None,None],'quirofano':[100,50,None],'materiales':[100,50,None]},
+        'ISS_2004': {'cirujano':[100,40,40],'anestesiologo':[100,40,40],'ayudante':[100,40,40],'quirofano':[100,40,40],'materiales':[100,50,50]},
+        'SOAT':     {'cirujano':[100,50,50],'anestesiologo':[75,75,75],'ayudante':[50,None,None],'quirofano':[50,50,None],'materiales':[None,None,None]},
+    },
+    'multiple_diferente_a': {
+        'ISS_2001': {'cirujano':[100,60,None],'anestesiologo':[100,None,None],'ayudante':[100,None,None],'quirofano':[100,50,None],'materiales':[100,50,None]},
+        'ISS_2004': {'cirujano':[100,40,40],'anestesiologo':[100,40,40],'ayudante':[100,40,40],'quirofano':[100,40,40],'materiales':[100,50,50]},
+        'SOAT':     {'cirujano':[100,50,50],'anestesiologo':[100,75,75],'ayudante':[100,None,None],'quirofano':[100,50,None],'materiales':[100,75,75]},
+    },
+    'multiple_diferente_b': {
+        'ISS_2001': {'cirujano':[100,60,None],'anestesiologo':[75,None,None],'ayudante':[50,None,None],'quirofano':[100,50,None],'materiales':[100,50,None]},
+        'ISS_2004': {'cirujano':[100,40,40],'anestesiologo':[100,40,40],'ayudante':[100,40,40],'quirofano':[100,40,40],'materiales':[100,50,50]},
+        'SOAT':     {'cirujano':[100,50,50],'anestesiologo':[75,75,75],'ayudante':[50,None,None],'quirofano':[50,50,None],'materiales':[75,75,75]},
+    },
+}
+
+
+class LiquidacionCirugia(models.Model):
+    TARIFARIO_CHOICES = [
+        ('ISS_2001', 'ISS 2001'),
+        ('ISS_2004', 'ISS 2004'),
+        ('SOAT',     'SOAT'),
+    ]
+    TIPO_CHOICES = [
+        ('bilateral',          'Bilateral'),
+        ('misma_via',          'Mismo especialista – Misma v\xeda'),
+        ('diferente_via',      'Mismo especialista – Diferente v\xeda'),
+        ('multiple_misma_a',   'M\xfaltiple especialista – Misma v\xeda (Cirujano A)'),
+        ('multiple_misma_b',   'M\xfaltiple especialista – Misma v\xeda (Cirujano B)'),
+        ('multiple_diferente_a','M\xfaltiple especialista – Diferente v\xeda (Cirujano A)'),
+        ('multiple_diferente_b','M\xfaltiple especialista – Diferente v\xeda (Cirujano B)'),
+    ]
+    ESTADO_CHOICES = [('borrador','Borrador'),('finalizada','Finalizada'),('facturada','Facturada')]
+
+    id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    descripcion_qx   = models.OneToOneField('DescripcionQuirurgica', on_delete=models.CASCADE,
+                                             related_name='liquidacion', null=True, blank=True)
+    ingreso          = models.ForeignKey(Ingreso, on_delete=models.SET_NULL, null=True, blank=True,
+                                          related_name='liquidaciones_cx')
+    tipo_tarifario   = models.CharField(max_length=10, choices=TARIFARIO_CHOICES, default='ISS_2001')
+    tipo_liquidacion = models.CharField(max_length=25, choices=TIPO_CHOICES, default='misma_via')
+    estado           = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='borrador')
+    observaciones    = models.TextField(blank=True)
+    total_cirujano      = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_anestesiologo = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_ayudante      = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_quirofano     = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_materiales    = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_general       = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    creado_en        = models.DateTimeField(auto_now_add=True)
+    actualizado_en   = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+        verbose_name = 'Liquidaci\xf3n de cirug\xeda'
+        verbose_name_plural = 'Liquidaciones de cirug\xeda'
+
+    def calcular_totales(self):
+        from decimal import Decimal
+        tots = {'cirujano':Decimal(0),'anestesiologo':Decimal(0),'ayudante':Decimal(0),'quirofano':Decimal(0),'materiales':Decimal(0)}
+        for p in self.procedimientos.all():
+            tots['cirujano']      += p.valor_cirujano
+            tots['anestesiologo'] += p.valor_anestesiologo
+            tots['ayudante']      += p.valor_ayudante
+            tots['quirofano']     += p.valor_quirofano
+            tots['materiales']    += p.valor_materiales
+        self.total_cirujano      = tots['cirujano']
+        self.total_anestesiologo = tots['anestesiologo']
+        self.total_ayudante      = tots['ayudante']
+        self.total_quirofano     = tots['quirofano']
+        self.total_materiales    = tots['materiales']
+        self.total_general       = sum(tots.values())
+        self.save(update_fields=['total_cirujano','total_anestesiologo','total_ayudante',
+                                  'total_quirofano','total_materiales','total_general','actualizado_en'])
+
+
+class ProcedimientoLiquidacion(models.Model):
+    id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    liquidacion  = models.ForeignKey(LiquidacionCirugia, on_delete=models.CASCADE, related_name='procedimientos')
+    orden        = models.PositiveSmallIntegerField(help_text='1=mayor UVR, 2, 3...')
+    cups         = models.CharField(max_length=15)
+    descripcion  = models.CharField(max_length=300, blank=True)
+    valor_base   = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    pct_cirujano      = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    pct_anestesiologo = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    pct_ayudante      = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    pct_quirofano     = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    pct_materiales    = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    valor_cirujano      = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_anestesiologo = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_ayudante      = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_quirofano     = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_materiales    = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    subtotal            = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ['orden']
+        constraints = [
+            models.UniqueConstraint(fields=['liquidacion', 'orden'], name='unique_liquidacion_orden')
+        ]
+
+    def aplicar_porcentajes(self):
+        from decimal import Decimal
+        tabla = TABLA_PCT_LIQUIDACION.get(self.liquidacion.tipo_liquidacion, {})
+        tar   = self.liquidacion.tipo_tarifario
+        idx   = self.orden - 1
+        def pct(servicio):
+            lista = tabla.get(tar, {}).get(servicio, [100])
+            val = lista[idx] if idx < len(lista) else None
+            return Decimal(str(val)) if val is not None else Decimal('0')
+        self.pct_cirujano      = pct('cirujano')
+        self.pct_anestesiologo = pct('anestesiologo')
+        self.pct_ayudante      = pct('ayudante')
+        self.pct_quirofano     = pct('quirofano')
+        self.pct_materiales    = pct('materiales')
+        b = self.valor_base
+        self.valor_cirujano      = (b * self.pct_cirujano      / 100).quantize(Decimal('1'))
+        self.valor_anestesiologo = (b * self.pct_anestesiologo / 100).quantize(Decimal('1'))
+        self.valor_ayudante      = (b * self.pct_ayudante      / 100).quantize(Decimal('1'))
+        self.valor_quirofano     = (b * self.pct_quirofano     / 100).quantize(Decimal('1'))
+        self.valor_materiales    = (b * self.pct_materiales    / 100).quantize(Decimal('1'))
+        self.subtotal = self.valor_cirujano + self.valor_anestesiologo + self.valor_ayudante + self.valor_quirofano + self.valor_materiales

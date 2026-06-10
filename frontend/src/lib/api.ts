@@ -578,3 +578,17 @@ export const notificacionesAPI = {
   marcarLeida: (id: string) => api.post(`/api/notificaciones/${id}/marcar_leida/`),
   marcarTodasLeidas: () => api.post('/api/notificaciones/marcar_todas_leidas/'),
 }
+
+// ── Liquidación Cirugías ──────────────────────────────────────────────────────
+export const liquidacionCxAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/liquidacion/cirugias/', { params }),
+  get:    (id: string) => api.get(`/api/liquidacion/cirugias/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/api/liquidacion/cirugias/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/liquidacion/cirugias/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/liquidacion/cirugias/${id}/`),
+  agregarProcedimiento: (id: string, data: Record<string, unknown>) =>
+    api.post(`/api/liquidacion/cirugias/${id}/agregar-procedimiento/`, data),
+  recalcular: (id: string, data: Record<string, unknown>) =>
+    api.post(`/api/liquidacion/cirugias/${id}/recalcular/`, data),
+  buscarDQX: (q: string) => api.get('/api/liquidacion/cirugias/buscar-dqx/', { params: { q } }),
+}

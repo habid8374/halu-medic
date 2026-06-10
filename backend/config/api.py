@@ -2866,6 +2866,7 @@ from apps.historia.models import (
     ReferenciaPaciente, PlanRehabilitacion, SesionRehabilitacion,
     HistoriaOdontologica, ProcedimientoOdontologico, SesionTelemedicina,
     CamaUCI, AdmisionUCI, MonitoreoUCI, UnidadHemoderivado, SolicitudHemoderivado, Quirofano,
+    LiquidacionCirugia, ProcedimientoLiquidacion,
 )
 from apps.farmacia.models import (
     MedicamentoFarmacia, LoteInventario, MovimientoInventario, DispensacionMedicamento,
@@ -3922,3 +3923,188 @@ class NotificacionViewSet(viewsets.ModelViewSet):
         notif.save()
         return Response({'ok': True})
 
+
+
+# ── Liquidación Cirugías ──────────────────────────────────────────────────────
+
+class ProcedimientoLiquidacionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = ProcedimientoLiquidacion
+        fields = [
+            'id', 'orden', 'cups', 'descripcion', 'valor_base',
+            'pct_cirujano', 'pct_anestesiologo', 'pct_ayudante', 'pct_quirofano', 'pct_materiales',
+            'valor_cirujano', 'valor_anestesiologo', 'valor_ayudante', 'valor_quirofano', 'valor_materiales',
+            'subtotal',
+        ]
+        read_only_fields = ['id', 'valor_cirujano', 'valor_anestesiologo', 'valor_ayudante',
+                            'valor_quirofano', 'valor_materiales', 'subtotal',
+                            'pct_cirujano', 'pct_anestesiologo', 'pct_ayudante', 'pct_quirofano', 'pct_materiales']
+
+
+class LiquidacionCirugiaSerializer(serializers.ModelSerializer):
+    procedimientos       = ProcedimientoLiquidacionSerializer(many=True, read_only=True)
+    paciente_nombre      = serializers.SerializerMethodField()
+    paciente_doc         = serializers.SerializerMethodField()
+    numero_ingreso       = serializers.SerializerMethodField()
+    dqx_numero           = serializers.SerializerMethodField()
+    dqx_cups             = serializers.SerializerMethodField()
+    dqx_descripcion      = serializers.SerializerMethodField()
+    dqx_cirujano         = serializers.SerializerMethodField()
+    dqx_anestesiologo    = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = LiquidacionCirugia
+        fields = [
+            'id', 'descripcion_qx', 'ingreso', 'tipo_tarifario', 'tipo_liquidacion', 'estado',
+            'observaciones',
+            'total_cirujano', 'total_anestesiologo', 'total_ayudante',
+            'total_quirofano', 'total_materiales', 'total_general',
+            'creado_en', 'actualizado_en',
+            'procedimientos',
+            'paciente_nombre', 'paciente_doc', 'numero_ingreso',
+            'dqx_numero', 'dqx_cups', 'dqx_descripcion', 'dqx_cirujano', 'dqx_anestesiologo',
+        ]
+        read_only_fields = ['id', 'creado_en', 'actualizado_en',
+                            'total_cirujano', 'total_anestesiologo', 'total_ayudante',
+                            'total_quirofano', 'total_materiales', 'total_general']
+
+    def get_paciente_nombre(self, obj):
+        try:
+            p = obj.ingreso.paciente if obj.ingreso else (obj.descripcion_qx.ingreso.paciente if obj.descripcion_qx and obj.descripcion_qx.ingreso else None)
+            return f"{p.primer_nombre} {p.primer_apellido}" if p else ''
+        except Exception:
+            return ''
+
+    def get_paciente_doc(self, obj):
+        try:
+            p = obj.ingreso.paciente if obj.ingreso else (obj.descripcion_qx.ingreso.paciente if obj.descripcion_qx and obj.descripcion_qx.ingreso else None)
+            return p.numero_identificacion if p else ''
+        except Exception:
+            return ''
+
+    def get_numero_ingreso(self, obj):
+        try:
+            return obj.ingreso.numero_ingreso if obj.ingreso else ''
+        except Exception:
+            return ''
+
+    def get_dqx_numero(self, obj):
+        return f"DQX-{str(obj.descripcion_qx.numero_dqx).zfill(5)}" if obj.descripcion_qx else ''
+
+    def get_dqx_cups(self, obj):
+        return obj.descripcion_qx.cups_principal if obj.descripcion_qx else ''
+
+    def get_dqx_descripcion(self, obj):
+        return obj.descripcion_qx.descripcion_procedimiento if obj.descripcion_qx else ''
+
+    def get_dqx_cirujano(self, obj):
+        return obj.descripcion_qx.cirujano_nombre if obj.descripcion_qx else ''
+
+    def get_dqx_anestesiologo(self, obj):
+        return obj.descripcion_qx.anestesiologo_nombre if obj.descripcion_qx else ''
+
+
+class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
+    serializer_class = LiquidacionCirugiaSerializer
+
+    def get_queryset(self):
+        qs = LiquidacionCirugia.objects.select_related(
+            'ingreso', 'ingreso__paciente', 'descripcion_qx'
+        ).prefetch_related('procedimientos')
+        ingreso = self.request.query_params.get('ingreso')
+        search  = self.request.query_params.get('search')
+        estado  = self.request.query_params.get('estado')
+        if ingreso:
+            qs = qs.filter(ingreso=ingreso)
+        if estado:
+            qs = qs.filter(estado=estado)
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(ingreso__paciente__primer_nombre__icontains=search) |
+                Q(ingreso__paciente__primer_apellido__icontains=search) |
+                Q(ingreso__paciente__numero_identificacion__icontains=search) |
+                Q(ingreso__numero_ingreso__icontains=search)
+            )
+        return qs
+
+    @action(detail=True, methods=['post'], url_path='agregar-procedimiento')
+    def agregar_procedimiento(self, request, pk=None):
+        liq = self.get_object()
+        cups  = request.data.get('cups', '')
+        desc  = request.data.get('descripcion', '')
+        valor = request.data.get('valor_base', 0)
+        orden = request.data.get('orden')
+
+        if not orden:
+            orden = liq.procedimientos.count() + 1
+
+        if not float(valor or 0):
+            from apps.tarifas.models import ManualTarifario
+            tar_default = ManualTarifario.objects.filter(es_predeterminado=True).first()
+            if tar_default:
+                item = tar_default.items.filter(cups=cups).first()
+                if item:
+                    valor = float(item.valor_base)
+                    desc  = desc or item.descripcion
+
+        liq.procedimientos.filter(orden=orden).delete()
+
+        proc = ProcedimientoLiquidacion(
+            liquidacion=liq, orden=orden, cups=cups,
+            descripcion=desc, valor_base=valor,
+        )
+        proc.aplicar_porcentajes()
+        proc.save()
+        liq.calcular_totales()
+        return Response(ProcedimientoLiquidacionSerializer(proc).data, status=201)
+
+    @action(detail=True, methods=['post'], url_path='recalcular')
+    def recalcular(self, request, pk=None):
+        liq = self.get_object()
+        changed = False
+        for campo in ('tipo_tarifario', 'tipo_liquidacion', 'estado', 'observaciones'):
+            if campo in request.data:
+                setattr(liq, campo, request.data[campo])
+                changed = True
+        if changed:
+            liq.save()
+        for proc in liq.procedimientos.all():
+            proc.aplicar_porcentajes()
+            proc.save()
+        liq.calcular_totales()
+        return Response(LiquidacionCirugiaSerializer(liq).data)
+
+    @action(detail=False, methods=['get'], url_path='buscar-dqx')
+    def buscar_dqx(self, request):
+        search = request.query_params.get('q', '')
+        from apps.historia.models import DescripcionQuirurgica
+        from django.db.models import Q
+        qs = DescripcionQuirurgica.objects.select_related(
+            'ingreso', 'ingreso__paciente'
+        ).filter(
+            Q(ingreso__paciente__numero_identificacion__icontains=search) |
+            Q(ingreso__numero_ingreso__icontains=search) |
+            Q(cups_principal__icontains=search)
+        )[:20]
+        data = []
+        for dqx in qs:
+            p = dqx.ingreso.paciente if dqx.ingreso else None
+            try:
+                liq_id = str(dqx.liquidacion.id)
+            except Exception:
+                liq_id = None
+            data.append({
+                'dqx_id': str(dqx.id),
+                'dqx_numero': f"DQX-{str(dqx.numero_dqx).zfill(5)}",
+                'cups': dqx.cups_principal,
+                'descripcion': dqx.descripcion_procedimiento,
+                'cirujano': dqx.cirujano_nombre,
+                'fecha': dqx.fecha_hora_inicio.strftime('%Y-%m-%d') if dqx.fecha_hora_inicio else '',
+                'paciente_nombre': f"{p.primer_nombre} {p.primer_apellido}" if p else '',
+                'paciente_doc': p.numero_identificacion if p else '',
+                'numero_ingreso': dqx.ingreso.numero_ingreso if dqx.ingreso else '',
+                'ingreso_id': str(dqx.ingreso.id) if dqx.ingreso else '',
+                'liquidacion_id': liq_id,
+            })
+        return Response(data)

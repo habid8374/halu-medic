@@ -84,8 +84,9 @@ const navItems: NavItem[] = [
     icon: Receipt,
     requiere: 'puede_facturar',
     children: [
-      { href: '/facturacion',     label: 'Por evento (FEV)' },
-      { href: '/facturacion/pgp', label: 'PGP / Capitado' },
+      { href: '/facturacion',                 label: 'Por evento (FEV)' },
+      { href: '/facturacion/pgp',             label: 'PGP / Capitado' },
+      { href: '/facturacion/liquidacion-cx',  label: 'Liquidación CX' },
     ],
   },
   { href: '/rips',           label: 'RIPS',             icon: FileJson,       requiere: 'puede_facturar' },
