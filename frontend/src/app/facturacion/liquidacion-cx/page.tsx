@@ -116,7 +116,20 @@ export default function LiquidacionCXPage() {
     setLoading(true)
     try {
       const res = await liquidacionCxAPI.get(id)
-      setLiq(res.data)
+      let data = res.data
+      // Si la liquidación está vacía pero el DQX tiene CUPS, auto-agregar el procedimiento
+      if (data.procedimientos?.length === 0 && data.dqx_cups) {
+        try {
+          await liquidacionCxAPI.agregarProcedimiento(id, {
+            cups: data.dqx_cups,
+            descripcion: data.dqx_descripcion || '',
+            orden: 1,
+          })
+          const refres = await liquidacionCxAPI.get(id)
+          data = refres.data
+        } catch (_) { /* si falla, mostrar igual */ }
+      }
+      setLiq(data)
       setResults([])
     } catch (e) {
       toast.error(mensajeError(e))
