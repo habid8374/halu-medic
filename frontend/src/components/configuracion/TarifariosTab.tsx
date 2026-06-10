@@ -379,7 +379,7 @@ export function TarifariosTab() {
                               </td>
                             </tr>
                           ) : (
-                            items[manual.id] ?? [].map(item => (
+                            (items[manual.id] ?? []).map(item => (
                               <tr key={item.id} className="border-t border-slate-100 hover:bg-white transition-colors">
                                 <td className="px-3 py-2 font-mono font-semibold text-halu-700">
                                   <div className="flex items-center gap-1.5">
