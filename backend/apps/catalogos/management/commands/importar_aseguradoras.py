@@ -138,15 +138,35 @@ ENTIDADES = [
 ]
 
 
+def _detectar_regimen(nombre: str, codigo: str) -> str:
+    """Deduce régimen desde el nombre o el código ADRES."""
+    n = nombre.upper()
+    if 'SUBSIDIADO' in n or 'SUBSID' in n:
+        return 'S'
+    if 'CONTRIBUTIVO' in n or 'CONTRIB' in n or 'MOVILIDAD' in n:
+        return 'C'
+    if codigo.startswith('ARL') or 'ARL' in n or 'RIESGOS' in n:
+        return 'A'
+    if 'SOAT' in n:
+        return 'T'
+    # EPS sin mención explícita → contributivo por defecto
+    if codigo.startswith('EPS') or codigo.startswith('EPSC'):
+        return 'C'
+    return ''
+
+
 def _cargar_en_schema(schema_name, stdout, style):
     from apps.pacientes.models import Aseguradora
     creadas = actualizadas = errores = 0
     for codigo, nombre, tipo in ENTIDADES:
-        nit = f"ADRES-{codigo}"
+        nit    = f"ADRES-{codigo}"
+        regimen = _detectar_regimen(nombre, codigo)
         try:
-            _, created = Aseguradora.objects.update_or_create(
-                codigo=codigo,
-                defaults={"nombre": nombre, "tipo": tipo, "nit": nit, "activa": True},
+            # Lookup por (nit, regimen) — la clave única real del modelo
+            obj, created = Aseguradora.objects.update_or_create(
+                nit=nit,
+                regimen=regimen,
+                defaults={"nombre": nombre, "tipo": tipo, "codigo": codigo, "activa": True},
             )
             if created:
                 creadas += 1
