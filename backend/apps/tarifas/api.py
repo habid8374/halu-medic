@@ -100,8 +100,10 @@ class ManualTarifarioViewSet(viewsets.ModelViewSet):
                 filas = _parse_csv(archivo)
             else:
                 filas = _parse_excel(archivo)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
         except Exception as e:
-            return Response({'error': f'Error leyendo archivo: {e}'}, status=400)
+            return Response({'error': f'No se pudo leer el archivo ({type(e).__name__}): {e}'}, status=400)
 
         importados = actualizados = errores = 0
         mensajes_error = []
@@ -262,13 +264,16 @@ class ManualTarifarioViewSet(viewsets.ModelViewSet):
 
 # ── Helpers de parseo ─────────────────────────────────────────────────────────
 
-_CUPS_COLS  = {'cups', 'codigo', 'cod', 'code', 'cod_cups', 'codigo_cups'}
-_DESC_COLS  = {'descripcion', 'nombre', 'description', 'name', 'procedimiento'}
-_VALOR_COLS = {'valor', 'precio', 'value', 'price', 'tarifa', 'valor_base'}
+_CUPS_COLS  = {'cups', 'codigo', 'cod', 'code', 'cod_cups', 'codigo_cups', 'codigocups', 'cup'}
+_DESC_COLS  = {'descripcion', 'nombre', 'description', 'name', 'procedimiento', 'desc', 'detalle', 'servicio'}
+_VALOR_COLS = {'valor', 'precio', 'value', 'price', 'tarifa', 'valor_base', 'valorbase', 'costo', 'importe', 'vr'}
 
 
 def _norm_header(h):
-    return str(h).lower().strip().replace(' ', '_').replace('.', '').replace(':', '')
+    import unicodedata
+    s = unicodedata.normalize('NFD', str(h))
+    s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')  # elimina tildes
+    return s.lower().strip().replace(' ', '_').replace('.', '').replace(':', '').replace('$', '').replace('(', '').replace(')', '')
 
 
 def _map_headers(headers):
@@ -296,10 +301,11 @@ def _parse_excel(archivo):
     headers = [str(c) if c is not None else '' for c in rows[0]]
     m = _map_headers(headers)
     if 'cups' not in m or 'valor' not in m:
+        norm = [_norm_header(h) for h in headers]
         raise ValueError(
-            f'No se encontraron columnas CUPS y valor. '
-            f'Columnas detectadas: {headers}. '
-            f'Nombra las columnas "CUPS" y "Valor" (o similar).'
+            f'Columnas no reconocidas. '
+            f'Se detectaron: {headers} (normalizado: {norm}). '
+            f'La primera fila debe tener columnas llamadas "CUPS" y "Valor" (o similar).'
         )
     result = []
     for row in rows[1:]:
