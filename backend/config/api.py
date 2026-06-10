@@ -4028,19 +4028,37 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
             )
         return qs
 
+    def _buscar_uvr(self, cups, tipo_tarifario, desc_fallback=''):
+        """Busca el valor UVR de un CUPS en el tarifario más apropiado."""
+        from apps.tarifas.models import ManualTarifario
+        from django.db.models import Q
+        # 1. Tarifario predeterminado
+        # 2. Tarifario cuyo nombre contiene el tipo (ISS 2001, ISS 2004, SOAT)
+        # 3. Cualquier tarifario que tenga el CUPS
+        nombre_hint = tipo_tarifario.replace('_', ' ')  # ISS_2001 → ISS 2001
+        candidatos = ManualTarifario.objects.filter(
+            Q(es_predeterminado=True) |
+            Q(nombre__icontains=nombre_hint)
+        ).order_by('-es_predeterminado', 'nombre')
+        for tar in candidatos:
+            item = tar.items.filter(cups=cups).first()
+            if item and float(item.valor_base or 0) > 0:
+                return float(item.valor_base), item.descripcion or desc_fallback
+        # último recurso: cualquier tarifario
+        from apps.tarifas.models import ItemTarifario
+        item = ItemTarifario.objects.filter(cups=cups, manual__isnull=False).order_by('-valor_base').first()
+        if item and float(item.valor_base or 0) > 0:
+            return float(item.valor_base), item.descripcion or desc_fallback
+        return 0, desc_fallback
+
     def perform_create(self, serializer):
         liq = serializer.save()
         dqx = liq.descripcion_qx
         if dqx and dqx.cups_principal and not liq.procedimientos.exists():
-            from apps.tarifas.models import ManualTarifario
-            valor = 0
-            desc  = dqx.descripcion_procedimiento or ''
-            tar   = ManualTarifario.objects.filter(es_predeterminado=True).first()
-            if tar:
-                item = tar.items.filter(cups=dqx.cups_principal).first()
-                if item:
-                    valor = float(item.valor_base)
-                    desc  = desc or item.descripcion
+            valor, desc = self._buscar_uvr(
+                dqx.cups_principal, liq.tipo_tarifario,
+                dqx.descripcion_procedimiento or ''
+            )
             proc = ProcedimientoLiquidacion(
                 liquidacion=liq, orden=1,
                 cups=dqx.cups_principal,
@@ -4063,13 +4081,8 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
             orden = liq.procedimientos.count() + 1
 
         if not float(valor or 0):
-            from apps.tarifas.models import ManualTarifario
-            tar_default = ManualTarifario.objects.filter(es_predeterminado=True).first()
-            if tar_default:
-                item = tar_default.items.filter(cups=cups).first()
-                if item:
-                    valor = float(item.valor_base)
-                    desc  = desc or item.descripcion
+            valor, desc_found = self._buscar_uvr(cups, liq.tipo_tarifario, desc)
+            desc = desc or desc_found
 
         liq.procedimientos.filter(orden=orden).delete()
 

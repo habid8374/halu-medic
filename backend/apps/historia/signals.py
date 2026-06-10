@@ -14,13 +14,24 @@ def crear_liquidacion_automatica(sender, instance, created, **kwargs):
                 ingreso=instance.ingreso,
             )
             if instance.cups_principal:
-                from apps.tarifas.models import ManualTarifario
+                from apps.tarifas.models import ManualTarifario, ItemTarifario
+                from django.db.models import Q
                 valor = 0
                 desc = instance.descripcion_procedimiento or ''
-                tar = ManualTarifario.objects.filter(es_predeterminado=True).first()
-                if tar:
-                    item = tar.items.filter(cups=instance.cups_principal).first()
-                    if item:
+                cups = instance.cups_principal
+                # buscar en tarifario predeterminado o ISS 2001
+                candidatos = ManualTarifario.objects.filter(
+                    Q(es_predeterminado=True) | Q(nombre__icontains='ISS 2001') | Q(nombre__icontains='ISS2001')
+                ).order_by('-es_predeterminado')
+                for tar in candidatos:
+                    item = tar.items.filter(cups=cups).first()
+                    if item and float(item.valor_base or 0) > 0:
+                        valor = float(item.valor_base)
+                        desc = desc or item.descripcion
+                        break
+                if not valor:
+                    item = ItemTarifario.objects.filter(cups=cups).order_by('-valor_base').first()
+                    if item and float(item.valor_base or 0) > 0:
                         valor = float(item.valor_base)
                         desc = desc or item.descripcion
                 proc = ProcedimientoLiquidacion(
