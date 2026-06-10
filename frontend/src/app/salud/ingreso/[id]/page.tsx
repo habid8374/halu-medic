@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ingresosAPI, notasMedicasAPI, ayudasDiagnosticasAPI,
-  programacionCxAPI, mensajeError, medicosAPI,
+  programacionCxAPI, mensajeError, medicosAPI, quirofanosAPI,
 } from '@/lib/api'
 import { Ingreso, NotaMedica, AyudaDiagnostica, ProgramacionCx, MedicoProfesional } from '@/types'
 import { PageHeader, Button, Spinner } from '@/components/ui'
@@ -260,6 +260,13 @@ function ModalNuevaCx({
     requiere_autorizacion: true, observaciones_preop: '',
   })
   const [saving, setSaving] = useState(false)
+  const [quirofanos, setQuirofanos] = useState<{ id: string; nombre: string; estado: string }[]>([])
+
+  useEffect(() => {
+    quirofanosAPI.list({ activos: '1' })
+      .then(({ data }) => setQuirofanos(data.results ?? data))
+      .catch(() => {/* silencioso */})
+  }, [])
 
   const save = async () => {
     if (!form.cups_principal) { toast.error('Ingresa el CUPS del procedimiento'); return }
@@ -372,8 +379,16 @@ function ModalNuevaCx({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label-xs">Quirófano</label>
-              <input value={form.quirofano} onChange={e => f('quirofano', e.target.value)}
-                placeholder="Ej: Quirófano 1" className="input-base w-full" />
+              <select value={form.quirofano} onChange={e => f('quirofano', e.target.value)}
+                className="input-base w-full">
+                <option value="">— Seleccionar —</option>
+                {quirofanos.map(q => (
+                  <option key={q.id} value={q.nombre}
+                    disabled={q.estado === 'mantenimiento'}>
+                    {q.nombre}{q.estado === 'en_uso' ? ' (En uso)' : q.estado === 'limpieza' ? ' (Limpieza)' : q.estado === 'mantenimiento' ? ' (Mant.)' : ''}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="label-xs">Tipo de anestesia</label>

@@ -51,6 +51,7 @@ const navItems: NavItem[] = [
       { href: '/salud/rehabilitacion', label: 'Rehabilitación' },
       { href: '/salud/odontologia', label: 'Odontología' },
       { href: '/salud/telemedicina', label: 'Telemedicina' },
+      { href: '/salud/quirofanos', label: 'Quirófanos' },
       { href: '/salud/uci', label: 'UCI / Cuidados intensivos' },
       { href: '/salud/banco-sangre', label: 'Banco de sangre' },
     ],

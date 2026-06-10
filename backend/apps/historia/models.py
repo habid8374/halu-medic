@@ -1203,6 +1203,47 @@ class CamaUCI(models.Model):
         return f'Cama {self.numero_cama} ({self.get_tipo_display()}) — {self.get_estado_display()}'
 
 
+class Quirofano(models.Model):
+    TIPO_CHOICES = [
+        ('general',    'Quirófano General'),
+        ('cardiaco',   'Cirugía Cardíaca'),
+        ('laparos',    'Laparoscopía'),
+        ('traumato',   'Traumatología'),
+        ('oftalmo',    'Oftalmología'),
+        ('endoscopia', 'Endoscopía'),
+        ('urologia',   'Urología'),
+        ('otro',       'Otro'),
+    ]
+    ESTADO_CHOICES = [
+        ('disponible',   'Disponible'),
+        ('en_uso',       'En uso'),
+        ('limpieza',     'En limpieza'),
+        ('mantenimiento','En mantenimiento'),
+    ]
+
+    id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    nombre       = models.CharField(max_length=50, help_text='Ej: Quirófano 1, Sala CX-A')
+    tipo         = models.CharField(max_length=15, choices=TIPO_CHOICES, default='general')
+    estado       = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='disponible')
+    ubicacion    = models.CharField(max_length=100, blank=True, help_text='Piso, ala, bloque')
+    numero       = models.PositiveIntegerField(null=True, blank=True, help_text='Número identificador')
+    capacidad_personal = models.PositiveIntegerField(default=5)
+    tiene_rx     = models.BooleanField(default=False, help_text='Rayos X intraoperatorio')
+    tiene_laparos = models.BooleanField(default=False, help_text='Torre de laparoscopía')
+    tiene_robot  = models.BooleanField(default=False, help_text='Sistema robótico')
+    observaciones = models.TextField(blank=True)
+    activo       = models.BooleanField(default=True)
+    creado_en    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Quirófano'
+        verbose_name_plural = 'Quirófanos'
+
+    def __str__(self):
+        return f'{self.nombre} ({self.get_tipo_display()})'
+
+
 class AdmisionUCI(models.Model):
     MOTIVO_INGRESO_CHOICES = [
         ('respiratorio',   'Falla respiratoria'),

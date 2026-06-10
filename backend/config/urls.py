@@ -62,6 +62,7 @@ from config.api import (
     CamaUCIViewSet,
     AdmisionUCIViewSet,
     MonitoreoUCIViewSet,
+    QuirofanoViewSet,
     UnidadHemoderivadoViewSet,
     SolicitudHemoderivadoViewSet,
     # Farmacia
@@ -150,6 +151,7 @@ router.register(r'salud/rehabilitacion/sesiones',    SesionRehabilitacionViewSet
 router.register(r'salud/odontologia/historias',      HistoriaOdontologicaViewSet,      basename='historia-odontologica')
 router.register(r'salud/odontologia/procedimientos', ProcedimientoOdontologicoViewSet, basename='procedimiento-odontologico')
 router.register(r'salud/telemedicina',               SesionTelemedicinaSViewSet,       basename='sesion-telemedicina')
+router.register(r'historia/quirofanos',               QuirofanoViewSet,                 basename='quirofano')
 router.register(r'salud/uci/camas',                  CamaUCIViewSet,                   basename='cama-uci')
 router.register(r'salud/uci/admisiones',             AdmisionUCIViewSet,               basename='admision-uci')
 router.register(r'salud/uci/monitoreo',              MonitoreoUCIViewSet,              basename='monitoreo-uci')

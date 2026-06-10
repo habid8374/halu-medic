@@ -2865,7 +2865,7 @@ class NotaEnfermeriaViewSet(viewsets.ModelViewSet):
 from apps.historia.models import (
     ReferenciaPaciente, PlanRehabilitacion, SesionRehabilitacion,
     HistoriaOdontologica, ProcedimientoOdontologico, SesionTelemedicina,
-    CamaUCI, AdmisionUCI, MonitoreoUCI, UnidadHemoderivado, SolicitudHemoderivado,
+    CamaUCI, AdmisionUCI, MonitoreoUCI, UnidadHemoderivado, SolicitudHemoderivado, Quirofano,
 )
 from apps.farmacia.models import (
     MedicamentoFarmacia, LoteInventario, MovimientoInventario, DispensacionMedicamento,
@@ -3091,6 +3091,37 @@ class CamaUCIViewSet(viewsets.ModelViewSet):
         estado = self.request.query_params.get('estado')
         if tipo:
             qs = qs.filter(tipo=tipo)
+        if estado:
+            qs = qs.filter(estado=estado)
+        return qs
+
+
+# ── Quirófano ─────────────────────────────────────────────────────────────────
+
+class QuirofanoSerializer(serializers.ModelSerializer):
+    tipo_label   = serializers.CharField(source='get_tipo_display',   read_only=True)
+    estado_label = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model  = Quirofano
+        fields = [
+            'id', 'nombre', 'tipo', 'tipo_label', 'estado', 'estado_label',
+            'ubicacion', 'numero', 'capacidad_personal',
+            'tiene_rx', 'tiene_laparos', 'tiene_robot',
+            'observaciones', 'activo', 'creado_en',
+        ]
+        read_only_fields = ['id', 'creado_en', 'tipo_label', 'estado_label']
+
+
+class QuirofanoViewSet(viewsets.ModelViewSet):
+    serializer_class = QuirofanoSerializer
+
+    def get_queryset(self):
+        qs = Quirofano.objects.all()
+        solo_activos = self.request.query_params.get('activos')
+        if solo_activos:
+            qs = qs.filter(activo=True)
+        estado = self.request.query_params.get('estado')
         if estado:
             qs = qs.filter(estado=estado)
         return qs

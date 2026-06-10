@@ -564,6 +564,14 @@ export const contabilidadAPI = {
   },
 }
 
+// ── Quirófanos ────────────────────────────────────────────────────────────────
+export const quirofanosAPI = {
+  list:   (params?: Record<string, unknown>) => api.get('/api/historia/quirofanos/', { params }),
+  create: (data: Record<string, unknown>) => api.post('/api/historia/quirofanos/', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/api/historia/quirofanos/${id}/`, data),
+  delete: (id: string) => api.delete(`/api/historia/quirofanos/${id}/`),
+}
+
 // ── Notificaciones ────────────────────────────────────────────────────────────
 export const notificacionesAPI = {
   list: () => api.get('/api/notificaciones/'),
