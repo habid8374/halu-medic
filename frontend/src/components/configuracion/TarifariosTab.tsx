@@ -91,19 +91,25 @@ export function TarifariosTab() {
   useEffect(() => { cargar() }, [])
 
   const cargarItems = async (id: string, search = '') => {
+    if (!search) {
+      // Sin búsqueda: limpiar items para mostrar estado vacío
+      setItems(prev => ({ ...prev, [id]: [] }))
+      setTotalItems(prev => ({ ...prev, [id]: 0 }))
+      return
+    }
     setLoadingItems(id)
     try {
-      const { data } = await tarifasAPI.listarItems(id, { page_size: 25, ...(search ? { search } : {}) })
+      const { data } = await tarifasAPI.listarItems(id, { page_size: 25, search })
       setItems(prev => ({ ...prev, [id]: data.results ?? data }))
       setTotalItems(prev => ({ ...prev, [id]: data.count ?? (data.results ?? data).length }))
     } catch { toast.error('Error cargando ítems') }
     finally { setLoadingItems(null) }
   }
 
-  const toggleExpandir = async (id: string) => {
+  const toggleExpandir = (id: string) => {
     if (expandido === id) { setExpandido(null); return }
     setExpandido(id)
-    await cargarItems(id)
+    // No carga items al expandir — espera que el usuario busque
   }
 
   const handleBusquedaItem = (manualId: string, value: string) => {
@@ -347,9 +353,9 @@ export function TarifariosTab() {
                           focus:outline-none focus:ring-2 focus:ring-halu-500/20 focus:border-halu-400"
                       />
                     </div>
-                    {(totalItems[manual.id] ?? 0) > 25 && !busquedaItem[manual.id] && (
+                    {busquedaItem[manual.id] && (totalItems[manual.id] ?? 0) > 0 && (
                       <span className="text-xs text-slate-400 flex-shrink-0">
-                        Mostrando 25 de {(totalItems[manual.id] ?? 0).toLocaleString('es-CO')} · busca para filtrar
+                        {(items[manual.id] ?? []).length} de {(totalItems[manual.id] ?? 0).toLocaleString('es-CO')} resultados
                       </span>
                     )}
                   </div>
@@ -375,7 +381,7 @@ export function TarifariosTab() {
                               <td colSpan={5} className="text-center py-6 text-slate-400 text-xs">
                                 {busquedaItem[manual.id]
                                   ? 'Sin resultados para la búsqueda.'
-                                  : 'Sin ítems. Agrega uno o sube un archivo.'}
+                                  : 'Escribe en el buscador para ver procedimientos.'}
                               </td>
                             </tr>
                           ) : (
