@@ -28,7 +28,7 @@ class AseguradoraSerializer(serializers.ModelSerializer):
     class Meta:
         model = Aseguradora
         fields = [
-            'id', 'nombre', 'nit', 'codigo', 'tipo', 'activa',
+            'id', 'nombre', 'nit', 'codigo', 'tipo', 'regimen', 'activa',
             'tarifario', 'tarifario_nombre', 'tarifario_porcentaje',
             'porcentaje_ajuste',
         ]
@@ -39,10 +39,20 @@ class AseguradoraViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Aseguradora.objects.select_related('tarifario')
-        todas = self.request.query_params.get('todas')
-        if todas:
-            return qs
-        return qs.filter(activa=True)
+        todas   = self.request.query_params.get('todas')
+        regimen = self.request.query_params.get('regimen')
+        tipo    = self.request.query_params.get('tipo')
+        search  = self.request.query_params.get('search')
+        if not todas:
+            qs = qs.filter(activa=True)
+        if regimen:
+            qs = qs.filter(regimen=regimen)
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(Q(nombre__icontains=search) | Q(nit__icontains=search))
+        return qs
 
 
 from apps.tarifas.models import ConvenioEPS
@@ -70,8 +80,9 @@ class ConvenioEPSViewSet(viewsets.ModelViewSet):
 
 
 class PacienteSerializer(serializers.ModelSerializer):
-    aseguradora_nombre = serializers.CharField(source='aseguradora.nombre', read_only=True)
-    nombre_completo    = serializers.CharField(read_only=True)
+    aseguradora_nombre   = serializers.CharField(source='aseguradora.nombre', read_only=True)
+    aseguradora_regimen  = serializers.CharField(source='aseguradora.regimen', read_only=True, default='')
+    nombre_completo      = serializers.CharField(read_only=True)
     tarifa             = serializers.PrimaryKeyRelatedField(
         queryset=ManualTarifario.objects.all(),
         allow_null=True, required=False
@@ -85,7 +96,7 @@ class PacienteSerializer(serializers.ModelSerializer):
             'primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido',
             'nombre_completo', 'fecha_nacimiento', 'sexo',
             'email', 'telefono', 'direccion', 'municipio_codigo',
-            'regimen', 'aseguradora', 'aseguradora_nombre', 'numero_poliza',
+            'regimen', 'aseguradora', 'aseguradora_nombre', 'aseguradora_regimen', 'numero_poliza',
             'tarifa', 'tarifa_nombre',
             'activo', 'creado_en',
         ]

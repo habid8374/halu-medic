@@ -32,12 +32,19 @@ class Aseguradora(models.Model):
     """EPS, medicina prepagada, ARL, aseguradora SOAT"""
     id        = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     nombre    = models.CharField(max_length=200)
-    nit       = models.CharField(max_length=20, unique=True)
+    nit       = models.CharField(max_length=20)
     codigo    = models.CharField(max_length=10, help_text='Código RIPS MinSalud')
     tipo      = models.CharField(max_length=20, choices=[
         ('EPS', 'EPS'), ('PREPAGADA', 'Medicina prepagada'),
         ('ARL', 'ARL'), ('SOAT', 'SOAT'), ('OTRO', 'Otro'),
     ])
+    regimen   = models.CharField(
+        max_length=1,
+        choices=RegimenAfiliacion.choices,
+        blank=True,
+        help_text='Régimen de afiliación (C=Contributivo, S=Subsidiado, …). '
+                  'Permite que una misma EPS tenga dos entradas con distinto régimen.',
+    )
     tarifario = models.ForeignKey(
         'tarifas.ManualTarifario',
         null=True, blank=True,
@@ -53,10 +60,13 @@ class Aseguradora(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['nombre']
+        ordering = ['nombre', 'regimen']
+        unique_together = [('nit', 'regimen')]
 
     def __str__(self):
-        return f'{self.nombre} ({self.nit})'
+        regimen_label = dict(RegimenAfiliacion.choices).get(self.regimen, '')
+        sufijo = f' ({regimen_label})' if regimen_label else ''
+        return f'{self.nombre}{sufijo} — {self.nit}'
 
 
 class Paciente(models.Model):

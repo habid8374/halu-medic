@@ -17,12 +17,37 @@ interface Tarifario {
   porcentaje_ajuste: string
 }
 
+const REGIMENES = [
+  { value: '',  label: '— Sin régimen (ARL / SOAT / Prepagada) —' },
+  { value: 'C', label: 'Contributivo' },
+  { value: 'S', label: 'Subsidiado' },
+  { value: 'V', label: 'Vinculado' },
+  { value: 'P', label: 'Particular' },
+  { value: 'A', label: 'ARL' },
+  { value: 'T', label: 'SOAT' },
+]
+
+const REGIMEN_LABEL: Record<string, string> = {
+  C: 'Contributivo', S: 'Subsidiado', V: 'Vinculado',
+  P: 'Particular', A: 'ARL', T: 'SOAT',
+}
+
+const REGIMEN_COLOR: Record<string, string> = {
+  C: 'bg-blue-50 text-blue-700',
+  S: 'bg-green-50 text-green-700',
+  V: 'bg-orange-50 text-orange-700',
+  P: 'bg-slate-100 text-slate-600',
+  A: 'bg-amber-50 text-amber-700',
+  T: 'bg-emerald-50 text-emerald-700',
+}
+
 interface Aseguradora {
   id: string
   nombre: string
   nit: string
   codigo: string
   tipo: string
+  regimen: string
   activa: boolean
   tarifario: string | null
   tarifario_nombre: string
@@ -47,7 +72,7 @@ const TIPO_COLOR: Record<string, string> = {
 }
 
 const EMPTY: Omit<Aseguradora, 'id' | 'tarifario_nombre' | 'tarifario_porcentaje'> = {
-  nombre: '', nit: '', codigo: '', tipo: 'EPS', activa: true, tarifario: null, porcentaje_ajuste: '0',
+  nombre: '', nit: '', codigo: '', tipo: 'EPS', regimen: 'C', activa: true, tarifario: null, porcentaje_ajuste: '0',
 }
 
 export default function AseguradorasPage() {
@@ -91,6 +116,7 @@ export default function AseguradorasPage() {
       nit: a.nit,
       codigo: a.codigo,
       tipo: a.tipo,
+      regimen: a.regimen ?? '',
       activa: a.activa,
       tarifario: a.tarifario,
       porcentaje_ajuste: a.porcentaje_ajuste ?? '0',
@@ -209,6 +235,11 @@ export default function AseguradorasPage() {
                   <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', TIPO_COLOR[a.tipo] ?? 'bg-slate-100 text-slate-600')}>
                     {a.tipo}
                   </span>
+                  {a.regimen && (
+                    <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', REGIMEN_COLOR[a.regimen] ?? 'bg-slate-100 text-slate-600')}>
+                      {REGIMEN_LABEL[a.regimen]}
+                    </span>
+                  )}
                   {!a.activa && (
                     <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full">Inactiva</span>
                   )}
@@ -291,6 +322,30 @@ export default function AseguradorasPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Régimen */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Régimen de afiliación
+                  </label>
+                  <select
+                    value={form.regimen}
+                    onChange={e => setForm(f => ({ ...f, regimen: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-halu-500"
+                  >
+                    {REGIMENES.map(r => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
+                  </select>
+                  {form.tipo === 'EPS' && !form.regimen && (
+                    <p className="text-xs text-amber-600 mt-1">Para EPS se recomienda especificar el régimen (Contributivo / Subsidiado).</p>
+                  )}
+                  {form.regimen && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      La misma EPS puede existir dos veces con distinto régimen (ej: COOSALUD Subsidiado y COOSALUD Contributivo).
+                    </p>
+                  )}
                 </div>
 
                 {/* Tarifario */}

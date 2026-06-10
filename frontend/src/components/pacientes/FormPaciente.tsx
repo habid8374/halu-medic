@@ -26,7 +26,7 @@ interface FormData {
   aseguradora: string
 }
 
-interface Aseguradora { id: string; nombre: string; nit: string; tipo: string; tarifario_nombre: string }
+interface Aseguradora { id: string; nombre: string; nit: string; tipo: string; regimen: string; tarifario_nombre: string }
 
 const EMPTY: FormData = {
   tipo_identificacion: 'CC',
@@ -75,7 +75,7 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
   const [aseguradoras, setAseguradoras] = useState<Aseguradora[]>([])
 
   useEffect(() => {
-    aseguradorasAPI.list({ activo: true })
+    aseguradorasAPI.list({ todas: '1' })
       .then(({ data }) => setAseguradoras(data.results ?? data))
       .catch(() => {/* silencioso */})
   }, [])
@@ -258,11 +258,22 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
             onChange={set('aseguradora')}
           >
             <option value="">— Particular / sin aseguradora —</option>
-            {aseguradoras.map(a => (
-              <option key={a.id} value={a.id}>
-                {a.nombre}{a.tarifario_nombre ? ` · ${a.tarifario_nombre}` : ''}
-              </option>
-            ))}
+            {aseguradoras
+              .filter(a => a.activa !== false)
+              .filter(a => !form.regimen || !a.regimen || a.regimen === form.regimen)
+              .map(a => {
+                const regimenLabel: Record<string, string> = {
+                  C: 'Contributivo', S: 'Subsidiado', V: 'Vinculado',
+                  P: 'Particular', A: 'ARL', T: 'SOAT',
+                }
+                const sufijo = a.regimen ? ` (${regimenLabel[a.regimen] ?? a.regimen})` : ''
+                return (
+                  <option key={a.id} value={a.id}>
+                    {a.nombre}{sufijo}{a.tarifario_nombre ? ` · ${a.tarifario_nombre}` : ''}
+                  </option>
+                )
+              })
+            }
           </Select>
           <Input
             label="Número de póliza / afiliación"
