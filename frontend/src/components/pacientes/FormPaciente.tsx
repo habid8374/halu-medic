@@ -75,7 +75,7 @@ export function FormPaciente({ inicial }: { inicial?: Partial<Paciente> }) {
   const [aseguradoras, setAseguradoras] = useState<Aseguradora[]>([])
 
   useEffect(() => {
-    aseguradorasAPI.list({ todas: '1' })
+    aseguradorasAPI.list({ todas: '1', page_size: 500 })
       .then(({ data }) => setAseguradoras(data.results ?? data))
       .catch(() => {/* silencioso */})
   }, [])

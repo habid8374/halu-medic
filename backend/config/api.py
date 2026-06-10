@@ -22,7 +22,7 @@ class AseguradoraSerializer(serializers.ModelSerializer):
     tarifario_nombre     = serializers.CharField(source='tarifario.nombre', read_only=True, default='')
     tarifario_porcentaje = serializers.DecimalField(
         source='tarifario.porcentaje_ajuste', read_only=True,
-        max_digits=6, decimal_places=2, default=None,
+        max_digits=6, decimal_places=2, default=None, allow_null=True,
     )
 
     class Meta:

@@ -89,7 +89,7 @@ export default function AseguradorasPage() {
     setLoading(true)
     try {
       const [resA, resT] = await Promise.all([
-        aseguradorasAPI.list({ todas: '1' }),
+        aseguradorasAPI.list({ todas: '1', page_size: 500 }),
         tarifasAPI.list({ page_size: 100 }),
       ])
       setLista(resA.data.results ?? resA.data)
