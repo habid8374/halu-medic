@@ -27,6 +27,7 @@ interface Aseguradora {
   tarifario: string | null
   tarifario_nombre: string
   tarifario_porcentaje: string | null
+  porcentaje_ajuste: string
 }
 
 const TIPOS = [
@@ -46,7 +47,7 @@ const TIPO_COLOR: Record<string, string> = {
 }
 
 const EMPTY: Omit<Aseguradora, 'id' | 'tarifario_nombre' | 'tarifario_porcentaje'> = {
-  nombre: '', nit: '', codigo: '', tipo: 'EPS', activa: true, tarifario: null,
+  nombre: '', nit: '', codigo: '', tipo: 'EPS', activa: true, tarifario: null, porcentaje_ajuste: '0',
 }
 
 export default function AseguradorasPage() {
@@ -92,6 +93,7 @@ export default function AseguradorasPage() {
       tipo: a.tipo,
       activa: a.activa,
       tarifario: a.tarifario,
+      porcentaje_ajuste: a.porcentaje_ajuste ?? '0',
     })
     setModalOpen(true)
   }
@@ -217,6 +219,11 @@ export default function AseguradorasPage() {
                     <Percent className="w-3 h-3" />
                     {a.tarifario_nombre}
                     {a.tarifario_porcentaje !== null && ` · ${a.tarifario_porcentaje}%`}
+                    {parseFloat(a.porcentaje_ajuste) !== 0 && (
+                      <span className="ml-1 font-semibold">
+                        + {a.porcentaje_ajuste}% contractual
+                      </span>
+                    )}
                   </p>
                 ) : (
                   <p className="text-xs text-slate-400 mt-0.5">Sin tarifario asignado</p>
@@ -306,12 +313,36 @@ export default function AseguradorasPage() {
                   {tarifarioSeleccionado && (
                     <p className="text-xs text-halu-600 mt-1.5 flex items-center gap-1">
                       <Percent className="w-3 h-3" />
-                      Se aplicará un ajuste de <strong>{tarifarioSeleccionado.porcentaje_ajuste}%</strong> en la facturación a esta aseguradora
+                      Tarifa base: <strong>{tarifarioSeleccionado.porcentaje_ajuste}%</strong> de ajuste del manual
                     </p>
                   )}
+                </div>
+
+                {/* % contractual por aseguradora */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    % contractual adicional
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={form.porcentaje_ajuste}
+                      onChange={e => setForm(f => ({ ...f, porcentaje_ajuste: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 px-4 pr-10 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-halu-500"
+                      placeholder="0"
+                    />
+                    <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    El porcentaje de ajuste del tarifario se usará para calcular los valores en facturas y RIPS.
+                    % negociado con esta aseguradora sobre el tarifario. Ej: ISS 2001 + 35% → ingresa 35.
                   </p>
+                  {parseFloat(form.porcentaje_ajuste) !== 0 && (
+                    <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                      <Percent className="w-3 h-3" />
+                      Se aplicará un ajuste contractual de <strong>{form.porcentaje_ajuste}%</strong> adicional al tarifario
+                    </p>
+                  )}
                 </div>
 
                 {/* Activa toggle */}

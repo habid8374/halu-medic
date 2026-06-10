@@ -19,7 +19,7 @@ class ItemTarifarioSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ItemTarifario
-        fields = ['id', 'cups', 'descripcion', 'valor_base', 'valor_final']
+        fields = ['id', 'cups', 'descripcion', 'valor_base', 'valor_final', 'es_paquete', 'cups_rips']
 
 
 class ManualTarifarioSerializer(serializers.ModelSerializer):
@@ -130,6 +130,27 @@ class ManualTarifarioViewSet(viewsets.ModelViewSet):
             'errores': errores,
             'total_items': manual.items.count(),
         })
+
+    # ── Plantilla CSV para importar ítems ────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='plantilla')
+    def plantilla(self, request):
+        """Descarga plantilla CSV lista para llenar e importar."""
+        import csv
+        from django.http import HttpResponse
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(['CUPS', 'Descripcion', 'Valor'])
+        writer.writerow(['890201', 'CONSULTA DE PRIMERA VEZ POR MEDICINA GENERAL', '50000'])
+        writer.writerow(['890202', 'CONSULTA DE CONTROL POR MEDICINA GENERAL', '45000'])
+        writer.writerow(['890301', 'CONSULTA DE URGENCIAS POR MEDICINA GENERAL', '65000'])
+        writer.writerow(['874000', 'RADIOGRAFIA DE TORAX ANTEROPOSTERIOR', '35000'])
+        writer.writerow(['904210', 'GLUCOSA EN AYUNAS', '12000'])
+        writer.writerow(['841000', 'ELECTROCARDIOGRAMA', '40000'])
+        resp = HttpResponse(buf.getvalue(), content_type='text/csv; charset=utf-8')
+        resp['Content-Disposition'] = 'attachment; filename="plantilla_tarifario.csv"'
+        resp['Access-Control-Expose-Headers'] = 'Content-Disposition'
+        return resp
 
     # ── Lookup de precio para un CUPS + paciente ──────────────────────────────
 

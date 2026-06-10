@@ -116,15 +116,28 @@ class ItemTarifario(models.Model):
     """Valor de un código CUPS dentro de un manual tarifario."""
     id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     manual      = models.ForeignKey(ManualTarifario, on_delete=models.CASCADE, related_name='items')
-    cups        = models.CharField(max_length=10, help_text='Código CUPS')
-    descripcion = models.CharField(max_length=400, blank=True, help_text='Descripción del procedimiento')
+    cups        = models.CharField(max_length=15, help_text='Código CUPS (o código paquete, ej: 876122-1)')
+    descripcion = models.CharField(max_length=400, blank=True, help_text='Descripción del procedimiento o paquete')
     valor_base  = models.DecimalField(max_digits=14, decimal_places=2, help_text='Valor base del manual')
+    es_paquete  = models.BooleanField(default=False,
+                                       help_text='True si este ítem es un paquete tarifario con sufijo')
+    cups_rips   = models.CharField(max_length=10, blank=True,
+                                    help_text='Código CUPS base para RIPS (sin sufijo). Auto-calculado.')
 
     class Meta:
         ordering = ['cups']
         unique_together = [['manual', 'cups']]
         verbose_name = 'Ítem tarifario'
         verbose_name_plural = 'Ítems tarifarios'
+
+    def save(self, *args, **kwargs):
+        if self.es_paquete:
+            if not self.cups_rips:
+                import re
+                self.cups_rips = re.sub(r'-\d+$', '', self.cups)[:10]
+        else:
+            self.cups_rips = ''
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.cups} — ${self.valor_base:,.0f}'

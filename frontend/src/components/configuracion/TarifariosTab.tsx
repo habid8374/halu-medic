@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { tarifasAPI } from '@/lib/api'
 import { CupsAutocomplete } from '@/components/ui/CupsAutocomplete'
 import { Button, Input, Select, Badge, Card } from '@/components/ui'
-import { Plus, Trash2, Upload, Search, ChevronDown, ChevronUp, Star, Pencil } from 'lucide-react'
+import { Plus, Trash2, Upload, Search, ChevronDown, ChevronUp, Star, Pencil, Download, Package } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Manual {
@@ -25,6 +25,8 @@ interface Item {
   descripcion: string
   valor_base: number
   valor_final: number
+  es_paquete: boolean
+  cups_rips: string
 }
 
 const TIPOS = [
@@ -53,9 +55,25 @@ export function TarifariosTab() {
   const [nuevoCups, setNuevoCups] = useState('')
   const [nuevoCupsDesc, setNuevoCupsDesc] = useState('')
   const [nuevoValor, setNuevoValor] = useState('')
+  // Modo paquete
+  const [modoPaquete, setModoPaquete] = useState(false)
+  const [paqueteCupsBase, setPaqueteCupsBase] = useState('')
+  const [paqueteSufijo, setPaqueteSufijo] = useState('-1')
+  const [paqueteDesc, setPaqueteDesc] = useState('')
+  const [paqueteValor, setPaqueteValor] = useState('')
 
   const fileRef = useRef<HTMLInputElement>(null)
   const [importando, setImportando] = useState(false)
+
+  const descargarPlantilla = async () => {
+    try {
+      const { data } = await tarifasAPI.plantilla()
+      const url = URL.createObjectURL(new Blob([data], { type: 'text/csv' }))
+      const a = document.createElement('a')
+      a.href = url; a.download = 'plantilla_tarifario.csv'; a.click()
+      URL.revokeObjectURL(url)
+    } catch { toast.error('Error descargando plantilla') }
+  }
 
   const cargar = async () => {
     setLoading(true)
@@ -116,13 +134,31 @@ export function TarifariosTab() {
         cups: nuevoCups,
         descripcion: nuevoCupsDesc,
         valor_base: parseFloat(nuevoValor),
+        es_paquete: false,
       })
       setItems(prev => ({ ...prev, [manualId]: [...(prev[manualId] ?? []), item] }))
       setNuevoCups(''); setNuevoCupsDesc(''); setNuevoValor('')
-      // Actualizar total_items
       setManuales(m => m.map(x => x.id === manualId ? { ...x, total_items: x.total_items + 1 } : x))
       toast.success('Ítem agregado')
     } catch { toast.error('Error agregando ítem') }
+  }
+
+  const agregarPaquete = async (manualId: string) => {
+    if (!paqueteCupsBase || !paqueteValor) { toast.error('Código base y valor son requeridos'); return }
+    const codigoPaquete = `${paqueteCupsBase.trim()}${paqueteSufijo.trim()}`
+    try {
+      const { data: item } = await tarifasAPI.agregarItem(manualId, {
+        cups: codigoPaquete,
+        descripcion: paqueteDesc,
+        valor_base: parseFloat(paqueteValor),
+        es_paquete: true,
+        cups_rips: paqueteCupsBase.trim(),
+      })
+      setItems(prev => ({ ...prev, [manualId]: [...(prev[manualId] ?? []), item] }))
+      setPaqueteCupsBase(''); setPaqueteSufijo('-1'); setPaqueteDesc(''); setPaqueteValor('')
+      setManuales(m => m.map(x => x.id === manualId ? { ...x, total_items: x.total_items + 1 } : x))
+      toast.success(`Paquete ${codigoPaquete} agregado`)
+    } catch { toast.error('Error agregando paquete') }
   }
 
   const eliminarItem = async (manualId: string, itemId: string) => {
@@ -275,6 +311,13 @@ export function TarifariosTab() {
                     <Button
                       variant="secondary"
                       className="text-xs py-1.5 px-3"
+                      onClick={descargarPlantilla}
+                    >
+                      <Download className="w-3.5 h-3.5" />Plantilla CSV
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="text-xs py-1.5 px-3"
                       onClick={() => fileRef.current?.click()}
                       loading={importando}
                     >
@@ -321,7 +364,19 @@ export function TarifariosTab() {
                           ) : (
                             itemsFiltrados(manual.id).map(item => (
                               <tr key={item.id} className="border-t border-slate-100 hover:bg-white transition-colors">
-                                <td className="px-3 py-2 font-mono font-semibold text-halu-700">{item.cups}</td>
+                                <td className="px-3 py-2 font-mono font-semibold text-halu-700">
+                                  <div className="flex items-center gap-1.5">
+                                    {item.cups}
+                                    {item.es_paquete && (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-medium">
+                                        <Package className="w-2.5 h-2.5" />PKG
+                                      </span>
+                                    )}
+                                  </div>
+                                  {item.es_paquete && item.cups_rips && (
+                                    <p className="text-[10px] text-slate-400 font-normal">RIPS: {item.cups_rips}</p>
+                                  )}
+                                </td>
                                 <td className="px-3 py-2 text-slate-700 max-w-xs truncate">{item.descripcion}</td>
                                 <td className="px-3 py-2 text-right text-slate-600">${Number(item.valor_base).toLocaleString('es-CO')}</td>
                                 <td className="px-3 py-2 text-right font-semibold text-slate-900">${Number(item.valor_final).toLocaleString('es-CO')}</td>
@@ -342,40 +397,100 @@ export function TarifariosTab() {
                     </div>
                   )}
 
-                  {/* Agregar ítem manual */}
-                  <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2">
-                    <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <Pencil className="w-3 h-3" />Agregar ítem manual
-                    </p>
-                    {/* Fila 1: CUPS + Descripción */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <CupsAutocomplete
-                        label="CUPS"
-                        value={nuevoCups}
-                        descripcion={nuevoCupsDesc}
-                        onChange={(cod, desc) => { setNuevoCups(cod); setNuevoCupsDesc(desc) }}
-                        placeholder="Código..."
-                      />
-                      <Input label="Descripción" value={nuevoCupsDesc}
-                        onChange={e => setNuevoCupsDesc(e.target.value)}
-                        placeholder="Se autocompleta..." />
-                    </div>
-                    {/* Fila 2: Valor + Botón */}
-                    <div className="flex gap-2 items-end">
-                      <div className="flex-1">
-                        <Input label="Valor base $" type="number" value={nuevoValor}
-                          onChange={e => setNuevoValor(e.target.value)}
-                          placeholder="85000" />
-                      </div>
-                      <Button
-                        className="py-2.5 px-4 flex-shrink-0"
-                        onClick={() => agregarItem(manual.id)}
-                        disabled={!nuevoCups || !nuevoValor}
+                  {/* Agregar ítem / paquete */}
+                  <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-3">
+                    {/* Toggle modo */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setModoPaquete(false)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${!modoPaquete ? 'bg-halu-100 text-halu-700' : 'text-slate-500 hover:bg-slate-100'}`}
                       >
-                        <Plus className="w-4 h-4" />
-                        <span className="hidden sm:inline">Agregar</span>
-                      </Button>
+                        <Pencil className="w-3 h-3" />Ítem normal
+                      </button>
+                      <button
+                        onClick={() => setModoPaquete(true)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${modoPaquete ? 'bg-violet-100 text-violet-700' : 'text-slate-500 hover:bg-slate-100'}`}
+                      >
+                        <Package className="w-3 h-3" />Paquete tarifario
+                      </button>
                     </div>
+
+                    {!modoPaquete ? (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <CupsAutocomplete
+                            label="CUPS"
+                            value={nuevoCups}
+                            descripcion={nuevoCupsDesc}
+                            onChange={(cod, desc) => { setNuevoCups(cod); setNuevoCupsDesc(desc) }}
+                            placeholder="Código..."
+                          />
+                          <Input label="Descripción" value={nuevoCupsDesc}
+                            onChange={e => setNuevoCupsDesc(e.target.value)}
+                            placeholder="Se autocompleta..." />
+                        </div>
+                        <div className="flex gap-2 items-end">
+                          <div className="flex-1">
+                            <Input label="Valor base $" type="number" value={nuevoValor}
+                              onChange={e => setNuevoValor(e.target.value)}
+                              placeholder="85000" />
+                          </div>
+                          <Button className="py-2.5 px-4 flex-shrink-0"
+                            onClick={() => agregarItem(manual.id)}
+                            disabled={!nuevoCups || !nuevoValor}
+                          >
+                            <Plus className="w-4 h-4" /><span className="hidden sm:inline">Agregar</span>
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-violet-700 bg-violet-50 rounded-lg px-3 py-2">
+                          El paquete se factura con código sufijado (ej: <strong>876122-1</strong>) pero el RIPS reporta el CUPS base (<strong>876122</strong>).
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Código CUPS base *</label>
+                            <input
+                              value={paqueteCupsBase}
+                              onChange={e => setPaqueteCupsBase(e.target.value)}
+                              placeholder="Ej: 876122"
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-halu-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Sufijo del paquete</label>
+                            <input
+                              value={paqueteSufijo}
+                              onChange={e => setPaqueteSufijo(e.target.value)}
+                              placeholder="-1"
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-halu-500"
+                            />
+                          </div>
+                        </div>
+                        {paqueteCupsBase && (
+                          <p className="text-xs text-slate-500">
+                            Código final: <span className="font-mono font-semibold text-violet-700">{paqueteCupsBase}{paqueteSufijo}</span>
+                            {' '}· RIPS usará: <span className="font-mono font-semibold text-halu-700">{paqueteCupsBase}</span>
+                          </p>
+                        )}
+                        <Input label="Descripción del paquete *" value={paqueteDesc}
+                          onChange={e => setPaqueteDesc(e.target.value)}
+                          placeholder="Ej: Paquete cateterismo + hospitalización 3 días" />
+                        <div className="flex gap-2 items-end">
+                          <div className="flex-1">
+                            <Input label="Valor del paquete $" type="number" value={paqueteValor}
+                              onChange={e => setPaqueteValor(e.target.value)} placeholder="1500000" />
+                          </div>
+                          <Button className="py-2.5 px-4 flex-shrink-0 bg-violet-600 hover:bg-violet-700"
+                            onClick={() => agregarPaquete(manual.id)}
+                            disabled={!paqueteCupsBase || !paqueteValor}
+                          >
+                            <Package className="w-4 h-4" /><span className="hidden sm:inline">Agregar</span>
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

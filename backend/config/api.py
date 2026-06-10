@@ -30,6 +30,7 @@ class AseguradoraSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'nombre', 'nit', 'codigo', 'tipo', 'activa',
             'tarifario', 'tarifario_nombre', 'tarifario_porcentaje',
+            'porcentaje_ajuste',
         ]
 
 

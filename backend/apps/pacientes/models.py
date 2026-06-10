@@ -45,6 +45,10 @@ class Aseguradora(models.Model):
         related_name='aseguradoras',
         help_text='Tarifario base para facturar a esta aseguradora',
     )
+    porcentaje_ajuste = models.DecimalField(
+        max_digits=6, decimal_places=2, default=0,
+        help_text='% contractual adicional sobre el tarifario. Ej: 35 = +35%',
+    )
     activa    = models.BooleanField(default=True)
     creado_en = models.DateTimeField(auto_now_add=True)
 

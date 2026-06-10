@@ -228,6 +228,7 @@ export const tarifasAPI = {
   },
   precio:        (cups: string, pacienteId?: string) =>
     api.get('/api/tarifas/precio/', { params: { cups, ...(pacienteId ? { paciente: pacienteId } : {}) } }),
+  plantilla:     () => api.get('/api/tarifas/plantilla/', { responseType: 'blob' }),
 }
 
 // ── Usuarios ──────────────────────────────────────────────────────────────────
