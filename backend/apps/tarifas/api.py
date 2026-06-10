@@ -104,31 +104,39 @@ class ManualTarifarioViewSet(viewsets.ModelViewSet):
             return Response({'error': f'Error leyendo archivo: {e}'}, status=400)
 
         importados = actualizados = errores = 0
+        mensajes_error = []
         for fila in filas:
             cups = fila.get('cups', '').strip()
             if not cups:
                 errores += 1
                 continue
             try:
-                valor = Decimal(str(fila.get('valor', 0)).replace(',', '.').replace(' ', ''))
-            except Exception:
+                valor_raw = str(fila.get('valor', 0) or 0).replace(',', '.').replace(' ', '').replace('$', '')
+                valor = Decimal(valor_raw) if valor_raw else Decimal('0')
+            except Exception as e:
                 errores += 1
+                mensajes_error.append(f'CUPS {cups}: valor inválido — {e}')
                 continue
-            desc = fila.get('descripcion', '')
-            obj, created = ItemTarifario.objects.update_or_create(
-                manual=manual, cups=cups,
-                defaults={'valor_base': valor, 'descripcion': desc[:400]},
-            )
-            if created:
-                importados += 1
-            else:
-                actualizados += 1
+            desc = fila.get('descripcion', '') or ''
+            try:
+                obj, created = ItemTarifario.objects.update_or_create(
+                    manual=manual, cups=cups,
+                    defaults={'valor_base': valor, 'descripcion': str(desc)[:400], 'es_paquete': False},
+                )
+                if created:
+                    importados += 1
+                else:
+                    actualizados += 1
+            except Exception as e:
+                errores += 1
+                mensajes_error.append(f'CUPS {cups}: {e}')
 
         return Response({
             'importados': importados,
             'actualizados': actualizados,
             'errores': errores,
             'total_items': manual.items.count(),
+            'detalle_errores': mensajes_error[:20],
         })
 
     # ── Plantilla CSV para importar ítems ────────────────────────────────────
@@ -296,10 +304,11 @@ def _parse_excel(archivo):
     result = []
     for row in rows[1:]:
         def _v(idx):
-            return row[idx] if idx < len(row) else None
+            return row[idx] if 0 <= idx < len(row) else None
+        desc_idx = m.get('descripcion')
         result.append({
             'cups': str(_v(m['cups']) or '').strip(),
-            'descripcion': str(_v(m.get('descripcion', -1)) or '').strip(),
+            'descripcion': str(_v(desc_idx) or '').strip() if desc_idx is not None else '',
             'valor': _v(m['valor']) or 0,
         })
     return result
@@ -315,9 +324,10 @@ def _parse_csv(archivo):
     result = []
     for row in reader:
         headers = list(row.keys())
+        desc_key = headers[m['descripcion']] if 'descripcion' in m else None
         result.append({
             'cups': str(row.get(headers[m['cups']], '') or '').strip(),
-            'descripcion': str(row.get(headers[m.get('descripcion', -1)], '') or '').strip() if 'descripcion' in m else '',
+            'descripcion': str(row.get(desc_key, '') or '').strip() if desc_key else '',
             'valor': row.get(headers[m['valor']], 0) or 0,
         })
     return result

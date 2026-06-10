@@ -176,12 +176,19 @@ export function TarifariosTab() {
     setImportando(true)
     try {
       const { data } = await tarifasAPI.importar(manualId, file)
-      toast.success(`Importados: ${data.importados}, Actualizados: ${data.actualizados}, Errores: ${data.errores}`)
-      // Recargar ítems
+      if (data.importados > 0 || data.actualizados > 0) {
+        toast.success(`✓ ${data.importados} nuevos · ${data.actualizados} actualizados${data.errores ? ` · ${data.errores} errores` : ''}`)
+      } else if (data.errores > 0) {
+        const detalle = data.detalle_errores?.join('\n') ?? ''
+        toast.error(`Sin registros importados. ${data.errores} errores.\n${detalle}`, { duration: 8000 })
+      }
       const { data: nuevosItems } = await tarifasAPI.listarItems(manualId)
       setItems(prev => ({ ...prev, [manualId]: nuevosItems.results ?? nuevosItems }))
       setManuales(m => m.map(x => x.id === manualId ? { ...x, total_items: data.total_items } : x))
-    } catch { toast.error('Error importando archivo') }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Error importando archivo'
+      toast.error(msg, { duration: 6000 })
+    }
     finally { setImportando(false) }
   }
 
