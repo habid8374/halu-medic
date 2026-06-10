@@ -45,8 +45,10 @@ export function TarifariosTab() {
   const [loading, setLoading] = useState(true)
   const [expandido, setExpandido] = useState<string | null>(null)
   const [items, setItems] = useState<Record<string, Item[]>>({})
+  const [totalItems, setTotalItems] = useState<Record<string, number>>({})
   const [loadingItems, setLoadingItems] = useState<string | null>(null)
-  const [busquedaItem, setBusquedaItem] = useState('')
+  const [busquedaItem, setBusquedaItem] = useState<Record<string, string>>({})
+  const busquedaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [showNuevo, setShowNuevo] = useState(false)
   const [nuevoForm, setNuevoForm] = useState({ ...MANUAL_EMPTY })
   const [guardando, setGuardando] = useState(false)
@@ -88,17 +90,26 @@ export function TarifariosTab() {
 
   useEffect(() => { cargar() }, [])
 
+  const cargarItems = async (id: string, search = '') => {
+    setLoadingItems(id)
+    try {
+      const { data } = await tarifasAPI.listarItems(id, { page_size: 25, ...(search ? { search } : {}) })
+      setItems(prev => ({ ...prev, [id]: data.results ?? data }))
+      setTotalItems(prev => ({ ...prev, [id]: data.count ?? (data.results ?? data).length }))
+    } catch { toast.error('Error cargando ítems') }
+    finally { setLoadingItems(null) }
+  }
+
   const toggleExpandir = async (id: string) => {
     if (expandido === id) { setExpandido(null); return }
     setExpandido(id)
-    if (!items[id]) {
-      setLoadingItems(id)
-      try {
-        const { data } = await tarifasAPI.listarItems(id, { page_size: 15000 })
-        setItems(prev => ({ ...prev, [id]: data.results ?? data }))
-      } catch { toast.error('Error cargando ítems') }
-      finally { setLoadingItems(null) }
-    }
+    await cargarItems(id)
+  }
+
+  const handleBusquedaItem = (manualId: string, value: string) => {
+    setBusquedaItem(prev => ({ ...prev, [manualId]: value }))
+    if (busquedaTimerRef.current) clearTimeout(busquedaTimerRef.current)
+    busquedaTimerRef.current = setTimeout(() => cargarItems(manualId, value), 350)
   }
 
   const crearManual = async () => {
@@ -138,9 +149,9 @@ export function TarifariosTab() {
         valor_base: parseFloat(nuevoValor),
         es_paquete: false,
       })
-      setItems(prev => ({ ...prev, [manualId]: [...(prev[manualId] ?? []), item] }))
       setNuevoCups(''); setNuevoCupsDesc(''); setNuevoValor('')
       setManuales(m => m.map(x => x.id === manualId ? { ...x, total_items: x.total_items + 1 } : x))
+      await cargarItems(manualId, busquedaItem[manualId] ?? '')
       toast.success('Ítem agregado')
     } catch { toast.error('Error agregando ítem') }
   }
@@ -159,6 +170,7 @@ export function TarifariosTab() {
       setItems(prev => ({ ...prev, [manualId]: [...(prev[manualId] ?? []), item] }))
       setPaqueteCupsBase(''); setPaqueteSufijo('-1'); setPaqueteDesc(''); setPaqueteValor('')
       setManuales(m => m.map(x => x.id === manualId ? { ...x, total_items: x.total_items + 1 } : x))
+      await cargarItems(manualId, busquedaItem[manualId] ?? '')
       toast.success(`Paquete ${codigoPaquete} agregado`)
     } catch { toast.error('Error agregando paquete') }
   }
@@ -166,8 +178,8 @@ export function TarifariosTab() {
   const eliminarItem = async (manualId: string, itemId: string) => {
     try {
       await tarifasAPI.eliminarItem(manualId, itemId)
-      setItems(prev => ({ ...prev, [manualId]: prev[manualId].filter(i => i.id !== itemId) }))
       setManuales(m => m.map(x => x.id === manualId ? { ...x, total_items: x.total_items - 1 } : x))
+      await cargarItems(manualId, busquedaItem[manualId] ?? '')
       toast.success('Ítem eliminado')
     } catch { toast.error('Error eliminando ítem') }
   }
@@ -182,8 +194,7 @@ export function TarifariosTab() {
         const detalle = data.detalle_errores?.join('\n') ?? ''
         toast.error(`Sin registros importados. ${data.errores} errores.\n${detalle}`, { duration: 8000 })
       }
-      const { data: nuevosItems } = await tarifasAPI.listarItems(manualId, { page_size: 15000 })
-      setItems(prev => ({ ...prev, [manualId]: nuevosItems.results ?? nuevosItems }))
+      await cargarItems(manualId, busquedaItem[manualId] ?? '')
       setManuales(m => m.map(x => x.id === manualId ? { ...x, total_items: data.total_items } : x))
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Error importando archivo'
@@ -197,13 +208,6 @@ export function TarifariosTab() {
       {[...Array(3)].map((_, i) => <div key={i} className="h-16 bg-slate-100 rounded-xl" />)}
     </div>
   )
-
-  const itemsFiltrados = (id: string) => {
-    const lista = items[id] ?? []
-    if (!busquedaItem) return lista
-    const q = busquedaItem.toLowerCase()
-    return lista.filter(i => i.cups.toLowerCase().includes(q) || i.descripcion.toLowerCase().includes(q))
-  }
 
   return (
     <div className="space-y-4">
@@ -336,13 +340,18 @@ export function TarifariosTab() {
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                       <input
                         type="search"
-                        value={busquedaItem}
-                        onChange={e => setBusquedaItem(e.target.value)}
+                        value={busquedaItem[manual.id] ?? ''}
+                        onChange={e => handleBusquedaItem(manual.id, e.target.value)}
                         placeholder="Buscar por CUPS o descripción..."
                         className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-white
                           focus:outline-none focus:ring-2 focus:ring-halu-500/20 focus:border-halu-400"
                       />
                     </div>
+                    {(totalItems[manual.id] ?? 0) > 25 && !busquedaItem[manual.id] && (
+                      <span className="text-xs text-slate-400 flex-shrink-0">
+                        Mostrando 25 de {(totalItems[manual.id] ?? 0).toLocaleString('es-CO')} · busca para filtrar
+                      </span>
+                    )}
                   </div>
 
                   {/* Tabla de ítems */}
@@ -361,17 +370,16 @@ export function TarifariosTab() {
                           </tr>
                         </thead>
                         <tbody>
-                          {itemsFiltrados(manual.id).length === 0 ? (
+                          {(items[manual.id] ?? []).length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="text-center py-6 text-slate-400">
-                                {items[manual.id]?.length === 0
-                                  ? 'Sin ítems. Agrega uno manualmente o sube un archivo.'
-                                  : 'Sin resultados para la búsqueda.'
-                                }
+                              <td colSpan={5} className="text-center py-6 text-slate-400 text-xs">
+                                {busquedaItem[manual.id]
+                                  ? 'Sin resultados para la búsqueda.'
+                                  : 'Sin ítems. Agrega uno o sube un archivo.'}
                               </td>
                             </tr>
                           ) : (
-                            itemsFiltrados(manual.id).map(item => (
+                            items[manual.id] ?? [].map(item => (
                               <tr key={item.id} className="border-t border-slate-100 hover:bg-white transition-colors">
                                 <td className="px-3 py-2 font-mono font-semibold text-halu-700">
                                   <div className="flex items-center gap-1.5">

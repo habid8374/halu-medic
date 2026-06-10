@@ -2207,9 +2207,43 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
             Ingreso, HistoriaClinica, OrdenHC, MedicamentoHC,
             AyudaDiagnostica, ProgramacionCx,
         )
-        from apps.tarifas.models import ManualTarifario
+        from apps.tarifas.models import ManualTarifario, ItemTarifario as ITar
+        from decimal import Decimal
 
         pre = self.get_object()
+
+        # ── Resolver tarifario y precio por CUPS ─────────────────────────────
+        def _get_precio(cups: str, valor_default: float = 0) -> float:
+            """
+            Busca el valor_final del CUPS en el tarifario del episodio.
+            Cadena: paciente.tarifa → aseguradora.tarifario → predeterminado.
+            Aplica porcentaje_ajuste del manual + porcentaje_ajuste de la aseguradora.
+            """
+            if not cups:
+                return valor_default
+            manual = None
+            aseg_pct = Decimal('0')
+            paciente = (pre.ingreso.paciente if pre.ingreso else
+                        pre.historia.paciente if pre.historia else
+                        pre.paciente if hasattr(pre, 'paciente') else None)
+            if paciente:
+                manual = getattr(paciente, 'tarifa', None)
+                if manual is None:
+                    aseg = getattr(paciente, 'aseguradora', None)
+                    if aseg:
+                        manual = getattr(aseg, 'tarifario', None)
+                        aseg_pct = getattr(aseg, 'porcentaje_ajuste', Decimal('0')) or Decimal('0')
+            if manual is None:
+                manual = ManualTarifario.objects.filter(es_predeterminado=True, activo=True).first()
+            if manual is None:
+                return valor_default
+            # Buscar código exacto o código base (paquetes)
+            item = manual.items.filter(cups=cups).first()
+            if item is None:
+                return valor_default
+            precio = item.valor_base * (1 + manual.porcentaje_ajuste / Decimal('100'))
+            precio = precio * (1 + aseg_pct / Decimal('100'))
+            return float(round(precio, 0))
         if pre.estado not in ('borrador', 'en_revision'):
             return Response({'error': 'Solo se puede autocargar en estado borrador o en revisión.'}, status=400)
 
@@ -2238,7 +2272,7 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                     descripcion=f'Hospitalización — {ing.get_tipo_atencion_display()} ({dias} días)',
                     cups='890301',  # CUPS hospitalización general
                     cantidad=dias,
-                    valor_unitario=0,  # el facturador ingresa la tarifa
+                    valor_unitario=_get_precio('890701'),
                     destino='eps',
                     es_manual=False,
                     origen_tipo='Ingreso',
@@ -2263,7 +2297,7 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                     descripcion=orden.descripcion_cups or orden.cups or orden.get_tipo_display(),
                     cups=orden.cups,
                     cantidad=orden.cantidad,
-                    valor_unitario=float(orden.valor_unitario),
+                    valor_unitario=float(orden.valor_unitario) or _get_precio(orden.cups),
                     destino='eps',
                     cie10=orden.cie10_justificacion,
                     es_manual=False,
@@ -2302,7 +2336,7 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                 descripcion=ayuda.descripcion,
                 cups=ayuda.cups,
                 cantidad=1,
-                valor_unitario=0,
+                valor_unitario=_get_precio(ayuda.cups),
                 destino='eps',
                 es_manual=False,
                 origen_tipo='AyudaDiagnostica',
@@ -2320,7 +2354,7 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                     descripcion=f'Derechos de sala — {cx.descripcion_cups or cx.cups_principal}',
                     cups=cx.cups_principal,
                     cantidad=1,
-                    valor_unitario=0,
+                    valor_unitario=_get_precio(cx.cups_principal),
                     destino='eps',
                     es_manual=False,
                     origen_tipo='ProgramacionCx',
@@ -2333,7 +2367,7 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                         descripcion=f'Anestesia {cx.tipo_anestesia} — {cx.descripcion_cups or cx.cups_principal}',
                         cups='',
                         cantidad=1,
-                        valor_unitario=0,
+                        valor_unitario=0,  # anestesia no tiene CUPS propio, queda manual
                         destino='eps',
                         es_manual=False,
                         origen_tipo='ProgramacionCx_anestesia',
