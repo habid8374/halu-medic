@@ -8,6 +8,8 @@ import {
 } from '@/lib/api'
 import { Ingreso, NotaMedica, AyudaDiagnostica, ProgramacionCx, MedicoProfesional } from '@/types'
 import { PageHeader, Button, Spinner } from '@/components/ui'
+import { CupsAutocomplete } from '@/components/ui/CupsAutocomplete'
+import { Cie10Autocomplete } from '@/components/ui/Cie10Autocomplete'
 import {
   ArrowLeft, FileText, Microscope, Scissors, PlusCircle, Lock, CheckCircle,
   Clock, AlertCircle, Upload, X,
@@ -289,9 +291,17 @@ function ModalNuevaCx({
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label-xs">CUPS procedimiento *</label>
-              <input value={form.cups_principal} onChange={e => f('cups_principal', e.target.value)}
-                placeholder="Ej: 1000100" className="input-base w-full" />
+              <CupsAutocomplete
+                label="CUPS procedimiento *"
+                value={form.cups_principal}
+                descripcion={form.descripcion_cups}
+                onChange={(cod, desc) => {
+                  f('cups_principal', cod)
+                  f('descripcion_cups', desc)
+                }}
+                placeholder="Código o nombre del procedimiento..."
+                required
+              />
             </div>
             <div>
               <label className="label-xs">Tipo de cirugía</label>
@@ -310,9 +320,15 @@ function ModalNuevaCx({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label-xs">CIE-10 preoperatorio</label>
-              <input value={form.diagnostico_preop} onChange={e => f('diagnostico_preop', e.target.value)}
-                placeholder="Ej: K35.8" className="input-base w-full" />
+              <Cie10Autocomplete
+                label="CIE-10 preoperatorio"
+                value={form.diagnostico_preop}
+                onChange={(cod, nombre) => {
+                  f('diagnostico_preop', cod)
+                  f('desc_diagnostico_preop', nombre)
+                }}
+                placeholder="Código o diagnóstico..."
+              />
             </div>
             <div>
               <label className="label-xs">Diagnóstico preoperatorio</label>
