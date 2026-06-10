@@ -135,20 +135,72 @@ class ManualTarifarioViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='plantilla')
     def plantilla(self, request):
-        """Descarga plantilla CSV lista para llenar e importar."""
-        import csv
+        """Descarga plantilla Excel lista para llenar e importar."""
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from django.http import HttpResponse
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow(['CUPS', 'Descripcion', 'Valor'])
-        writer.writerow(['890201', 'CONSULTA DE PRIMERA VEZ POR MEDICINA GENERAL', '50000'])
-        writer.writerow(['890202', 'CONSULTA DE CONTROL POR MEDICINA GENERAL', '45000'])
-        writer.writerow(['890301', 'CONSULTA DE URGENCIAS POR MEDICINA GENERAL', '65000'])
-        writer.writerow(['874000', 'RADIOGRAFIA DE TORAX ANTEROPOSTERIOR', '35000'])
-        writer.writerow(['904210', 'GLUCOSA EN AYUNAS', '12000'])
-        writer.writerow(['841000', 'ELECTROCARDIOGRAMA', '40000'])
-        resp = HttpResponse(buf.getvalue(), content_type='text/csv; charset=utf-8')
-        resp['Content-Disposition'] = 'attachment; filename="plantilla_tarifario.csv"'
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Tarifario'
+
+        # Estilos
+        hdr_font  = Font(bold=True, color='FFFFFF', size=11)
+        hdr_fill  = PatternFill('solid', fgColor='0F2D5E')
+        hdr_align = Alignment(horizontal='center', vertical='center')
+        ex_fill   = PatternFill('solid', fgColor='EFF6FF')
+        thin      = Side(style='thin', color='CCCCCC')
+        border    = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        headers = ['CUPS', 'Descripcion', 'Valor']
+        ws.append(headers)
+        for col, _ in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col)
+            cell.font = hdr_font
+            cell.fill = hdr_fill
+            cell.alignment = hdr_align
+            cell.border = border
+
+        ejemplos = [
+            ('890201', 'CONSULTA DE PRIMERA VEZ POR MEDICINA GENERAL',          50000),
+            ('890202', 'CONSULTA DE CONTROL O SEGUIMIENTO POR MEDICINA GENERAL', 45000),
+            ('890301', 'CONSULTA DE URGENCIAS POR MEDICINA GENERAL',             65000),
+            ('890406', 'CONSULTA DE CONTROL POR MEDICINA ESPECIALIZADA',         55000),
+            ('841000', 'ELECTROCARDIOGRAMA',                                     40000),
+            ('841100', 'ESPIROMETRIA SIMPLE',                                    38000),
+            ('874000', 'RADIOGRAFIA DE TORAX ANTEROPOSTERIOR',                   35000),
+            ('874100', 'ECOGRAFIA ABDOMINAL TOTAL',                              80000),
+            ('874200', 'MAMOGRAFIA BILATERAL',                                   90000),
+            ('903803', 'ALBUMINA EN SUERO',                                      18000),
+            ('904210', 'GLUCOSA EN AYUNAS',                                      12000),
+            ('904214', 'CREATININA EN SUERO',                                    15000),
+            ('904200', 'HEMOGRAMA TIPO IV (CUADRO HEMATICO)',                    20000),
+            ('904221', 'PARCIAL DE ORINA (UROANÁLISIS)',                         14000),
+            ('890701', 'ESTANCIA HOSPITALARIA - MEDICINA GENERAL (DIA CAMA)',    85000),
+            ('890703', 'ESTANCIA UCI ADULTOS',                                  350000),
+        ]
+        for i, fila in enumerate(ejemplos, 2):
+            ws.append(list(fila))
+            for col in range(1, 4):
+                cell = ws.cell(row=i, column=col)
+                cell.fill = ex_fill
+                cell.border = border
+                cell.alignment = Alignment(vertical='center')
+
+        # Anchos de columna
+        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['B'].width = 60
+        ws.column_dimensions['C'].width = 16
+        ws.row_dimensions[1].height = 22
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        resp = HttpResponse(
+            buf.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        resp['Content-Disposition'] = 'attachment; filename="plantilla_tarifario.xlsx"'
         resp['Access-Control-Expose-Headers'] = 'Content-Disposition'
         return resp
 

@@ -68,9 +68,11 @@ export function TarifariosTab() {
   const descargarPlantilla = async () => {
     try {
       const { data } = await tarifasAPI.plantilla()
-      const url = URL.createObjectURL(new Blob([data], { type: 'text/csv' }))
+      const url = URL.createObjectURL(new Blob([data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }))
       const a = document.createElement('a')
-      a.href = url; a.download = 'plantilla_tarifario.csv'; a.click()
+      a.href = url; a.download = 'plantilla_tarifario.xlsx'; a.click()
       URL.revokeObjectURL(url)
     } catch { toast.error('Error descargando plantilla') }
   }
