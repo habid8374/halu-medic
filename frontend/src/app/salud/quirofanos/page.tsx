@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { quirofanosAPI, mensajeError } from '@/lib/api'
-import { PageHeader, Button } from '@/components/ui'
+import { Button } from '@/components/ui'
 import { Plus, Pencil, Trash2, Scissors, X, Wrench, Sparkles, Activity } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -148,12 +148,15 @@ export default function QuirofanosPage() {
 
   return (
     <div className="animate-fade-in">
-      <PageHeader
-        titulo="Quirófanos"
-        descripcion="Gestión de salas de cirugía y su disponibilidad"
-        icono={<Scissors className="w-5 h-5" />}
-        accion={<Button onClick={() => abrir()}><Plus className="w-4 h-4" />Nuevo quirófano</Button>}
-      />
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <Scissors className="w-5 h-5 text-halu-600" />Quirófanos
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">Gestión de salas de cirugía y su disponibilidad</p>
+        </div>
+        <Button onClick={() => abrir()}><Plus className="w-4 h-4" />Nuevo quirófano</Button>
+      </div>
 
       {/* Resumen */}
       {lista.length > 0 && (
