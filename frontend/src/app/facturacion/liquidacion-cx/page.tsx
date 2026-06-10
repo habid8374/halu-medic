@@ -449,7 +449,7 @@ export default function LiquidacionCXPage() {
                     placeholder="Descripción (opcional)" className="w-48 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-halu-500" />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-0.5">Valor base</label>
+                  <label className="block text-xs text-slate-500 mb-0.5">Puntos UVR</label>
                   <input type="number" min="0" value={addValor} onChange={e => setAddValor(e.target.value)}
                     placeholder="0 = buscar tarifario" className="w-36 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-halu-500" />
                 </div>
@@ -470,7 +470,7 @@ export default function LiquidacionCXPage() {
                     <th className="px-2 py-1.5 text-left text-slate-600 font-medium w-8">#</th>
                     <th className="px-2 py-1.5 text-left text-slate-600 font-medium">CUPS</th>
                     <th className="px-2 py-1.5 text-left text-slate-600 font-medium">Descripción</th>
-                    <th className="px-2 py-1.5 text-right text-slate-600 font-medium">Valor Base</th>
+                    <th className="px-2 py-1.5 text-right text-slate-600 font-medium">UVR</th>
                     <th className="px-2 py-1.5 text-right text-blue-600 font-medium">% Cir</th>
                     <th className="px-2 py-1.5 text-right text-blue-600 font-medium">Cirujano</th>
                     <th className="px-2 py-1.5 text-right text-purple-600 font-medium">% Anest</th>
@@ -498,7 +498,7 @@ export default function LiquidacionCXPage() {
                       <td className="px-2 py-1.5 font-mono font-bold text-slate-500">{p.orden}</td>
                       <td className="px-2 py-1.5 font-mono">{p.cups}</td>
                       <td className="px-2 py-1.5 text-slate-600 max-w-[160px] truncate">{p.descripcion}</td>
-                      <td className="px-2 py-1.5 text-right font-mono">{fmt(p.valor_base)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-slate-500">{Number(p.valor_base).toLocaleString('es-CO')} uvr</td>
                       <td className="px-2 py-1.5 text-right text-blue-600">{p.pct_cirujano}%</td>
                       <td className="px-2 py-1.5 text-right font-mono text-blue-700">{fmt(p.valor_cirujano)}</td>
                       <td className="px-2 py-1.5 text-right text-purple-600">{p.pct_anestesiologo}%</td>

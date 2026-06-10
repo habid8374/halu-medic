@@ -1404,6 +1404,31 @@ class SolicitudHemoderivado(models.Model):
 
 # ── Liquidación de Cirugías (ISS/SOAT) ────────────────────────────────────────
 
+# Artículo 77 ISS 2001 — Derechos de sala quirófano
+# Tabla escalonada en bandas de 10 UVR; >450 UVR → UVR × $1.410
+# Fuente: Acuerdo 256/2001, ejemplo verificado: banda 111-120 = $153.075 → $1.276/UVR
+def _sala_iss2001(uvr_dec):
+    from decimal import Decimal
+    uvr = int(uvr_dec)
+    if uvr <= 0:
+        return Decimal('0')
+    if uvr > 450:
+        return (Decimal(str(uvr)) * Decimal('1410')).quantize(Decimal('1'))
+    banda = ((uvr + 9) // 10) * 10   # redondea al techo del rango
+    return (Decimal(str(banda)) * Decimal('1276')).quantize(Decimal('1'))
+
+
+# Artículo 85 ISS 2001 — Material de sutura y curación
+# Tabla ≤170 UVR; >170 UVR = por consumo (no liquidable automáticamente)
+def _mat_iss2001(uvr_dec):
+    from decimal import Decimal
+    uvr = int(uvr_dec)
+    if uvr <= 0 or uvr > 170:
+        return Decimal('0')
+    banda = ((uvr + 9) // 10) * 10
+    return (Decimal(str(banda)) * Decimal('505')).quantize(Decimal('1'))
+
+
 TABLA_PCT_LIQUIDACION = {
     'bilateral': {
         'ISS_2001': {'cirujano':[100,75,None],'anestesiologo':[100,75,None],'ayudante':[100,75,None],'quirofano':[100,75,None],'materiales':[100,75,None]},
@@ -1529,22 +1554,44 @@ class ProcedimientoLiquidacion(models.Model):
 
     def aplicar_porcentajes(self):
         from decimal import Decimal
+        uvr = Decimal(str(self.valor_base))   # valor_base almacena PUNTOS UVR
+        tar = self.liquidacion.tipo_tarifario
+
+        # Base por servicio según tarifario (ISS 2001 multipliers per UVR point)
+        if tar == 'ISS_2001':
+            b_cir   = (uvr * Decimal('1270')).quantize(Decimal('1'))
+            b_anest = (uvr * Decimal('960')).quantize(Decimal('1'))
+            b_ayud  = (uvr * Decimal('360')).quantize(Decimal('1'))
+            b_sala  = _sala_iss2001(uvr)
+            b_mat   = _mat_iss2001(uvr)
+        elif tar == 'ISS_2004':
+            # ISS 2004 Acuerdo 312: factor único UVR-S = $100 integral (incluye todo)
+            b_cir   = (uvr * Decimal('100')).quantize(Decimal('1'))
+            b_anest = (uvr * Decimal('80')).quantize(Decimal('1'))
+            b_ayud  = (uvr * Decimal('28')).quantize(Decimal('1'))
+            b_sala  = (uvr * Decimal('100')).quantize(Decimal('1'))
+            b_mat   = Decimal('0')   # ISS 2004 incluye materiales en tarifa integral
+        else:  # SOAT — usa mismos multiplicadores que ISS 2001
+            b_cir   = (uvr * Decimal('1270')).quantize(Decimal('1'))
+            b_anest = (uvr * Decimal('960')).quantize(Decimal('1'))
+            b_ayud  = (uvr * Decimal('360')).quantize(Decimal('1'))
+            b_sala  = _sala_iss2001(uvr)
+            b_mat   = _mat_iss2001(uvr)
+
+        # Aplicar porcentajes de la tabla de liquidación (múltiples procedimientos)
         tabla = TABLA_PCT_LIQUIDACION.get(self.liquidacion.tipo_liquidacion, {})
-        tar   = self.liquidacion.tipo_tarifario
         idx   = self.orden - 1
-        def pct(servicio):
+
+        def aplicar(servicio, base):
             lista = tabla.get(tar, {}).get(servicio, [100])
-            val = lista[idx] if idx < len(lista) else None
-            return Decimal(str(val)) if val is not None else Decimal('0')
-        self.pct_cirujano      = pct('cirujano')
-        self.pct_anestesiologo = pct('anestesiologo')
-        self.pct_ayudante      = pct('ayudante')
-        self.pct_quirofano     = pct('quirofano')
-        self.pct_materiales    = pct('materiales')
-        b = self.valor_base
-        self.valor_cirujano      = (b * self.pct_cirujano      / 100).quantize(Decimal('1'))
-        self.valor_anestesiologo = (b * self.pct_anestesiologo / 100).quantize(Decimal('1'))
-        self.valor_ayudante      = (b * self.pct_ayudante      / 100).quantize(Decimal('1'))
-        self.valor_quirofano     = (b * self.pct_quirofano     / 100).quantize(Decimal('1'))
-        self.valor_materiales    = (b * self.pct_materiales    / 100).quantize(Decimal('1'))
-        self.subtotal = self.valor_cirujano + self.valor_anestesiologo + self.valor_ayudante + self.valor_quirofano + self.valor_materiales
+            val   = lista[idx] if idx < len(lista) else None
+            p     = Decimal(str(val)) if val is not None else Decimal('0')
+            return p, (base * p / 100).quantize(Decimal('1'))
+
+        self.pct_cirujano,      self.valor_cirujano      = aplicar('cirujano',      b_cir)
+        self.pct_anestesiologo, self.valor_anestesiologo = aplicar('anestesiologo', b_anest)
+        self.pct_ayudante,      self.valor_ayudante      = aplicar('ayudante',      b_ayud)
+        self.pct_quirofano,     self.valor_quirofano     = aplicar('quirofano',     b_sala)
+        self.pct_materiales,    self.valor_materiales    = aplicar('materiales',    b_mat)
+        self.subtotal = (self.valor_cirujano + self.valor_anestesiologo +
+                         self.valor_ayudante + self.valor_quirofano + self.valor_materiales)
