@@ -3,9 +3,13 @@ set -e
 
 echo "=== Halu Medic — Railway startup ==="
 
-# Solo migraciones shared (tablas públicas, muy rápido)
+# Migraciones shared (esquema público)
 echo "→ Migraciones shared..."
 python manage.py migrate_schemas --shared --noinput
+
+# Migraciones tenant (schemas por IPS — historia, farmacia, etc.)
+echo "→ Migraciones tenant..."
+python manage.py migrate_schemas --noinput
 
 # Archivos estáticos
 echo "→ Collectstatic..."

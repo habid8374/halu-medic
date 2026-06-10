@@ -7,7 +7,8 @@ def crear_liquidacion_automatica(sender, instance, created, **kwargs):
     """Al guardar una descripción quirúrgica, crea la liquidación si no existe."""
     from apps.historia.models import LiquidacionCirugia, ProcedimientoLiquidacion
     try:
-        if not hasattr(instance, 'liquidacion') or instance.liquidacion is None:
+        exists = LiquidacionCirugia.objects.filter(descripcion_qx=instance).exists()
+        if not exists:
             liq = LiquidacionCirugia.objects.create(
                 descripcion_qx=instance,
                 ingreso=instance.ingreso,
