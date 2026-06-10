@@ -105,13 +105,18 @@ class ManualTarifarioViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': f'No se pudo leer el archivo ({type(e).__name__}): {e}'}, status=400)
 
-        importados = actualizados = errores = 0
+        # Parsear y validar filas
+        objetos = []
+        errores = 0
         mensajes_error = []
+        vistos = set()
         for fila in filas:
             cups = fila.get('cups', '').strip()
-            if not cups:
-                errores += 1
+            if not cups or cups in vistos:
+                if not cups:
+                    errores += 1
                 continue
+            vistos.add(cups)
             try:
                 valor_raw = str(fila.get('valor', 0) or 0).replace(',', '.').replace(' ', '').replace('$', '')
                 valor = Decimal(valor_raw) if valor_raw else Decimal('0')
@@ -119,19 +124,31 @@ class ManualTarifarioViewSet(viewsets.ModelViewSet):
                 errores += 1
                 mensajes_error.append(f'CUPS {cups}: valor inválido — {e}')
                 continue
-            desc = fila.get('descripcion', '') or ''
-            try:
-                obj, created = ItemTarifario.objects.update_or_create(
-                    manual=manual, cups=cups,
-                    defaults={'valor_base': valor, 'descripcion': str(desc)[:400], 'es_paquete': False},
-                )
-                if created:
-                    importados += 1
-                else:
-                    actualizados += 1
-            except Exception as e:
-                errores += 1
-                mensajes_error.append(f'CUPS {cups}: {e}')
+            desc = str(fila.get('descripcion', '') or '')[:400]
+            objetos.append(ItemTarifario(
+                manual=manual, cups=cups, descripcion=desc,
+                valor_base=valor, es_paquete=False, cups_rips='',
+            ))
+
+        # Bulk upsert en lotes de 500
+        BATCH = 500
+        importados = actualizados = 0
+        existentes = set(manual.items.values_list('cups', flat=True))
+        nuevos   = [o for o in objetos if o.cups not in existentes]
+        updates  = [o for o in objetos if o.cups in existentes]
+
+        for i in range(0, len(nuevos), BATCH):
+            creados = ItemTarifario.objects.bulk_create(nuevos[i:i+BATCH], ignore_conflicts=False)
+            importados += len(creados)
+
+        for i in range(0, len(updates), BATCH):
+            ItemTarifario.objects.bulk_create(
+                updates[i:i+BATCH],
+                update_conflicts=True,
+                unique_fields=['manual', 'cups'],
+                update_fields=['descripcion', 'valor_base'],
+            )
+            actualizados += len(updates[i:i+BATCH])
 
         return Response({
             'importados': importados,

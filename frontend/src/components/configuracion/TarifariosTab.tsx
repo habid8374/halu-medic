@@ -94,7 +94,7 @@ export function TarifariosTab() {
     if (!items[id]) {
       setLoadingItems(id)
       try {
-        const { data } = await tarifasAPI.listarItems(id)
+        const { data } = await tarifasAPI.listarItems(id, { page_size: 15000 })
         setItems(prev => ({ ...prev, [id]: data.results ?? data }))
       } catch { toast.error('Error cargando ítems') }
       finally { setLoadingItems(null) }
@@ -182,7 +182,7 @@ export function TarifariosTab() {
         const detalle = data.detalle_errores?.join('\n') ?? ''
         toast.error(`Sin registros importados. ${data.errores} errores.\n${detalle}`, { duration: 8000 })
       }
-      const { data: nuevosItems } = await tarifasAPI.listarItems(manualId)
+      const { data: nuevosItems } = await tarifasAPI.listarItems(manualId, { page_size: 15000 })
       setItems(prev => ({ ...prev, [manualId]: nuevosItems.results ?? nuevosItems }))
       setManuales(m => m.map(x => x.id === manualId ? { ...x, total_items: data.total_items } : x))
     } catch (err: unknown) {
