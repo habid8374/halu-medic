@@ -158,19 +158,24 @@ function ModalNuevaAyuda({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [form, setForm] = useState({
-    tipo: 'laboratorio', descripcion: '', indicacion_clinica: '',
-    cups: '', urgente: false, medico_solicitante: '',
-  })
+  const formVacio = { tipo: 'laboratorio', descripcion: '', indicacion_clinica: '', cups: '', urgente: false, medico_solicitante: '' }
+  const [form, setForm] = useState({ ...formVacio })
   const [saving, setSaving] = useState(false)
+  const [agregadas, setAgregadas] = useState<string[]>([])
 
-  const save = async () => {
+  const save = async (cerrarDespues = false) => {
     if (!form.descripcion.trim()) { toast.error('Ingresa la descripción del examen'); return }
     setSaving(true)
     try {
       await ayudasDiagnosticasAPI.create({ ...form, ingreso: ingresoId })
-      toast.success('Ayuda diagnóstica solicitada')
+      setAgregadas(prev => [...prev, form.descripcion])
       onSaved()
+      if (cerrarDespues) {
+        onClose()
+      } else {
+        setForm({ ...formVacio, tipo: form.tipo, medico_solicitante: form.medico_solicitante })
+        toast.success('Ayuda agregada — puedes agregar otra')
+      }
     } catch (e) { toast.error(mensajeError(e)) }
     finally { setSaving(false) }
   }
@@ -179,9 +184,21 @@ function ModalNuevaAyuda({
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-900">Solicitar ayuda diagnóstica</h2>
+          <div>
+            <h2 className="font-semibold text-slate-900">Solicitar ayuda diagnóstica</h2>
+            {agregadas.length > 0 && (
+              <p className="text-xs text-green-600 mt-0.5">{agregadas.length} agregada{agregadas.length > 1 ? 's' : ''} en esta sesión</p>
+            )}
+          </div>
           <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
         </div>
+        {agregadas.length > 0 && (
+          <div className="mx-5 mt-4 rounded-lg bg-green-50 border border-green-100 px-3 py-2 space-y-0.5">
+            {agregadas.map((d, i) => (
+              <p key={i} className="text-xs text-green-700">✓ {d}</p>
+            ))}
+          </div>
+        )}
         <div className="p-5 space-y-4">
           <div>
             <label className="label-xs">Tipo</label>
@@ -233,9 +250,12 @@ function ModalNuevaAyuda({
             </label>
           </div>
         </div>
-        <div className="p-5 border-t border-slate-100">
-          <Button onClick={save} loading={saving} className="w-full">
-            <Microscope className="w-4 h-4" /> Solicitar ayuda diagnóstica
+        <div className="p-5 border-t border-slate-100 flex gap-2">
+          <Button onClick={() => save(false)} loading={saving} className="flex-1">
+            <PlusCircle className="w-4 h-4" /> Agregar otra
+          </Button>
+          <Button onClick={() => save(true)} loading={saving} variant="secondary" className="flex-1">
+            <Microscope className="w-4 h-4" /> Guardar y cerrar
           </Button>
         </div>
       </div>
