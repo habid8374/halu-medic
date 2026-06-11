@@ -1,12 +1,16 @@
 'use client'
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import Sidebar from '@/components/layout/Sidebar'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { usuario, isLoading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
+
+  // Vistas de impresión: sin sidebar ni chrome de la app
+  const esVistaImpresion = pathname.endsWith('/imprimir') || pathname.endsWith('/egreso')
 
   useEffect(() => {
     if (!isLoading && !usuario) router.replace('/login')
@@ -18,6 +22,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="w-8 h-8 border-4 border-halu-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
+  }
+
+  if (esVistaImpresion) {
+    return <>{children}</>
   }
 
   return (
