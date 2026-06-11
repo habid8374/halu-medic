@@ -2214,6 +2214,12 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
         Auto-carga ítems desde todos los módulos clínicos del episodio.
         Solo agrega ítems que no existen aún (evita duplicados por origen_id).
         """
+        try:
+            return self._autocargar_impl(request, pk)
+        except Exception as e:
+            return Response({'error': f'Error al autocargar: {type(e).__name__}: {e}'}, status=500)
+
+    def _autocargar_impl(self, request, pk=None):
         from apps.historia.models import (
             Ingreso, HistoriaClinica, OrdenHC, MedicamentoHC,
             AyudaDiagnostica, ProgramacionCx,

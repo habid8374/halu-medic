@@ -332,7 +332,7 @@ class ItemPrefactura(models.Model):
     # Origen: referencia al objeto clínico que generó este ítem
     origen_tipo     = models.CharField(max_length=30, blank=True,
                                         help_text='Ej: OrdenHC, MedicamentoHC, AyudaDiagnostica, ProgramacionCx')
-    origen_id       = models.CharField(max_length=40, blank=True,
+    origen_id       = models.CharField(max_length=80, blank=True,
                                         help_text='UUID del objeto origen')
 
     # ¿Fue agregado manualmente o auto-generado?
