@@ -228,6 +228,8 @@ function ModalEgreso({ onClose, onConfirm, ingresoId }: {
     try {
       const { indicaciones_alta, diagnostico_egreso_nombre, ...rest } = form
       await onConfirm({ ...rest, indicaciones_alta })
+    } catch (err) {
+      toast.error(mensajeError(err))
     } finally { setSaving(false) }
   }
 
@@ -848,24 +850,33 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
 
       {/* Egreso info */}
       {ingreso.egreso_info && (
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 flex gap-4 items-center">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 flex flex-wrap gap-3 items-center">
           <CheckCircle2 className="w-5 h-5 text-slate-500 shrink-0" />
-          <div className="flex-1">
+          <div className="flex-1 min-w-[180px]">
             <p className="text-sm font-semibold text-slate-700">Paciente egresado</p>
             <p className="text-xs text-slate-500">
               {fmtFecha(ingreso.egreso_info.fecha_egreso)} · {TIPO_EGRESO.find(t => t.value === ingreso.egreso_info!.tipo_egreso)?.label}
               {ingreso.egreso_info.diagnostico_egreso && ` · Dx: ${ingreso.egreso_info.diagnostico_egreso}`}
             </p>
           </div>
-          <a
-            href={`/historia-clinica/ingresos/${id}/egreso`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-600 hover:bg-white transition-colors"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            Orden de salida
-          </a>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowPrefacturaPrompt(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Generar prefactura
+            </button>
+            <a
+              href={`/historia-clinica/ingresos/${id}/egreso`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-600 hover:bg-white transition-colors"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Orden de salida
+            </a>
+          </div>
         </div>
       )}
 
