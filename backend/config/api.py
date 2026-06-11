@@ -2266,6 +2266,15 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
         if estado:   qs = qs.filter(estado=estado)
         return qs
 
+    def destroy(self, request, *args, **kwargs):
+        pre = self.get_object()
+        if pre.estado == 'facturada' or pre.factura_id:
+            return Response(
+                {'error': 'No se puede eliminar una prefactura ya facturada. Anula primero la factura.'},
+                status=400,
+            )
+        return super().destroy(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         # Derivar convenio automáticamente de la aseguradora del paciente si no viene
         convenio = serializer.validated_data.get('convenio')

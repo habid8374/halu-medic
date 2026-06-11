@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { prefacturaAPI, mensajeError } from '@/lib/api'
 import type { Prefactura, EstadoPrefactura } from '@/types'
 import toast from 'react-hot-toast'
-import { FileText, Search, Plus, Loader2, ChevronRight } from 'lucide-react'
+import { FileText, Search, Plus, Loader2, ChevronRight, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
 
 const ESTADO_COLORS: Record<EstadoPrefactura, string> = {
@@ -28,6 +28,8 @@ export default function PrefacturasPage() {
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<EstadoPrefactura | ''>('')
+  const [aEliminar, setAEliminar] = useState<Prefactura | null>(null)
+  const [eliminando, setEliminando] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -44,6 +46,23 @@ export default function PrefacturasPage() {
   }, [filtroEstado])
 
   useEffect(() => { load() }, [load])
+
+  const eliminar = async () => {
+    if (!aEliminar) return
+    setEliminando(true)
+    try {
+      await prefacturaAPI.delete(aEliminar.id)
+      toast.success(`${aEliminar.numero_formateado} eliminada`)
+      setAEliminar(null)
+      load()
+    } catch (e) {
+      toast.error(mensajeError(e))
+    } finally {
+      setEliminando(false)
+    }
+  }
+
+  const puedeEliminar = (p: Prefactura) => p.estado !== 'facturada'
 
   const filtradas = prefacturas.filter(p =>
     !busqueda ||
@@ -119,47 +138,139 @@ export default function PrefacturasPage() {
             <p>No hay prefacturas</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Número</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Paciente</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Convenio</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Total EPS</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Pac.</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Estado</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Creada</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {filtradas.map(p => (
-                <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-slate-600">{p.numero_formateado}</td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{p.paciente_nombre}</td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">{p.convenio_info?.nombre || '—'}</td>
-                  <td className="px-4 py-3 text-right text-blue-700 font-medium">{fmt(p.subtotal_eps)}</td>
-                  <td className="px-4 py-3 text-right text-amber-700 font-medium">{fmt(p.subtotal_paciente)}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={clsx('text-xs px-2 py-1 rounded-full font-medium', ESTADO_COLORS[p.estado])}>
-                      {ESTADO_LABELS[p.estado]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-400">{new Date(p.creado_en).toLocaleDateString('es-CO')}</td>
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/facturacion/prefactura/${p.id}`}
-                      className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg inline-flex"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </Link>
-                  </td>
+          <>
+            {/* Tabla — escritorio */}
+            <table className="w-full text-sm hidden md:table">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Número</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Paciente</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Convenio</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Total EPS</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Pac.</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Estado</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Creada</th>
+                  <th className="px-4 py-3" />
                 </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filtradas.map(p => (
+                  <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{p.numero_formateado}</td>
+                    <td className="px-4 py-3 font-medium text-slate-800">{p.paciente_nombre}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{p.convenio_info?.nombre || '—'}</td>
+                    <td className="px-4 py-3 text-right text-blue-700 font-medium">{fmt(p.subtotal_eps)}</td>
+                    <td className="px-4 py-3 text-right text-amber-700 font-medium">{fmt(p.subtotal_paciente)}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={clsx('text-xs px-2 py-1 rounded-full font-medium', ESTADO_COLORS[p.estado])}>
+                        {ESTADO_LABELS[p.estado]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-400">{new Date(p.creado_en).toLocaleDateString('es-CO')}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        {puedeEliminar(p) && (
+                          <button
+                            onClick={() => setAEliminar(p)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg inline-flex"
+                            title="Eliminar prefactura"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        <Link
+                          href={`/facturacion/prefactura/${p.id}`}
+                          className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg inline-flex"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Tarjetas — móvil */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filtradas.map(p => (
+                <div key={p.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <Link href={`/facturacion/prefactura/${p.id}`} className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs text-slate-500">{p.numero_formateado}</span>
+                        <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', ESTADO_COLORS[p.estado])}>
+                          {ESTADO_LABELS[p.estado]}
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-800 mt-1 truncate">{p.paciente_nombre}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {p.convenio_info?.nombre || 'Sin convenio'} · {new Date(p.creado_en).toLocaleDateString('es-CO')}
+                      </p>
+                      <div className="flex gap-4 mt-2 text-xs">
+                        <span className="text-blue-700 font-medium">EPS: {fmt(p.subtotal_eps)}</span>
+                        <span className="text-amber-700 font-medium">Pac: {fmt(p.subtotal_paciente)}</span>
+                      </div>
+                    </Link>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      {puedeEliminar(p) && (
+                        <button
+                          onClick={() => setAEliminar(p)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                          title="Eliminar prefactura"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      <Link
+                        href={`/facturacion/prefactura/${p.id}`}
+                        className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
+
+      {/* Modal confirmar eliminación */}
+      {aEliminar && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900 text-sm">Eliminar {aEliminar.numero_formateado}</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Se eliminará la prefactura de <strong>{aEliminar.paciente_nombre}</strong> con todos sus ítems. Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={eliminar}
+                disabled={eliminando}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-60 transition-colors"
+              >
+                {eliminando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {eliminando ? 'Eliminando…' : 'Sí, eliminar'}
+              </button>
+              <button
+                onClick={() => setAEliminar(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
