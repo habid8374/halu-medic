@@ -1,14 +1,53 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { prefacturaAPI, mensajeError } from '@/lib/api'
+import { prefacturaAPI, itemPrefacturaAPI, liquidacionCxAPI, mensajeError } from '@/lib/api'
 import BuscadorPacienteIngreso from '@/components/ui/BuscadorPacienteIngreso'
 import type { PacienteResumen, IngresoResumen } from '@/components/ui/BuscadorPacienteIngreso'
 import toast from 'react-hot-toast'
-import { ArrowLeft, User, BedDouble, Search, FileText, Loader2 } from 'lucide-react'
+import { ArrowLeft, User, BedDouble, Search, FileText, Loader2, Scissors, ChevronDown, ChevronUp } from 'lucide-react'
 import Link from 'next/link'
 
 const INPUT = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-halu-500/20 focus:border-halu-400 bg-white'
+
+interface LiquidacionCx {
+  id: string
+  dqx_cups: string | null
+  dqx_descripcion: string | null
+  dqx_numero: string | null
+  estado: string
+  total_cirujano: string
+  total_anestesiologo: string
+  total_ayudante: string
+  total_quirofano: string
+  total_materiales: string
+  total_general: string
+}
+
+type ItemKey = 'cirujano' | 'anestesiologo' | 'ayudante' | 'quirofano' | 'materiales'
+
+const ITEM_LABELS: Record<ItemKey, string> = {
+  cirujano:      'Cirujano',
+  anestesiologo: 'Anestesiólogo',
+  ayudante:      'Ayudante',
+  quirofano:     'Quirófano',
+  materiales:    'Materiales',
+}
+
+function totalField(liq: LiquidacionCx, key: ItemKey): number {
+  const map: Record<ItemKey, string> = {
+    cirujano:      liq.total_cirujano,
+    anestesiologo: liq.total_anestesiologo,
+    ayudante:      liq.total_ayudante,
+    quirofano:     liq.total_quirofano,
+    materiales:    liq.total_materiales,
+  }
+  return parseFloat(map[key]) || 0
+}
+
+function fmt(v: string | number) {
+  return Number(v).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
+}
 
 export default function NuevaPrefacturaPage() {
   const router = useRouter()
@@ -25,6 +64,12 @@ export default function NuevaPrefacturaPage() {
   })
   const [saving, setSaving] = useState(false)
 
+  // Cirugías liquidadas
+  const [liquidaciones, setLiquidaciones] = useState<LiquidacionCx[]>([])
+  const [cxExpanded, setCxExpanded] = useState(false)
+  // checked[liqId][itemKey] = true/false
+  const [checked, setChecked] = useState<Record<string, Record<ItemKey, boolean>>>({})
+
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
@@ -36,6 +81,44 @@ export default function NuevaPrefacturaPage() {
       setForm(f => ({ ...f, fecha_inicio: ing.fecha_ingreso.split('T')[0], fecha_fin: today }))
     }
     setShowBuscador(false)
+  }
+
+  // Fetch liquidaciones finalizadas cuando cambia el ingreso
+  useEffect(() => {
+    if (!ingreso?.id) {
+      setLiquidaciones([])
+      setChecked({})
+      setCxExpanded(false)
+      return
+    }
+    liquidacionCxAPI.porIngreso(String(ingreso.id)).then(({ data }) => {
+      const results: LiquidacionCx[] = data.results ?? data
+      setLiquidaciones(results)
+      if (results.length > 0) {
+        setCxExpanded(true)
+        // pre-marcar todos los ítems con valor > 0
+        const init: Record<string, Record<ItemKey, boolean>> = {}
+        for (const liq of results) {
+          init[liq.id] = {
+            cirujano:      parseFloat(liq.total_cirujano) > 0,
+            anestesiologo: parseFloat(liq.total_anestesiologo) > 0,
+            ayudante:      parseFloat(liq.total_ayudante) > 0,
+            quirofano:     parseFloat(liq.total_quirofano) > 0,
+            materiales:    parseFloat(liq.total_materiales) > 0,
+          }
+        }
+        setChecked(init)
+      }
+    }).catch(() => {
+      // silencioso: no bloquear flujo si el endpoint falla
+    })
+  }, [ingreso?.id])
+
+  const toggleItem = (liqId: string, key: ItemKey) => {
+    setChecked(prev => ({
+      ...prev,
+      [liqId]: { ...prev[liqId], [key]: !prev[liqId]?.[key] }
+    }))
   }
 
   const crear = async () => {
@@ -51,14 +134,49 @@ export default function NuevaPrefacturaPage() {
       if (ingreso)      payload.ingreso  = ingreso.id
       if (form.convenio) payload.convenio = form.convenio
       const { data } = await prefacturaAPI.create(payload)
-      toast.success('Prefactura creada')
-      router.push(`/facturacion/prefactura/${data.id}`)
+      const prefacturaId: string = data.id
+
+      // Importar ítems de cirugías seleccionadas
+      const keys: ItemKey[] = ['cirujano', 'anestesiologo', 'ayudante', 'quirofano', 'materiales']
+      const itemPromises: Promise<unknown>[] = []
+      for (const liq of liquidaciones) {
+        const sel = checked[liq.id] ?? {}
+        for (const key of keys) {
+          if (!sel[key]) continue
+          const valor = totalField(liq, key)
+          if (valor <= 0) continue
+          const cups = liq.dqx_cups || null
+          const descripcion = `${ITEM_LABELS[key]}${liq.dqx_descripcion ? ` - ${liq.dqx_descripcion}` : ''}`
+          itemPromises.push(
+            itemPrefacturaAPI.create({
+              prefactura: prefacturaId,
+              descripcion,
+              cantidad: 1,
+              valor_unitario: valor,
+              ...(cups ? { cups } : {}),
+            })
+          )
+        }
+      }
+      if (itemPromises.length > 0) {
+        await Promise.all(itemPromises)
+        toast.success(`Prefactura creada con ${itemPromises.length} ítem(s) de cirugía importados`)
+      } else {
+        toast.success('Prefactura creada')
+      }
+      router.push(`/facturacion/prefactura/${prefacturaId}`)
     } catch (e) {
       toast.error(mensajeError(e))
     } finally {
       setSaving(false)
     }
   }
+
+  const hayItemsSeleccionados = liquidaciones.some(liq =>
+    (['cirujano', 'anestesiologo', 'ayudante', 'quirofano', 'materiales'] as ItemKey[]).some(
+      k => checked[liq.id]?.[k] && totalField(liq, k) > 0
+    )
+  )
 
   return (
     <div className="page-padding animate-fade-in max-w-2xl mx-auto">
@@ -127,6 +245,88 @@ export default function NuevaPrefacturaPage() {
           </div>
         )}
 
+        {/* ── Cirugías liquidadas ──────────────────────────────────────── */}
+        {liquidaciones.length > 0 && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setCxExpanded(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <Scissors className="w-4 h-4 text-emerald-600" />
+                <span className="text-sm font-semibold text-emerald-800">
+                  Cirugías liquidadas ({liquidaciones.length})
+                </span>
+                {hayItemsSeleccionados && (
+                  <span className="text-xs bg-emerald-600 text-white rounded-full px-2 py-0.5">
+                    Importar seleccionados
+                  </span>
+                )}
+              </div>
+              {cxExpanded
+                ? <ChevronUp className="w-4 h-4 text-emerald-600" />
+                : <ChevronDown className="w-4 h-4 text-emerald-600" />
+              }
+            </button>
+
+            {cxExpanded && (
+              <div className="border-t border-emerald-200 px-4 pb-4 space-y-4 pt-3">
+                {liquidaciones.map(liq => (
+                  <div key={liq.id} className="bg-white rounded-xl border border-emerald-100 p-3 space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-semibold text-slate-700">
+                        {liq.dqx_numero ? `DQX #${liq.dqx_numero}` : 'Cirugía'}
+                      </span>
+                      {liq.dqx_cups && (
+                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">
+                          {liq.dqx_cups}
+                        </span>
+                      )}
+                      {liq.dqx_descripcion && (
+                        <span className="text-xs text-slate-500 truncate">{liq.dqx_descripcion}</span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {(['cirujano', 'anestesiologo', 'ayudante', 'quirofano', 'materiales'] as ItemKey[]).map(key => {
+                        const valor = totalField(liq, key)
+                        if (valor <= 0) return null
+                        const isChecked = checked[liq.id]?.[key] ?? false
+                        return (
+                          <label
+                            key={key}
+                            className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                              isChecked ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-100 opacity-60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleItem(liq.id, key)}
+                                className="accent-emerald-600"
+                              />
+                              <span className="text-xs font-medium text-slate-700">{ITEM_LABELS[key]}</span>
+                            </div>
+                            <span className="text-xs font-semibold text-slate-800">{fmt(valor)}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+
+                    <div className="flex justify-end pt-1">
+                      <span className="text-xs text-slate-500">
+                        Total liquidación: <span className="font-semibold text-slate-700">{fmt(liq.total_general)}</span>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Período */}
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -163,7 +363,7 @@ export default function NuevaPrefacturaPage() {
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-            Crear prefactura
+            {hayItemsSeleccionados ? 'Crear e importar cirugías' : 'Crear prefactura'}
           </button>
         </div>
       </div>
