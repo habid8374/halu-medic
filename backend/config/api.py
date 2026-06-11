@@ -4028,35 +4028,35 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
             )
         return qs
 
-    def _buscar_uvr(self, cups, tipo_tarifario, desc_fallback=''):
-        """Busca el valor UVR de un CUPS en el tarifario más apropiado."""
-        from apps.tarifas.models import ManualTarifario
-        from django.db.models import Q
-        # 1. Tarifario predeterminado
-        # 2. Tarifario cuyo nombre contiene el tipo (ISS 2001, ISS 2004, SOAT)
-        # 3. Cualquier tarifario que tenga el CUPS
-        nombre_hint = tipo_tarifario.replace('_', ' ')  # ISS_2001 → ISS 2001
-        candidatos = ManualTarifario.objects.filter(
-            Q(es_predeterminado=True) |
-            Q(nombre__icontains=nombre_hint)
-        ).order_by('-es_predeterminado', 'nombre')
-        for tar in candidatos:
-            item = tar.items.filter(cups=cups).first()
-            if item and float(item.valor_base or 0) > 0:
-                return float(item.valor_base), item.descripcion or desc_fallback
-        # último recurso: cualquier tarifario
+    def _buscar_uvr(self, cups, liq, desc_fallback=''):
+        """Busca UVR del CUPS en el tarifario de la aseguradora del paciente."""
         from apps.tarifas.models import ItemTarifario
-        item = ItemTarifario.objects.filter(cups=cups, manual__isnull=False).order_by('-valor_base').first()
+        valor = 0
+        desc  = desc_fallback
+
+        # Cadena: ingreso → paciente → aseguradora → tarifario
+        try:
+            tarifario = liq.ingreso.paciente.aseguradora.tarifario
+            if tarifario:
+                item = tarifario.items.filter(cups=cups).first()
+                if item and float(item.valor_base or 0) > 0:
+                    return float(item.valor_base), item.descripcion or desc
+        except Exception:
+            pass
+
+        # Fallback: cualquier ItemTarifario con ese CUPS
+        item = ItemTarifario.objects.filter(cups=cups).order_by('-valor_base').first()
         if item and float(item.valor_base or 0) > 0:
-            return float(item.valor_base), item.descripcion or desc_fallback
-        return 0, desc_fallback
+            valor = float(item.valor_base)
+            desc  = item.descripcion or desc
+        return valor, desc
 
     def perform_create(self, serializer):
         liq = serializer.save()
         dqx = liq.descripcion_qx
         if dqx and dqx.cups_principal and not liq.procedimientos.exists():
             valor, desc = self._buscar_uvr(
-                dqx.cups_principal, liq.tipo_tarifario,
+                dqx.cups_principal, liq,
                 dqx.descripcion_procedimiento or ''
             )
             proc = ProcedimientoLiquidacion(
@@ -4081,7 +4081,7 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
             orden = liq.procedimientos.count() + 1
 
         if not float(valor or 0):
-            valor, desc_found = self._buscar_uvr(cups, liq.tipo_tarifario, desc)
+            valor, desc_found = self._buscar_uvr(cups, liq, desc)
             desc = desc or desc_found
 
         liq.procedimientos.filter(orden=orden).delete()
