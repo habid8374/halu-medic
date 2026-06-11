@@ -2181,6 +2181,32 @@ class PrefacturaSerializer(serializers.ModelSerializer):
             'subtotal_no_facturable', 'total', 'creado_en', 'actualizado_en',
         ]
 
+    def validate(self, data):
+        # Solo en creación: la cuenta médica es por episodio (ingreso)
+        if self.instance is None:
+            ingreso = data.get('ingreso')
+            if not ingreso:
+                raise serializers.ValidationError({
+                    'ingreso': 'Toda prefactura debe estar asociada a un ingreso (episodio). '
+                               'Selecciona el ingreso a facturar.'
+                })
+            existente = (Prefactura.objects
+                         .filter(ingreso=ingreso, estado__in=['borrador', 'en_revision'])
+                         .first())
+            if existente:
+                raise serializers.ValidationError({
+                    'ingreso': f'Ya existe la prefactura PRE-{str(existente.numero_prefactura).zfill(5)} '
+                               f'activa para este ingreso. Continúa trabajando sobre ella.',
+                    'prefactura_existente': str(existente.id),
+                })
+            # Coherencia paciente-ingreso
+            paciente = data.get('paciente')
+            if paciente and ingreso.paciente_id != paciente.id:
+                raise serializers.ValidationError({
+                    'ingreso': 'El ingreso seleccionado no pertenece al paciente indicado.'
+                })
+        return data
+
 
 class PrefacturaViewSet(viewsets.ModelViewSet):
     """
@@ -2205,7 +2231,21 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(creado_por=self.request.user)
+        # Derivar convenio automáticamente de la aseguradora del paciente si no viene
+        convenio = serializer.validated_data.get('convenio')
+        if convenio is None:
+            paciente = serializer.validated_data.get('paciente')
+            aseg = getattr(paciente, 'aseguradora', None)
+            if aseg:
+                from apps.tarifas.models import ConvenioEPS
+                from django.utils import timezone
+                hoy = timezone.now().date()
+                convenio = (ConvenioEPS.objects
+                            .filter(aseguradora=aseg,
+                                    vigencia_desde__lte=hoy, vigencia_hasta__gte=hoy)
+                            .first()
+                            or ConvenioEPS.objects.filter(aseguradora=aseg).first())
+        serializer.save(creado_por=self.request.user, convenio=convenio)
 
     @action(detail=True, methods=['post'], url_path='autocargar')
     def autocargar(self, request, pk=None):

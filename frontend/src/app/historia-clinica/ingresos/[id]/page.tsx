@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { ingresosAPI, historiaAPI, medicamentosHCAPI, catalogoMedicamentosAPI, cie10API, ordenesHCAPI, descripcionQxAPI, liquidacionCxAPI, ayudasDiagnosticasAPI, mensajeError } from '@/lib/api'
+import { ingresosAPI, historiaAPI, medicamentosHCAPI, catalogoMedicamentosAPI, cie10API, ordenesHCAPI, descripcionQxAPI, liquidacionCxAPI, ayudasDiagnosticasAPI, prefacturaAPI, mensajeError } from '@/lib/api'
 import { Ingreso, HistoriaClinica } from '@/types'
 import { Button, Card, Spinner } from '@/components/ui'
 import { CupsAutocomplete } from '@/components/ui/CupsAutocomplete'
@@ -689,6 +689,28 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
     toast.success('Paciente egresado correctamente')
     setShowEgreso(false)
     cargar()
+    // Al egreso se cierra la cuenta: ofrecer abrir la prefactura del episodio
+    if (ingreso && window.confirm('¿Generar la prefactura de este ingreso ahora?')) {
+      try {
+        const hoy = new Date().toISOString().split('T')[0]
+        const { data: pre } = await prefacturaAPI.create({
+          paciente: ingreso.paciente,
+          ingreso: id,
+          fecha_inicio: (ingreso.fecha_ingreso || hoy).split('T')[0],
+          fecha_fin: hoy,
+        })
+        try { await prefacturaAPI.autocargar(pre.id) } catch { /* autocarga manual luego */ }
+        window.location.href = `/facturacion/prefactura/${pre.id}`
+      } catch (e: unknown) {
+        const detail = (e as { response?: { data?: { prefactura_existente?: string | string[] } } })?.response?.data
+        const existente = Array.isArray(detail?.prefactura_existente) ? detail?.prefactura_existente[0] : detail?.prefactura_existente
+        if (existente) {
+          window.location.href = `/facturacion/prefactura/${existente}`
+        } else {
+          toast.error(mensajeError(e))
+        }
+      }
+    }
   }
 
   if (loading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>
