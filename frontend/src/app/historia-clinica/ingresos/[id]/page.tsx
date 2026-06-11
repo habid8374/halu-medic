@@ -705,6 +705,8 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
   const [showEgreso, setShowEgreso]   = useState(false)
   const [showNuevaHC, setShowNuevaHC] = useState(false)
   const [showEpicrisis, setShowEpicrisis] = useState(false)
+  const [showPrefacturaPrompt, setShowPrefacturaPrompt] = useState(false)
+  const [egresoData, setEgresoData] = useState<Record<string, unknown> | null>(null)
   const [dqxList, setDqxList]             = useState<any[]>([])
   const [liquidaciones, setLiquidaciones] = useState<any[]>([])
   const [ayudas, setAyudas]               = useState<any[]>([])
@@ -731,27 +733,30 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
     await ingresosAPI.egresar(id, data)
     toast.success('Paciente egresado correctamente')
     setShowEgreso(false)
+    setEgresoData(data)
     cargar()
-    // Al egreso se cierra la cuenta: ofrecer abrir la prefactura del episodio
-    if (ingreso && window.confirm('¿Generar la prefactura de este ingreso ahora?')) {
-      try {
-        const hoy = new Date().toISOString().split('T')[0]
-        const { data: pre } = await prefacturaAPI.create({
-          paciente: ingreso.paciente,
-          ingreso: id,
-          fecha_inicio: (ingreso.fecha_ingreso || hoy).split('T')[0],
-          fecha_fin: hoy,
-        })
-        try { await prefacturaAPI.autocargar(pre.id) } catch { /* autocarga manual luego */ }
-        window.location.href = `/facturacion/prefactura/${pre.id}`
-      } catch (e: unknown) {
-        const detail = (e as { response?: { data?: { prefactura_existente?: string | string[] } } })?.response?.data
-        const existente = Array.isArray(detail?.prefactura_existente) ? detail?.prefactura_existente[0] : detail?.prefactura_existente
-        if (existente) {
-          window.location.href = `/facturacion/prefactura/${existente}`
-        } else {
-          toast.error(mensajeError(e))
-        }
+    setShowPrefacturaPrompt(true)
+  }
+
+  const crearPrefacturaDesdeEgreso = async () => {
+    setShowPrefacturaPrompt(false)
+    try {
+      const hoy = new Date().toISOString().split('T')[0]
+      const { data: pre } = await prefacturaAPI.create({
+        paciente: ingreso!.paciente,
+        ingreso: id,
+        fecha_inicio: (ingreso!.fecha_ingreso || hoy).split('T')[0],
+        fecha_fin: hoy,
+      })
+      try { await prefacturaAPI.autocargar(pre.id) } catch { /* autocarga manual luego */ }
+      window.location.href = `/facturacion/prefactura/${pre.id}`
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { prefactura_existente?: string | string[] } } })?.response?.data
+      const existente = Array.isArray(detail?.prefactura_existente) ? detail?.prefactura_existente[0] : detail?.prefactura_existente
+      if (existente) {
+        window.location.href = `/facturacion/prefactura/${existente}`
+      } else {
+        toast.error(mensajeError(e))
       }
     }
   }
@@ -764,6 +769,36 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
   return (
     <div className="page-padding max-w-4xl animate-fade-in">
       {showEgreso && <ModalEgreso ingresoId={id} onClose={() => setShowEgreso(false)} onConfirm={confirmarEgreso} />}
+      {showPrefacturaPrompt && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-violet-100 rounded-full flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5 text-violet-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900 text-sm">Cuenta médica del episodio</p>
+                <p className="text-xs text-slate-500 mt-0.5">¿Deseas generar la prefactura de este ingreso ahora?</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={crearPrefacturaDesdeEgreso}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                Generar prefactura
+              </button>
+              <button
+                onClick={() => setShowPrefacturaPrompt(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Ahora no
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showNuevaHC && (
         <ModalNuevaHC
           ingresoId={id} pacienteId={ingreso.paciente}
