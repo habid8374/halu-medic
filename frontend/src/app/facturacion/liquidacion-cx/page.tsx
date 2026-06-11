@@ -117,7 +117,7 @@ export default function LiquidacionCXPage() {
     try {
       const res = await liquidacionCxAPI.get(id)
       let data = res.data
-      // Si la liquidación está vacía pero el DQX tiene CUPS, auto-agregar el procedimiento
+      // Si no hay procedimientos, agregar el del DQX automáticamente
       if (data.procedimientos?.length === 0 && data.dqx_cups) {
         try {
           await liquidacionCxAPI.agregarProcedimiento(id, {
@@ -127,7 +127,15 @@ export default function LiquidacionCXPage() {
           })
           const refres = await liquidacionCxAPI.get(id)
           data = refres.data
-        } catch (_) { /* si falla, mostrar igual */ }
+        } catch (_) { /* mostrar igual */ }
+      }
+      // Si algún procedimiento tiene UVR=0, recalcular para re-leer del tarifario
+      const tieneUvrCero = data.procedimientos?.some((p: {valor_base: string}) => Number(p.valor_base) === 0)
+      if (tieneUvrCero) {
+        try {
+          const refres = await liquidacionCxAPI.recalcular(id, {})
+          data = refres.data
+        } catch (_) { /* mostrar igual */ }
       }
       setLiq(data)
       setResults([])

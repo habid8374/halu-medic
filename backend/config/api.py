@@ -4106,6 +4106,13 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
         if changed:
             liq.save()
         for proc in liq.procedimientos.all():
+            # Si el UVR es 0, intentar re-leer del tarifario de la aseguradora
+            if float(proc.valor_base or 0) == 0:
+                uvr, desc = self._buscar_uvr(proc.cups, liq, proc.descripcion)
+                if uvr:
+                    proc.valor_base = uvr
+                    if not proc.descripcion and desc:
+                        proc.descripcion = desc
             proc.aplicar_porcentajes()
             proc.save()
         liq.calcular_totales()
