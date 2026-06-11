@@ -257,7 +257,7 @@ function ModalEgreso({ onClose, onConfirm, ingresoId }: {
 
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Diagnóstico de egreso (CIE-10)</label>
-            <Cie10Autocomplete
+            <BuscadorCIE10
               value={form.diagnostico_egreso}
               nombre={form.diagnostico_egreso_nombre}
               onChange={(codigo, nombre) => setForm(f => ({ ...f, diagnostico_egreso: codigo, diagnostico_egreso_nombre: nombre }))}
