@@ -2407,7 +2407,7 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
             ids_liq_dqx = set(
                 LiquidacionCirugia.objects.filter(ingreso=pre.ingreso)
                 .exclude(descripcion_qx=None)
-                .values_list('descripcion_qx__programacion_id', flat=True)
+                .values_list('descripcion_qx__programacion', flat=True)
             )
             for cx in ProgramacionCx.objects.filter(ingreso=pre.ingreso, estado='realizada'):
                 if cx.id in ids_liq_dqx or ya_existe(str(cx.id)):
