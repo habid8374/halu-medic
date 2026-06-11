@@ -65,6 +65,7 @@ class Egreso(models.Model):
     diagnostico_egreso = models.CharField(max_length=10, blank=True, help_text='CIE-10')
     descripcion_diagnostico = models.CharField(max_length=300, blank=True)
     condicion_al_egreso = models.TextField(blank=True)
+    indicaciones_alta   = models.TextField(blank=True, help_text='Indicaciones de alta: medicamentos, cuidados, cita control')
     medico           = models.ForeignKey('citas.Medico', on_delete=models.SET_NULL,
                                           null=True, blank=True)
     observaciones    = models.TextField(blank=True)

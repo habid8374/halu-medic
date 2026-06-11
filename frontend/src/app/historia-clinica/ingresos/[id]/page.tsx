@@ -206,26 +206,44 @@ function BuscadorCIE10({ value, nombre, onChange }: {
   )
 }
 
-function ModalEgreso({ onClose, onConfirm }: { onClose: () => void; onConfirm: (data: Record<string, unknown>) => Promise<void> }) {
-  const [form, setForm] = useState({ fecha_egreso: new Date().toISOString().slice(0, 16), tipo_egreso: 'alta_medica', diagnostico_egreso: '', condicion_al_egreso: '', observaciones: '' })
+function ModalEgreso({ onClose, onConfirm, ingresoId }: {
+  onClose: () => void
+  onConfirm: (data: Record<string, unknown>) => Promise<void>
+  ingresoId: string
+}) {
+  const [form, setForm] = useState({
+    fecha_egreso: new Date().toISOString().slice(0, 16),
+    tipo_egreso: 'alta_medica',
+    diagnostico_egreso: '',
+    diagnostico_egreso_nombre: '',
+    condicion_al_egreso: '',
+    indicaciones_alta: '',
+    observaciones: '',
+  })
   const [saving, setSaving] = useState(false)
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true)
-    try { await onConfirm(form) } finally { setSaving(false) }
+    try {
+      const { indicaciones_alta, diagnostico_egreso_nombre, ...rest } = form
+      await onConfirm({ ...rest, indicaciones_alta })
+    } finally { setSaving(false) }
   }
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="p-5 border-b border-slate-100">
           <h2 className="text-base font-bold text-slate-900">Registrar Egreso</h2>
           <p className="text-xs text-slate-500 mt-0.5">Completar para dar de alta al paciente</p>
         </div>
-        <form onSubmit={submit} className="p-5 space-y-3">
+        <form onSubmit={submit} className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Fecha egreso *</label>
-              <input type="datetime-local" className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <input type="datetime-local"
+                className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={form.fecha_egreso} onChange={e => set('fecha_egreso', e.target.value)} required />
             </div>
             <div>
@@ -236,21 +254,46 @@ function ModalEgreso({ onClose, onConfirm }: { onClose: () => void; onConfirm: (
               </select>
             </div>
           </div>
+
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Diagnóstico egreso (CIE-10)</label>
-            <input type="text" maxLength={10} className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={form.diagnostico_egreso} onChange={e => set('diagnostico_egreso', e.target.value)} placeholder="Ej: J06.9" />
+            <label className="block text-xs font-medium text-slate-600 mb-1">Diagnóstico de egreso (CIE-10)</label>
+            <Cie10Autocomplete
+              value={form.diagnostico_egreso}
+              nombre={form.diagnostico_egreso_nombre}
+              onChange={(codigo, nombre) => setForm(f => ({ ...f, diagnostico_egreso: codigo, diagnostico_egreso_nombre: nombre }))}
+            />
           </div>
+
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Condición al egreso</label>
             <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              value={form.condicion_al_egreso} onChange={e => set('condicion_al_egreso', e.target.value)} placeholder="Estado del paciente al momento del egreso..." />
+              value={form.condicion_al_egreso} onChange={e => set('condicion_al_egreso', e.target.value)}
+              placeholder="Estado del paciente al momento del egreso..." />
           </div>
-          <div className="flex gap-3 pt-2">
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Indicaciones de alta</label>
+            <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              value={form.indicaciones_alta} onChange={e => set('indicaciones_alta', e.target.value)}
+              placeholder="Medicamentos, cuidados, dieta, cita de control..." />
+          </div>
+
+          <div className="flex gap-3 pt-1">
             <Button type="submit" disabled={saving} className="flex-1">
               {saving ? <Spinner size="sm" /> : <CheckCircle2 className="w-4 h-4" />}
               {saving ? 'Guardando…' : 'Confirmar Egreso'}
             </Button>
+            {form.diagnostico_egreso && (
+              <a
+                href={`/historia-clinica/ingresos/${ingresoId}/egreso`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                <Printer className="w-4 h-4" />
+                Orden de salida
+              </a>
+            )}
             <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
           </div>
         </form>
@@ -720,7 +763,7 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
 
   return (
     <div className="page-padding max-w-4xl animate-fade-in">
-      {showEgreso && <ModalEgreso onClose={() => setShowEgreso(false)} onConfirm={confirmarEgreso} />}
+      {showEgreso && <ModalEgreso ingresoId={id} onClose={() => setShowEgreso(false)} onConfirm={confirmarEgreso} />}
       {showNuevaHC && (
         <ModalNuevaHC
           ingresoId={id} pacienteId={ingreso.paciente}
@@ -772,13 +815,22 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
       {ingreso.egreso_info && (
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 flex gap-4 items-center">
           <CheckCircle2 className="w-5 h-5 text-slate-500 shrink-0" />
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-semibold text-slate-700">Paciente egresado</p>
             <p className="text-xs text-slate-500">
               {fmtFecha(ingreso.egreso_info.fecha_egreso)} · {TIPO_EGRESO.find(t => t.value === ingreso.egreso_info!.tipo_egreso)?.label}
               {ingreso.egreso_info.diagnostico_egreso && ` · Dx: ${ingreso.egreso_info.diagnostico_egreso}`}
             </p>
           </div>
+          <a
+            href={`/historia-clinica/ingresos/${id}/egreso`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-600 hover:bg-white transition-colors"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            Orden de salida
+          </a>
         </div>
       )}
 

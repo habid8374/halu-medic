@@ -1171,6 +1171,10 @@ class IngresoSerializer(serializers.ModelSerializer):
             'fecha_egreso': e.fecha_egreso,
             'tipo_egreso': e.tipo_egreso,
             'diagnostico_egreso': e.diagnostico_egreso,
+            'descripcion_diagnostico': getattr(e, 'descripcion_diagnostico', ''),
+            'condicion_al_egreso': e.condicion_al_egreso,
+            'indicaciones_alta': getattr(e, 'indicaciones_alta', ''),
+            'medico_id': str(e.medico_id) if e.medico_id else None,
         }
 
 
@@ -1180,7 +1184,7 @@ class EgresoSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'ingreso', 'fecha_egreso', 'tipo_egreso',
             'diagnostico_egreso', 'descripcion_diagnostico',
-            'condicion_al_egreso', 'medico', 'observaciones', 'creado_en',
+            'condicion_al_egreso', 'indicaciones_alta', 'medico', 'observaciones', 'creado_en',
         ]
 
 
