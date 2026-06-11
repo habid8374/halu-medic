@@ -2290,7 +2290,6 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
             ing = pre.ingreso
             origen_id_hoteleria = f'hoteleria_{ing.id}'
             if not ya_existe(origen_id_hoteleria):
-                from django.utils import timezone as tz
                 fecha_inicio = pre.fecha_inicio
                 fecha_fin    = pre.fecha_fin
                 dias = max(1, (fecha_fin - fecha_inicio).days + 1)
@@ -2303,11 +2302,11 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                     destino='eps',
                     es_manual=False,
                     origen_tipo='Ingreso',
-                    origen_id=str(ing.id),
+                    origen_id=origen_id_hoteleria,
                     fecha_servicio=fecha_inicio,
                 )
 
-        # ── 2. Órdenes médicas ejecutadas (HC) ────────────────────────────────
+        # ── 2. Órdenes médicas (HC) — pendientes o ejecutadas ─────────────────
         hc_ids = []
         if pre.ingreso:
             hc_ids = list(HistoriaClinica.objects.filter(ingreso=pre.ingreso)
@@ -2316,7 +2315,8 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
             hc_ids = [pre.historia_id]
 
         for hc_id in hc_ids:
-            for orden in OrdenHC.objects.filter(historia=hc_id, estado='ejecutada'):
+            for orden in OrdenHC.objects.filter(historia=hc_id,
+                                                 estado__in=['pendiente', 'ejecutada']):
                 if ya_existe(str(orden.id)):
                     continue
                 crear_item(
@@ -2349,8 +2349,9 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                     origen_id=str(med.id),
                 )
 
-        # ── 4. Ayudas diagnósticas realizadas ────────────────────────────────
-        ayudas_qs = AyudaDiagnostica.objects.filter(estado='resultado')
+        # ── 4. Ayudas diagnósticas (solicitadas, tomadas o con resultado) ─────
+        ayudas_qs = AyudaDiagnostica.objects.filter(
+            estado__in=['solicitada', 'tomada', 'resultado'])
         if pre.ingreso:
             ayudas_qs = ayudas_qs.filter(ingreso=pre.ingreso)
         elif pre.historia:
@@ -2370,12 +2371,47 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                 origen_id=str(ayuda.id),
             )
 
-        # ── 5. Cirugías realizadas ────────────────────────────────────────────
+        # ── 5. Cirugías — desde Liquidación CX (valores ISS/SOAT ya calculados) ─
         if pre.ingreso:
+            from apps.historia.models import LiquidacionCirugia
+            for liq in LiquidacionCirugia.objects.filter(ingreso=pre.ingreso):
+                dqx = liq.descripcion_qx
+                cups_cx = dqx.cups_principal if dqx else ''
+                desc_cx = (dqx.descripcion_procedimiento if dqx else '') or cups_cx
+                servicios = [
+                    ('cirujano',      'procedimiento',     'Honorarios cirujano',      liq.total_cirujano),
+                    ('anestesiologo', 'anestesia',         'Honorarios anestesiólogo', liq.total_anestesiologo),
+                    ('ayudante',      'procedimiento',     'Honorarios ayudante',      liq.total_ayudante),
+                    ('quirofano',     'derechos_sala',     'Derechos de sala',         liq.total_quirofano),
+                    ('materiales',    'insumo_facturable', 'Materiales e insumos',     liq.total_materiales),
+                ]
+                for clave, tipo_item, etiqueta, total in servicios:
+                    if float(total or 0) <= 0:
+                        continue
+                    oid = f'liqcx_{liq.id}_{clave}'
+                    if ya_existe(oid):
+                        continue
+                    crear_item(
+                        tipo=tipo_item,
+                        descripcion=f'{etiqueta} — {desc_cx}',
+                        cups=cups_cx,
+                        cantidad=1,
+                        valor_unitario=float(total),
+                        destino='eps',
+                        es_manual=False,
+                        origen_tipo='LiquidacionCirugia',
+                        origen_id=oid,
+                    )
+
+            # Fallback: cirugías programadas/realizadas sin liquidación
+            ids_liq_dqx = set(
+                LiquidacionCirugia.objects.filter(ingreso=pre.ingreso)
+                .exclude(descripcion_qx=None)
+                .values_list('descripcion_qx__programacion_id', flat=True)
+            )
             for cx in ProgramacionCx.objects.filter(ingreso=pre.ingreso, estado='realizada'):
-                if ya_existe(str(cx.id)):
+                if cx.id in ids_liq_dqx or ya_existe(str(cx.id)):
                     continue
-                # Derecho de sala
                 crear_item(
                     tipo='derechos_sala',
                     descripcion=f'Derechos de sala — {cx.descripcion_cups or cx.cups_principal}',
@@ -2387,19 +2423,6 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                     origen_tipo='ProgramacionCx',
                     origen_id=str(cx.id),
                 )
-                # Anestesia
-                if cx.anestesiologo_id:
-                    crear_item(
-                        tipo='anestesia',
-                        descripcion=f'Anestesia {cx.tipo_anestesia} — {cx.descripcion_cups or cx.cups_principal}',
-                        cups='',
-                        cantidad=1,
-                        valor_unitario=0,  # anestesia no tiene CUPS propio, queda manual
-                        destino='eps',
-                        es_manual=False,
-                        origen_tipo='ProgramacionCx_anestesia',
-                        origen_id=f'anest_{cx.id}',
-                    )
 
         pre.recalcular_totales()
         return Response({
