@@ -263,7 +263,8 @@ export const ingresosAPI = {
   get:     (id: string) => api.get(`/api/historia/ingresos/${id}/`),
   create:  (data: Record<string, unknown>) => api.post('/api/historia/ingresos/', data),
   update:  (id: string, data: Record<string, unknown>) => api.patch(`/api/historia/ingresos/${id}/`, data),
-  egresar: (id: string, data: Record<string, unknown>) => api.post(`/api/historia/ingresos/${id}/egresar/`, data),
+  egresar:        (id: string, data: Record<string, unknown>) => api.post(`/api/historia/ingresos/${id}/egresar/`, data),
+  reversarEgreso: (id: string) => api.post(`/api/historia/ingresos/${id}/reversar-egreso/`),
 }
 
 export const historiaAPI = {

@@ -1260,7 +1260,22 @@ class IngresoViewSet(viewsets.ModelViewSet):
         ser = EgresoSerializer(data={**request.data, 'ingreso': str(ingreso.id)})
         ser.is_valid(raise_exception=True)
         egreso = ser.save()
+        ingreso.activo = False
+        ingreso.save(update_fields=['activo'])
         return Response(EgresoSerializer(egreso).data, status=201)
+
+    @action(detail=True, methods=['post'], url_path='reversar-egreso')
+    def reversar_egreso(self, request, pk=None):
+        """POST /api/ingresos/{id}/reversar-egreso/ — elimina el egreso y reactiva el ingreso."""
+        ingreso = self.get_object()
+        if ingreso.activo:
+            return Response({'error': 'Este ingreso ya está activo (no tiene egreso que reversar).'}, status=400)
+        if not hasattr(ingreso, 'egreso'):
+            return Response({'error': 'No existe un egreso registrado para este ingreso.'}, status=400)
+        ingreso.egreso.delete()
+        ingreso.activo = True
+        ingreso.save(update_fields=['activo'])
+        return Response({'mensaje': 'Egreso reversado. El ingreso volvió a estado activo.'}, status=200)
 
 
 class EgresoViewSet(viewsets.ModelViewSet):
