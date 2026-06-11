@@ -183,22 +183,24 @@ function ModalNuevaAyuda({
           <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
         </div>
         <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label-xs">Tipo</label>
-              <select value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
-                className="input-base w-full">
-                {Object.entries(TIPO_AYUDA_LABELS).map(([k, v]) =>
-                  <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label-xs">CUPS (opcional)</label>
-              <input value={form.cups}
-                onChange={e => setForm(f => ({ ...f, cups: e.target.value }))}
-                placeholder="Ej: 902201"
-                className="input-base w-full" />
-            </div>
+          <div>
+            <label className="label-xs">Tipo</label>
+            <select value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
+              className="input-base w-full">
+              {Object.entries(TIPO_AYUDA_LABELS).map(([k, v]) =>
+                <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <CupsAutocomplete
+              label="CUPS (opcional)"
+              value={form.cups}
+              descripcion={form.descripcion}
+              onChange={(cod, desc) => {
+                setForm(f => ({ ...f, cups: cod, ...(desc ? { descripcion: desc } : {}) }))
+              }}
+              placeholder="Código o descripción del examen..."
+            />
           </div>
           <div>
             <label className="label-xs">Descripción / nombre del examen *</label>
