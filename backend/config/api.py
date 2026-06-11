@@ -1140,6 +1140,7 @@ from apps.historia.models import Ingreso, Egreso, HistoriaClinica, OrdenHC
 
 class IngresoSerializer(serializers.ModelSerializer):
     paciente_nombre = serializers.SerializerMethodField()
+    paciente_info   = serializers.SerializerMethodField()
     medico_nombre   = serializers.SerializerMethodField()
     tiene_egreso    = serializers.SerializerMethodField()
     egreso_info     = serializers.SerializerMethodField()
@@ -1147,7 +1148,7 @@ class IngresoSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Ingreso
         fields = [
-            'id', 'numero_ingreso', 'paciente', 'paciente_nombre',
+            'id', 'numero_ingreso', 'paciente', 'paciente_nombre', 'paciente_info',
             'medico', 'medico_nombre', 'fecha_ingreso', 'motivo_ingreso',
             'tipo_atencion', 'observaciones', 'activo',
             'tiene_egreso', 'egreso_info', 'creado_en',
@@ -1155,6 +1156,22 @@ class IngresoSerializer(serializers.ModelSerializer):
 
     def get_paciente_nombre(self, obj):
         return getattr(obj.paciente, 'nombre_completo', '') if obj.paciente else ''
+
+    def get_paciente_info(self, obj):
+        p = obj.paciente
+        if not p:
+            return None
+        return {
+            'tipo_identificacion': p.tipo_identificacion,
+            'numero_identificacion': p.numero_identificacion,
+            'fecha_nacimiento': p.fecha_nacimiento,
+            'sexo': p.sexo,
+            'telefono': p.telefono,
+            'direccion': p.direccion,
+            'regimen': p.regimen,
+            'aseguradora_nombre': p.aseguradora.nombre if p.aseguradora else '',
+            'numero_poliza': p.numero_poliza,
+        }
 
     def get_medico_nombre(self, obj):
         return getattr(obj.medico, 'nombre_completo', '') if obj.medico else ''
