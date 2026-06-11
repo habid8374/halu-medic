@@ -2259,7 +2259,13 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                 return valor_default
             item = manual.items.filter(cups=cups).first()
             if item is None:
-                return valor_default
+                # Fallback: buscar en cualquier tarifario activo
+                fallback = ITar.objects.filter(cups=cups, tarifario__activo=True).order_by('-valor_base').first()
+                if fallback is None:
+                    return valor_default
+                item = fallback
+                manual = item.tarifario
+                aseg_pct = Decimal('0')
             uvr = item.valor_base  # puntos UVR o valor directo según tipo
 
             # Convertir UVR → pesos según tipo de tarifario
@@ -2381,6 +2387,23 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
         if pre.ingreso:
             from apps.historia.models import LiquidacionCirugia
             for liq in LiquidacionCirugia.objects.filter(ingreso=pre.ingreso):
+                # Auto-recalculate if totals are still 0 (e.g. created before UVR fix)
+                if float(liq.total_general or 0) == 0:
+                    for proc in liq.procedimientos.all():
+                        if float(proc.valor_base or 0) == 0:
+                            try:
+                                uvr, desc = self._buscar_uvr(proc.cups, liq, proc.descripcion)
+                                if uvr:
+                                    proc.valor_base = uvr
+                                    if not proc.descripcion and desc:
+                                        proc.descripcion = desc
+                            except Exception:
+                                pass
+                        proc.aplicar_porcentajes()
+                        proc.save()
+                    liq.calcular_totales()
+                    liq.refresh_from_db()
+
                 dqx = liq.descripcion_qx
                 cups_cx = dqx.cups_principal if dqx else ''
                 desc_cx = (dqx.descripcion_procedimiento if dqx else '') or cups_cx
