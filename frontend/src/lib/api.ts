@@ -581,7 +581,9 @@ export const notificacionesAPI = {
 
 // ── Liquidación Cirugías ──────────────────────────────────────────────────────
 export const liquidacionCxAPI = {
-  list:   (params?: Record<string, unknown>) => api.get('/api/liquidacion/cirugias/', { params }),
+  list:      (params?: Record<string, unknown>) => api.get('/api/liquidacion/cirugias/', { params }),
+  porIngreso: (ingresoId: string) =>
+    api.get('/api/liquidacion/cirugias/', { params: { ingreso: ingresoId, estado: 'finalizada' } }),
   get:    (id: string) => api.get(`/api/liquidacion/cirugias/${id}/`),
   create: (data: Record<string, unknown>) => api.post('/api/liquidacion/cirugias/', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/api/liquidacion/cirugias/${id}/`, data),

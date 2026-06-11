@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { ingresosAPI, historiaAPI, medicamentosHCAPI, catalogoMedicamentosAPI, cie10API, ordenesHCAPI, mensajeError } from '@/lib/api'
+import { ingresosAPI, historiaAPI, medicamentosHCAPI, catalogoMedicamentosAPI, cie10API, ordenesHCAPI, descripcionQxAPI, liquidacionCxAPI, ayudasDiagnosticasAPI, mensajeError } from '@/lib/api'
 import { Ingreso, HistoriaClinica } from '@/types'
 import { Button, Card, Spinner } from '@/components/ui'
 import { CupsAutocomplete } from '@/components/ui/CupsAutocomplete'
@@ -10,6 +10,7 @@ import {
   ArrowLeft, UserCheck, UserMinus, PlusCircle, ClipboardList,
   Heart, Thermometer, Activity, Scale, CheckCircle2, Pill, Trash2, Search, X,
   FlaskConical, Stethoscope, Scissors, FileText, AlertCircle, Printer,
+  ChevronDown, ChevronRight, FlaskRound,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -624,6 +625,35 @@ function ModalNuevaHC({ ingresoId, pacienteId, onClose, onCreated }: {
   )
 }
 
+function fmtCOP(n: number | string | null | undefined) {
+  if (n == null) return '—'
+  const num = typeof n === 'string' ? parseFloat(n) : n
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(num)
+}
+
+function Acordeon({ titulo, icono, badge, children }: {
+  titulo: string; icono: React.ReactNode; badge?: number; children: React.ReactNode
+}) {
+  const [abierto, setAbierto] = useState(false)
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden mb-4">
+      <button
+        type="button"
+        onClick={() => setAbierto(a => !a)}
+        className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 transition-colors text-left"
+      >
+        <span className="text-slate-600">{icono}</span>
+        <span className="text-sm font-semibold text-slate-800 flex-1">{titulo}</span>
+        {badge !== undefined && badge > 0 && (
+          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{badge}</span>
+        )}
+        {abierto ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+      </button>
+      {abierto && <div className="border-t border-slate-100 p-4">{children}</div>}
+    </div>
+  )
+}
+
 export default function IngresoDetallePage({ params }: { params: { id: string } }) {
   const { id } = params
   const [ingreso, setIngreso]     = useState<Ingreso | null>(null)
@@ -632,14 +662,23 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
   const [showEgreso, setShowEgreso]   = useState(false)
   const [showNuevaHC, setShowNuevaHC] = useState(false)
   const [showEpicrisis, setShowEpicrisis] = useState(false)
+  const [dqxList, setDqxList]             = useState<any[]>([])
+  const [liquidaciones, setLiquidaciones] = useState<any[]>([])
+  const [ayudas, setAyudas]               = useState<any[]>([])
 
   const cargar = () => {
     Promise.all([
       ingresosAPI.get(id),
       historiaAPI.list({ ingreso: id }),
-    ]).then(([{ data: ing }, { data: hc }]) => {
+      descripcionQxAPI.list({ ingreso: id } as any).catch(() => ({ data: [] })),
+      liquidacionCxAPI.list({ ingreso: id }).catch(() => ({ data: [] })),
+      ayudasDiagnosticasAPI.list({ ingreso: id } as any).catch(() => ({ data: [] })),
+    ]).then(([{ data: ing }, { data: hc }, { data: dqx }, { data: liq }, { data: ay }]) => {
       setIngreso(ing)
       setHistorias(Array.isArray(hc) ? hc : hc.results ?? [])
+      setDqxList(Array.isArray(dqx) ? dqx : (dqx as any).results ?? [])
+      setLiquidaciones(Array.isArray(liq) ? liq : (liq as any).results ?? [])
+      setAyudas(Array.isArray(ay) ? ay : (ay as any).results ?? [])
     }).catch(() => {}).finally(() => setLoading(false))
   }
 
@@ -769,6 +808,157 @@ export default function IngresoDetallePage({ params }: { params: { id: string } 
           <Printer className="w-4 h-4" />Imprimir HC
         </button>
       </div>
+
+      {/* ── Descripciones Quirúrgicas ── */}
+      <Acordeon
+        titulo={`Descripciones Quirúrgicas (DQX)${dqxList.length === 0 ? ' — sin registros' : ''}`}
+        icono={<Scissors className="w-4 h-4" />}
+        badge={dqxList.length}
+      >
+        {dqxList.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-2">No hay descripciones quirúrgicas registradas para este ingreso.</p>
+        ) : (
+          <div className="space-y-3">
+            {dqxList.map((dqx: any) => (
+              <div key={dqx.id} className="border border-slate-200 rounded-xl p-4">
+                <div className="flex items-start justify-between mb-2 flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-mono font-bold text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
+                      DQX-{String(dqx.numero_dqx).padStart(5, '0')}
+                    </span>
+                    {dqx.cups_principal && (
+                      <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">{dqx.cups_principal}</span>
+                    )}
+                    {dqx.firmada ? (
+                      <span className="text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">Firmada</span>
+                    ) : (
+                      <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">Borrador</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400">{dqx.fecha_hora_inicio ? fmtFecha(dqx.fecha_hora_inicio) : ''}</p>
+                </div>
+                {dqx.descripcion_procedimiento && (
+                  <p className="text-sm font-medium text-slate-800 mb-1">{dqx.descripcion_procedimiento}</p>
+                )}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600 mt-2">
+                  {dqx.cirujano_nombre && <span><strong>Cirujano:</strong> {dqx.cirujano_nombre}</span>}
+                  {dqx.anestesiologo_nombre && <span><strong>Anestesiólogo:</strong> {dqx.anestesiologo_nombre}</span>}
+                  {dqx.tipo_anestesia && <span><strong>Anestesia:</strong> {dqx.tipo_anestesia}</span>}
+                  {dqx.quirofano && <span><strong>Quirófano:</strong> {dqx.quirofano}</span>}
+                  {dqx.diagnostico_postoperatorio && <span><strong>Dx post-op:</strong> {dqx.diagnostico_postoperatorio} {dqx.desc_diag_postop}</span>}
+                  {dqx.sangrado_estimado_ml && <span><strong>Sangrado:</strong> {dqx.sangrado_estimado_ml} ml</span>}
+                </div>
+                {dqx.hallazgos && (
+                  <div className="mt-2">
+                    <p className="text-xs text-slate-400 font-medium">Hallazgos</p>
+                    <p className="text-xs text-slate-700 whitespace-pre-line">{dqx.hallazgos}</p>
+                  </div>
+                )}
+                {dqx.complicaciones && (
+                  <div className="mt-2 bg-red-50 rounded-lg px-3 py-2">
+                    <p className="text-xs font-medium text-red-700">Complicaciones</p>
+                    <p className="text-xs text-red-800">{dqx.complicaciones}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Acordeon>
+
+      {/* ── Liquidaciones de Cirugía ── */}
+      <Acordeon
+        titulo={`Liquidación de Cirugía (CX)${liquidaciones.length === 0 ? ' — sin registros' : ''}`}
+        icono={<FileText className="w-4 h-4" />}
+        badge={liquidaciones.length}
+      >
+        {liquidaciones.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-2">No hay liquidaciones registradas para este ingreso.</p>
+        ) : (
+          <div className="space-y-4">
+            {liquidaciones.map((liq: any) => (
+              <div key={liq.id} className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3 bg-slate-50">
+                  <span className={clsx(
+                    'text-xs px-2 py-0.5 rounded-full font-medium',
+                    liq.estado === 'finalizada' ? 'bg-green-100 text-green-700' :
+                    liq.estado === 'facturada' ? 'bg-blue-100 text-blue-700' :
+                    'bg-amber-100 text-amber-700'
+                  )}>{liq.estado}</span>
+                  <span className="text-xs text-slate-500">{liq.tipo_tarifario} · {liq.tipo_liquidacion?.replace(/_/g, ' ')}</span>
+                  <span className="ml-auto text-sm font-bold text-slate-900">{fmtCOP(liq.total_general)}</span>
+                </div>
+                <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="text-center bg-blue-50 rounded-lg p-2">
+                    <p className="text-xs text-slate-500 mb-0.5">Cirujano</p>
+                    <p className="text-sm font-bold text-blue-800">{fmtCOP(liq.total_cirujano)}</p>
+                  </div>
+                  <div className="text-center bg-purple-50 rounded-lg p-2">
+                    <p className="text-xs text-slate-500 mb-0.5">Anestesiólogo</p>
+                    <p className="text-sm font-bold text-purple-800">{fmtCOP(liq.total_anestesiologo)}</p>
+                  </div>
+                  <div className="text-center bg-orange-50 rounded-lg p-2">
+                    <p className="text-xs text-slate-500 mb-0.5">Ayudante</p>
+                    <p className="text-sm font-bold text-orange-800">{fmtCOP(liq.total_ayudante)}</p>
+                  </div>
+                  <div className="text-center bg-teal-50 rounded-lg p-2">
+                    <p className="text-xs text-slate-500 mb-0.5">Quirófano</p>
+                    <p className="text-sm font-bold text-teal-800">{fmtCOP(liq.total_quirofano)}</p>
+                  </div>
+                  <div className="text-center bg-slate-50 rounded-lg p-2">
+                    <p className="text-xs text-slate-500 mb-0.5">Materiales</p>
+                    <p className="text-sm font-bold text-slate-800">{fmtCOP(liq.total_materiales)}</p>
+                  </div>
+                  <div className="text-center bg-green-50 rounded-lg p-2 col-span-2 sm:col-span-1">
+                    <p className="text-xs text-slate-500 mb-0.5">Total general</p>
+                    <p className="text-base font-extrabold text-green-800">{fmtCOP(liq.total_general)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Acordeon>
+
+      {/* ── Ayudas Diagnósticas ── */}
+      <Acordeon
+        titulo={`Ayudas Diagnósticas${ayudas.length === 0 ? ' — sin registros' : ''}`}
+        icono={<FlaskConical className="w-4 h-4" />}
+        badge={ayudas.length}
+      >
+        {ayudas.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-2">No hay ayudas diagnósticas registradas para este ingreso.</p>
+        ) : (
+          <div className="space-y-2">
+            {ayudas.map((ay: any) => (
+              <div key={ay.id} className={clsx(
+                'flex items-start gap-3 rounded-lg px-3 py-2.5 border',
+                ay.urgente ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'
+              )}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded capitalize">
+                      {ay.tipo?.replace(/_/g, ' ')}
+                    </span>
+                    {ay.cups && <span className="text-xs font-mono text-slate-500">{ay.cups}</span>}
+                    {ay.urgente && <span className="text-xs text-red-700 font-bold">URGENTE</span>}
+                    <span className={clsx(
+                      'ml-auto text-xs px-2 py-0.5 rounded-full',
+                      ay.estado === 'resultado' ? 'bg-green-100 text-green-700' :
+                      ay.estado === 'tomada' ? 'bg-blue-100 text-blue-700' :
+                      ay.estado === 'cancelada' ? 'bg-slate-100 text-slate-500' :
+                      'bg-amber-100 text-amber-700'
+                    )}>{ay.estado}</span>
+                  </div>
+                  <p className="text-sm text-slate-800">{ay.descripcion}</p>
+                  {ay.indicacion_clinica && <p className="text-xs text-slate-500 mt-0.5">{ay.indicacion_clinica}</p>}
+                  {ay.medico_solicitante_nombre && <p className="text-xs text-slate-400 mt-1">Dr. {ay.medico_solicitante_nombre}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Acordeon>
 
       {/* Timeline HC */}
       <div>
