@@ -2226,9 +2226,12 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
         # ── Resolver tarifario y precio por CUPS ─────────────────────────────
         def _get_precio(cups: str, valor_default: float = 0) -> float:
             """
-            Busca el valor_final del CUPS en el tarifario del episodio.
-            Cadena: paciente.tarifa → aseguradora.tarifario → predeterminado.
-            Aplica porcentaje_ajuste del manual + porcentaje_ajuste de la aseguradora.
+            Busca el valor del CUPS en el tarifario de la aseguradora del paciente.
+            Para tarifarios ISS (valor_base = puntos UVR), convierte a pesos:
+              ISS_2001: UVR × $1.270 (HN CX base)
+              ISS_2004: UVR × $100 (factor único UVR-S)
+              SOAT    : UVR × $1.270
+            Aplica porcentaje_ajuste del manual y de la aseguradora.
             """
             if not cups:
                 return valor_default
@@ -2248,11 +2251,24 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                 manual = ManualTarifario.objects.filter(es_predeterminado=True, activo=True).first()
             if manual is None:
                 return valor_default
-            # Buscar código exacto o código base (paquetes)
             item = manual.items.filter(cups=cups).first()
             if item is None:
                 return valor_default
-            precio = item.valor_base * (1 + manual.porcentaje_ajuste / Decimal('100'))
+            uvr = item.valor_base  # puntos UVR o valor directo según tipo
+
+            # Convertir UVR → pesos según tipo de tarifario
+            tipo = getattr(manual, 'tipo', '')
+            if tipo == 'ISS_2001':
+                precio = uvr * Decimal('1270')
+            elif tipo == 'ISS_2004':
+                precio = uvr * Decimal('100')
+            elif tipo == 'SOAT':
+                precio = uvr * Decimal('1270')
+            else:
+                precio = uvr  # tarifarios MANUAL/PARTICULAR ya tienen valor en pesos
+
+            # Ajuste porcentual del manual y de la aseguradora
+            precio = precio * (1 + manual.porcentaje_ajuste / Decimal('100'))
             precio = precio * (1 + aseg_pct / Decimal('100'))
             return float(round(precio, 0))
         if pre.estado not in ('borrador', 'en_revision'):
@@ -2281,9 +2297,9 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                 crear_item(
                     tipo='hoteleria',
                     descripcion=f'Hospitalización — {ing.get_tipo_atencion_display()} ({dias} días)',
-                    cups='890301',  # CUPS hospitalización general
+                    cups='890301',
                     cantidad=dias,
-                    valor_unitario=_get_precio('890701'),
+                    valor_unitario=_get_precio('890301', _get_precio('890701', _get_precio('890401', 0))),
                     destino='eps',
                     es_manual=False,
                     origen_tipo='Ingreso',
