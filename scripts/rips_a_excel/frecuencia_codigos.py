@@ -98,6 +98,35 @@ def nombre_eps(n):
     return re.sub(r'\s+', ' ', (n or '').strip()).upper() or 'SIN_CLASIFICAR'
 
 
+def eps_y_regimen(nombre_carpeta):
+    """De 'COOSALUD CONTRIBUTIVO' devuelve ('COOSALUD', 'Contributivo').
+
+    El régimen se detecta por las palabras CONTRIB*/SUBSID* del nombre y se
+    quita del nombre de la EPS. 'EPS' NO se quita (es parte de 'NUEVA EPS').
+    """
+    raw = re.sub(r'\s+', ' ', (nombre_carpeta or '').strip())
+    norm = quitar_tildes(raw.upper())
+    if 'CONTRIB' in norm:
+        regimen = 'Contributivo'
+    elif 'SUBSID' in norm:
+        regimen = 'Subsidiado'
+    else:
+        regimen = 'Otro'
+    keep = []
+    for tok in raw.split(' '):
+        tn = quitar_tildes(tok.upper())
+        if 'CONTRIB' in tn or 'SUBSID' in tn or tn in ('REGIMEN', 'REG.', 'REG'):
+            continue
+        keep.append(tok)
+    eps = re.sub(r'\s+', ' ', ' '.join(keep)).strip().upper() or 'SIN_CLASIFICAR'
+    return eps, regimen
+
+
+def eps_archivo(nombre):
+    n = re.sub(r'[^A-Z0-9]+', '_', quitar_tildes(nombre_eps(nombre))).strip('_')
+    return n or 'SIN_CLASIFICAR'
+
+
 def leer_texto(path: Path):
     for enc in ('utf-8-sig', 'utf-8', 'latin-1', 'cp1252'):
         try:
@@ -221,9 +250,9 @@ def agregar_extras(extras, codigos, info, meta_cols):
 
 # ── Conteo en RIPS ──────────────────────────────────────────────────────────
 
-def _registrar(acc, info_rips, cod, eps, anio, valor, tipo, nombre):
+def _registrar(acc, info_rips, cod, eps, regimen, anio, valor, tipo, nombre):
     """Acumula frecuencia/valor de CUALQUIER código y guarda su tipo/nombre."""
-    a = acc[(cod, eps, anio)]
+    a = acc[(cod, eps, regimen, anio)]
     a[0] += 1
     a[1] += valor
     meta = info_rips[cod]
@@ -232,7 +261,7 @@ def _registrar(acc, info_rips, cod, eps, anio, valor, tipo, nombre):
         meta['nombre'] = str(nombre).strip()
 
 
-def contar_json(path: Path, eps, anio, acc, info_rips):
+def contar_json(path: Path, eps, regimen, anio, acc, info_rips):
     try:
         data = json.loads(leer_texto(path))
     except json.JSONDecodeError as e:
@@ -248,12 +277,12 @@ def contar_json(path: Path, eps, anio, acc, info_rips):
                 for serv in contenedor.get(seccion, []) or []:
                     cod = clave_match(serv.get(campo))
                     if cod:
-                        _registrar(acc, info_rips, cod, eps, anio,
+                        _registrar(acc, info_rips, cod, eps, regimen, anio,
                                    a_float(serv.get('vrServicio')), tipo,
                                    serv.get('nomTecnologiaSalud'))
 
 
-def contar_txt(path: Path, eps, anio, acc, info_rips):
+def contar_txt(path: Path, eps, regimen, anio, acc, info_rips):
     pref = prefijo_txt(path.name)
     if pref is None:
         return
@@ -267,7 +296,7 @@ def contar_txt(path: Path, eps, anio, acc, info_rips):
         if cod:
             valor = a_float(partes[idx_val]) if idx_val < len(partes) else 0.0
             nombre = partes[idx_nom] if idx_nom is not None and idx_nom < len(partes) else None
-            _registrar(acc, info_rips, cod, eps, anio, valor, tipo, nombre)
+            _registrar(acc, info_rips, cod, eps, regimen, anio, valor, tipo, nombre)
 
 
 def recolectar(origenes, acc, info_rips):
@@ -292,7 +321,7 @@ def recolectar(origenes, acc, info_rips):
                 destinos.append(('SIN_CLASIFICAR', mes_dir, False))
 
             for eps_nom, carpeta, recursivo in destinos:
-                eps = nombre_eps(eps_nom)
+                eps, regimen = eps_y_regimen(eps_nom)
                 archivos = (carpeta.rglob('*') if recursivo
                             else (f for f in mes_dir.iterdir() if f.is_file()))
                 for f in archivos:
@@ -301,104 +330,121 @@ def recolectar(origenes, acc, info_rips):
                     ext = f.suffix.lower()
                     if ext == '.json':
                         stats['archivos'] += 1; stats['json'] += 1
-                        contar_json(f, eps, anio, acc, info_rips)
+                        contar_json(f, eps, regimen, anio, acc, info_rips)
                     elif ext == '.txt' and prefijo_txt(f.name):
                         stats['archivos'] += 1; stats['txt'] += 1
-                        contar_txt(f, eps, anio, acc, info_rips)
+                        contar_txt(f, eps, regimen, anio, acc, info_rips)
     return stats
 
 
 # ── Escritura del informe ───────────────────────────────────────────────────
 
-def escribir(salida: Path, codigos, info, meta_cols, acc, info_rips):
-    salida.parent.mkdir(parents=True, exist_ok=True)
+REG_ORDER = {'Contributivo': 0, 'Subsidiado': 1, 'Otro': 2}
+
+
+def _ajustar_anchos(ws):
+    for col in ws.columns:
+        ancho = max((len(str(c.value)) for c in col if c.value is not None), default=10)
+        ws.column_dimensions[col[0].column_letter].width = min(max(ancho + 2, 10), 45)
+
+
+def escribir(salida_dir: Path, codigos, info, meta_cols, acc, info_rips):
+    """Genera UN libro de Excel por EPS, con columnas por régimen y año."""
+    salida_dir.mkdir(parents=True, exist_ok=True)
     codigos_set = set(codigos)
-    combos = sorted({(eps, anio) for (_, eps, anio) in acc},
-                    key=lambda x: (x[0], str(x[1])))
+    eps_todas = sorted({eps for (_, eps, _, _) in acc})
+    generados = 0
 
-    def cols_combos(get_fv):
-        """Construye las columnas Frec/Valor por EPS/año + TOTAL."""
-        d = {}
-        tf = tv = 0
-        for eps, anio in combos:
-            f, v = get_fv(eps, anio)
-            etq = f"{eps} {anio if anio else 'SA'}"
-            d[f"{etq} | Frec"] = f
-            d[f"{etq} | Valor"] = round(v, 2)
-            tf += f; tv += v
-        d['TOTAL | Frec'] = tf
-        d['TOTAL | Valor'] = round(tv, 2)
-        return d, tf
+    for eps in eps_todas:
+        combos = sorted({(reg, anio) for (c, e, reg, anio) in acc if e == eps},
+                        key=lambda x: (REG_ORDER.get(x[0], 9), str(x[1])))
 
-    # ── Hoja POR_EPS_ANIO (códigos de la propuesta) ──
-    filas = []
-    for c in codigos:
-        fila = {mc: info[c][mc] for mc in meta_cols}
-        cols, _ = cols_combos(lambda e, a: acc.get((c, e, a), [0, 0.0]))
-        fila.update(cols)
-        filas.append(fila)
-    df_matriz = pd.DataFrame(filas)
+        def cols_combos(get_fv, _combos=combos):
+            d = {}
+            tf = tv = 0
+            for reg, anio in _combos:
+                f, v = get_fv(reg, anio)
+                etq = f"{reg} {anio if anio else 'SA'}"
+                d[f"{etq} | Frec"] = f
+                d[f"{etq} | Valor"] = round(v, 2)
+                tf += f; tv += v
+            d['TOTAL | Frec'] = tf
+            d['TOTAL | Valor'] = round(tv, 2)
+            return d, tf
 
-    # ── Hoja DETALLE (solo propuesta, formato largo) ──
-    det = []
-    for (c, eps, anio), (f, v) in acc.items():
-        if c not in codigos_set:
-            continue
-        reg = {mc: info[c][mc] for mc in meta_cols}
-        reg.update({'EPS': eps, 'ANIO': anio, 'FRECUENCIA': f,
-                    'VALOR_FACTURADO': round(v, 2)})
-        det.append(reg)
-    df_det = (pd.DataFrame(det).sort_values(['EPS', 'ANIO', 'FRECUENCIA'],
-              ascending=[True, True, False]) if det else pd.DataFrame())
+        # ── POR_REGIMEN_ANIO (códigos de la propuesta) ──
+        filas = []
+        for c in codigos:
+            fila = {mc: info[c][mc] for mc in meta_cols}
+            cols, _ = cols_combos(lambda r, a, _c=c: acc.get((_c, eps, r, a), [0, 0.0]))
+            fila.update(cols)
+            filas.append(fila)
+        df_matriz = pd.DataFrame(filas)
 
-    # ── Hoja RESUMEN_EPS (solo propuesta) ──
-    res = defaultdict(lambda: [0, 0.0, set()])
-    for (c, eps, anio), (f, v) in acc.items():
-        if c not in codigos_set:
-            continue
-        r = res[(eps, anio)]
-        r[0] += f; r[1] += v
-        if f:
-            r[2].add(c)
-    df_res = pd.DataFrame(
-        [{'EPS': eps, 'ANIO': anio, 'Total_usos': r[0],
-          'Total_valor': round(r[1], 2), 'Codigos_distintos_usados': len(r[2])}
-         for (eps, anio), r in sorted(res.items(), key=lambda x: (x[0][0], str(x[0][1])))])
+        # ── DETALLE (solo propuesta) ──
+        det = []
+        for (c, e, reg, anio), (f, v) in acc.items():
+            if e != eps or c not in codigos_set:
+                continue
+            r = {mc: info[c][mc] for mc in meta_cols}
+            r.update({'REGIMEN': reg, 'ANIO': anio, 'FRECUENCIA': f,
+                      'VALOR_FACTURADO': round(v, 2)})
+            det.append(r)
+        df_det = (pd.DataFrame(det).sort_values(['REGIMEN', 'ANIO', 'FRECUENCIA'],
+                  ascending=[True, True, False]) if det else pd.DataFrame())
 
-    # ── Hoja NO_USADOS (propuesta con frecuencia 0) ──
-    usados = {c for (c, _, _), (f, _) in acc.items() if f and c in codigos_set}
-    df_nou = pd.DataFrame([{mc: info[c][mc] for mc in meta_cols}
-                           for c in codigos if c not in usados])
+        # ── RESUMEN (por régimen y año) ──
+        res = defaultdict(lambda: [0, 0.0, set()])
+        for (c, e, reg, anio), (f, v) in acc.items():
+            if e != eps or c not in codigos_set:
+                continue
+            rr = res[(reg, anio)]
+            rr[0] += f; rr[1] += v
+            if f:
+                rr[2].add(c)
+        df_res = pd.DataFrame(
+            [{'REGIMEN': reg, 'ANIO': anio, 'Total_usos': rr[0],
+              'Total_valor': round(rr[1], 2), 'Codigos_distintos_usados': len(rr[2])}
+             for (reg, anio), rr in sorted(res.items(),
+                 key=lambda x: (REG_ORDER.get(x[0][0], 9), str(x[0][1])))])
 
-    # ── Hoja FUERA_PROPUESTA (códigos en RIPS que NO están en la propuesta) ──
-    fuera_codes = {c for (c, _, _) in acc if c not in codigos_set}
-    filas_f = []
-    for c in fuera_codes:
-        meta = info_rips.get(c, {'tipos': set(), 'nombre': ''})
-        fila = {'CODIGO': c,
-                'TIPO': ', '.join(sorted(meta['tipos'])),
-                'NOMBRE_RIPS': meta['nombre']}
-        cols, tf = cols_combos(lambda e, a: acc.get((c, e, a), [0, 0.0]))
-        fila.update(cols)
-        filas_f.append((tf, fila))
-    filas_f.sort(key=lambda x: x[0], reverse=True)
-    df_fuera = pd.DataFrame([f for _, f in filas_f])
+        # ── NO_USADOS (propuesta con frecuencia 0 en esta EPS) ──
+        usados = {c for (c, e, _, _), (f, _) in acc.items()
+                  if e == eps and f and c in codigos_set}
+        df_nou = pd.DataFrame([{mc: info[c][mc] for mc in meta_cols}
+                               for c in codigos if c not in usados])
 
-    with pd.ExcelWriter(salida, engine='openpyxl') as w:
-        df_matriz.to_excel(w, sheet_name='POR_EPS_ANIO', index=False)
-        if not df_det.empty:
-            df_det.to_excel(w, sheet_name='DETALLE', index=False)
-        if not df_res.empty:
-            df_res.to_excel(w, sheet_name='RESUMEN_EPS', index=False)
-        if not df_nou.empty:
-            df_nou.to_excel(w, sheet_name='NO_USADOS', index=False)
-        if not df_fuera.empty:
-            df_fuera.to_excel(w, sheet_name='FUERA_PROPUESTA', index=False)
-        for ws in w.book.worksheets:
-            for col in ws.columns:
-                ancho = max((len(str(c.value)) for c in col if c.value is not None),
-                            default=10)
-                ws.column_dimensions[col[0].column_letter].width = min(max(ancho + 2, 10), 45)
+        # ── FUERA_PROPUESTA (códigos de esta EPS que no están en la propuesta) ──
+        fuera_codes = {c for (c, e, _, _) in acc if e == eps and c not in codigos_set}
+        filas_f = []
+        for c in fuera_codes:
+            meta = info_rips.get(c, {'tipos': set(), 'nombre': ''})
+            fila = {'CODIGO': c,
+                    'TIPO': ', '.join(sorted(meta['tipos'])),
+                    'NOMBRE_RIPS': meta['nombre']}
+            cols, tf = cols_combos(lambda r, a, _c=c: acc.get((_c, eps, r, a), [0, 0.0]))
+            fila.update(cols)
+            filas_f.append((tf, fila))
+        filas_f.sort(key=lambda x: x[0], reverse=True)
+        df_fuera = pd.DataFrame([f for _, f in filas_f])
+
+        ruta = salida_dir / f"{eps_archivo(eps)}.xlsx"
+        with pd.ExcelWriter(ruta, engine='openpyxl') as w:
+            df_matriz.to_excel(w, sheet_name='POR_REGIMEN_ANIO', index=False)
+            if not df_det.empty:
+                df_det.to_excel(w, sheet_name='DETALLE', index=False)
+            if not df_res.empty:
+                df_res.to_excel(w, sheet_name='RESUMEN', index=False)
+            if not df_nou.empty:
+                df_nou.to_excel(w, sheet_name='NO_USADOS', index=False)
+            if not df_fuera.empty:
+                df_fuera.to_excel(w, sheet_name='FUERA_PROPUESTA', index=False)
+            for ws in w.book.worksheets:
+                _ajustar_anchos(ws)
+        print(f"  ✔ {ruta.name}  (regímenes/años: {len(combos)})")
+        generados += 1
+
+    return generados
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
@@ -412,7 +458,9 @@ def main():
     ap.add_argument('--codigo-extra', action='append', default=[], dest='extras',
                     help='Código adicional que NO está en el Excel de propuesta. '
                          'Repetible. Formato: CODIGO o "CODIGO=Descripción".')
-    ap.add_argument('--salida', default=None)
+    ap.add_argument('--salida', default=None,
+                    help='Carpeta de salida (un Excel por EPS). '
+                         'Por defecto <primer origen>\\_FRECUENCIA_CODIGOS')
     args = ap.parse_args()
 
     print("=== Cargando códigos de la propuesta ===")
@@ -421,22 +469,22 @@ def main():
     codigos_set = set(codigos)
 
     origenes = [Path(o) for o in args.origen]
-    salida = Path(args.salida) if args.salida else origenes[0] / '_FRECUENCIA_CODIGOS.xlsx'
+    salida = Path(args.salida) if args.salida else origenes[0] / '_FRECUENCIA_CODIGOS'
 
-    acc = defaultdict(lambda: [0, 0.0])          # (cod, eps, anio) -> [frecuencia, valor]
+    acc = defaultdict(lambda: [0, 0.0])     # (cod, eps, regimen, anio) -> [frecuencia, valor]
     info_rips = defaultdict(lambda: {'tipos': set(), 'nombre': ''})
     stats = recolectar(origenes, acc, info_rips)
 
-    print("\n=== Generando informe ===")
-    escribir(salida, codigos, info, meta_cols, acc, info_rips)
+    print("\n=== Generando informes (un libro por EPS) ===")
+    generados = escribir(salida, codigos, info, meta_cols, acc, info_rips)
 
-    usados_prop = len({c for (c, _, _), (f, _) in acc.items() if f and c in codigos_set})
-    fuera = len({c for (c, _, _) in acc if c not in codigos_set})
+    usados_prop = len({c for (c, _, _, _), (f, _) in acc.items() if f and c in codigos_set})
+    fuera = len({c for (c, _, _, _) in acc if c not in codigos_set})
     print("\n────────────────────── RESUMEN ──────────────────────")
     print(f"  Archivos leídos : {stats['archivos']}  (JSON: {stats['json']}, TXT: {stats['txt']})")
     print(f"  Códigos propuesta: {len(codigos)}  |  usados: {usados_prop}  |  sin uso: {len(codigos) - usados_prop}")
     print(f"  Códigos en RIPS fuera de la propuesta: {fuera}")
-    print(f"  Informe          : {salida}")
+    print(f"  Libros generados : {generados}  (carpeta: {salida})")
     print(f"  Hora             : {datetime.now():%Y-%m-%d %H:%M:%S}")
     print("──────────────────────────────────────────────────────")
 
