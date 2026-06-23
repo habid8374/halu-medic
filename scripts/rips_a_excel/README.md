@@ -1,9 +1,8 @@
 # Convertir RIPS → Excel por EPS y año
 
 Herramienta para **extraer los RIPS** (en `JSON` y/o `TXT`) de una carpeta y
-**convertirlos a Excel**, generando **un archivo por cada EPS y año**, con una
-hoja por tipo de servicio. Pensada para armar el informe consolidado de todas
-las EPS.
+**convertirlos a Excel**, generando **un archivo por cada EPS y año**, con el
+mismo formato del modelo `RIPS_EDITABLE` (una hoja por sección del RIPS).
 
 > ⚠️ Este script se ejecuta **en tu PC con Windows**, donde están los archivos
 > (`D:\RIPS 2026`, etc.). El servidor de Claude no tiene acceso a tu disco `D:`.
@@ -32,17 +31,23 @@ las EPS.
   - `SALUD_TOTAL_2026.xlsx`
   - `NUEVA_EPS_2025.xlsx`
 
-- Cada Excel trae estas hojas (solo las que tengan datos):
-  `Resumen`, `Facturas`, `Usuarios`, `Consultas`, `Procedimientos`,
-  `Urgencias`, `Hospitalizacion`, `RecienNacidos`, `Medicamentos`,
-  `OtrosServicios`.
+- Cada Excel trae estas hojas, **idénticas al modelo `RIPS_EDITABLE`** (solo se
+  crean las que tengan datos):
+  `FACTURA`, `USUARIOS`, `CONSULTAS`, `PROCEDIMIENTOS`, `HOSPITALIZACION`,
+  `MEDICAMENTOS`, `OTROS_SERVICIOS`, `URGENCIAS`, `RECIEN_NACIDOS`.
 
-- La hoja **Resumen** muestra, por tipo de servicio, la cantidad de registros y
-  el valor total — base directa para el informe.
+- Los nombres y el **orden de las columnas** son los del RIPS JSON. En cada
+  servicio se **inyecta el documento del paciente**
+  (`tipoDocumentoIdentificacion`, `numDocumentoIdentificacion`) para saber a
+  quién pertenece. **No se agregan columnas extra.**
+- Se conservan los tipos: los códigos con ceros a la izquierda (`080010235501`,
+  `08001`, `01`) quedan como **texto**; los valores (`vrServicio`,
+  `consecutivo`, etc.) quedan como **número**.
 
-La **EPS** se toma del nombre de la subcarpeta; el **año** y el **mes**, del
-nombre de la carpeta del mes (`RIPS ENERO 2026`). Tanto los JSON como los TXT de
-una misma EPS/año se combinan en el mismo archivo y las mismas hojas.
+La **EPS** se toma del nombre de la subcarpeta; el **año**, del nombre de la
+carpeta del mes (`RIPS ENERO 2026`). Tanto los JSON como los TXT de una misma
+EPS/año se **consolidan** en el mismo archivo; al juntar varios meses, la hoja
+`FACTURA` tendrá **una fila por cada factura**.
 
 ---
 
@@ -102,9 +107,7 @@ python convertir_rips_excel.py --origen "D:\RIPS 2026" --salida "D:\Informes\Exc
 
 ## Para el informe de todas las EPS
 
-Cada `*.xlsx` ya queda separado por EPS y año con su hoja `Resumen`. Para el
-consolidado final puedes:
-
-1. Abrir las hojas `Resumen` de cada archivo y pegarlas en un libro maestro, o
-2. Pedir una segunda pasada que genere un **Excel maestro comparativo** (todas las
-   EPS en una sola tabla). Avísame si lo quieres y lo agrego.
+Cada `*.xlsx` queda separado por EPS y año, con el formato exacto del RIPS. Si
+además quieres un **Excel maestro comparativo** (una hoja resumen con totales por
+EPS/año y servicio para comparar de un vistazo), avísame y lo agrego como una
+segunda pasada — sin tocar este formato.
