@@ -116,12 +116,30 @@ def prefijo_txt(nombre):
 
 
 def norm_cod(v):
-    """Normaliza un código a texto comparable (sin .0, sin espacios)."""
+    """Normaliza un código a texto legible (sin .0, sin espacios)."""
     if v is None:
         return None
     s = str(v).strip()
     if s.endswith('.0') and s[:-2].isdigit():
         s = s[:-2]
+    return s or None
+
+
+def clave_match(v):
+    """
+    Clave para CRUZAR códigos entre propuesta y RIPS, tolerando:
+      • ceros iniciales perdidos por Excel (CUPS '030405' guardado como 30405)
+      • sufijos con guion ('325401-1' -> base '325401')
+      • el '.0' de los números float
+    Los CUPS son de 6 dígitos: si es numérico y queda más corto, se rellena
+    con ceros a la izquierda hasta 6.
+    """
+    s = norm_cod(v)
+    if not s:
+        return None
+    s = s.split('-')[0].strip().replace(' ', '')   # base antes del guion
+    if s.isdigit() and len(s) < 6:
+        s = s.zfill(6)
     return s or None
 
 
@@ -144,23 +162,23 @@ def cargar_codigos(path: Path):
         sys.exit(1)
     meta_cols = [df.columns[i] for i in range(min(len(df.columns), 7))]
     cod_up = col_cod.upper().strip()
-    codigos = []
-    info = {}
+    codigos = []          # claves de cruce (únicas, en orden)
+    info = {}             # clave -> metadatos (la columna CODIGO conserva el original)
     for _, fila in df.iterrows():
-        c = norm_cod(fila[col_cod])
-        if not c or c in info:
+        clave = clave_match(fila[col_cod])
+        if not clave or clave in info:
             continue
-        codigos.append(c)
+        codigos.append(clave)
         registro = {}
         for mc in meta_cols:
             val = fila.get(mc)
             nom = mc.upper().strip()
             if nom == cod_up or 'CLASIFICACION' in nom:
-                val = norm_cod(val)           # quita el .0 de los códigos numéricos
+                val = norm_cod(val)           # se muestra el código tal cual lo trae la propuesta
             elif 'VALOR' in nom:
                 val = round(a_float(val), 2) if val not in (None, '') else None
             registro[mc] = val
-        info[c] = registro
+        info[clave] = registro
     print(f"  Códigos cargados de la propuesta: {len(codigos)}")
     return codigos, info, meta_cols
 
@@ -192,7 +210,7 @@ def contar_json(path: Path, eps, anio, acc, info_rips):
             contenedor = usuario.get('servicios') or usuario
             for seccion, (campo, tipo) in JSON_SECCION_CAMPO.items():
                 for serv in contenedor.get(seccion, []) or []:
-                    cod = norm_cod(serv.get(campo))
+                    cod = clave_match(serv.get(campo))
                     if cod:
                         _registrar(acc, info_rips, cod, eps, anio,
                                    a_float(serv.get('vrServicio')), tipo,
@@ -209,7 +227,7 @@ def contar_txt(path: Path, eps, anio, acc, info_rips):
     for partes in csv.reader(texto.splitlines(), delimiter=delim):
         if len(partes) <= idx_cod:
             continue
-        cod = norm_cod(partes[idx_cod])
+        cod = clave_match(partes[idx_cod])
         if cod:
             valor = a_float(partes[idx_val]) if idx_val < len(partes) else 0.0
             nombre = partes[idx_nom] if idx_nom is not None and idx_nom < len(partes) else None

@@ -145,3 +145,12 @@ python frecuencia_codigos.py ^
 | `RESUMEN_EPS` | Totales por EPS y año: usos, valor facturado y cuántos códigos distintos se usaron. |
 | `NO_USADOS` | Códigos de la propuesta que **nunca se usaron** en los RIPS (frecuencia 0). |
 | `FUERA_PROPUESTA` | CUPS que **sí aparecen en los RIPS pero no están en la propuesta**, con su tipo, nombre (si lo trae el RIPS) y Frec/Valor por EPS/año. Ordenados por frecuencia — útil para detectar oportunidades de tarifa. |
+
+### Cruce de códigos (tolerancia)
+
+El cruce normaliza los códigos para evitar falsos negativos:
+- **Ceros iniciales perdidos por Excel**: los CUPS que empiezan por `0` (p. ej.
+  `030405`) suelen quedar guardados como número `30405` en el Excel de propuesta.
+  El cruce rellena con ceros a la izquierda hasta 6 dígitos.
+- **Sufijos con guion**: `325401-1` se cruza por su base `325401`.
+- Se ignora el `.0` de los números float.
