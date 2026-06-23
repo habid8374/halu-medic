@@ -111,3 +111,35 @@ Cada `*.xlsx` queda separado por EPS y año, con el formato exacto del RIPS. Si
 además quieres un **Excel maestro comparativo** (una hoja resumen con totales por
 EPS/año y servicio para comparar de un vistazo), avísame y lo agrego como una
 segunda pasada — sin tocar este formato.
+
+---
+
+# Frecuencia de uso de códigos (propuesta tarifaria)  →  `frecuencia_codigos.py`
+
+Segunda herramienta. Toma un Excel con una columna **`CODIGO`** (ej.
+`CODIGOS_PROPUESTA_TARIFARIA_MUTUAL_SER.xlsx`) y cuenta, para cada código,
+**cuántas veces se usó en los RIPS** y **cuánto se facturó** (`vrServicio`),
+desglosado **por EPS y año**.
+
+Busca los códigos en `codConsulta`, `codProcedimiento` y `codTecnologiaSalud`
+(consultas, procedimientos, medicamentos, otros servicios), tanto en JSON (2026)
+como en TXT (2024: archivos `AC`, `AP`, `AM`, `AT`).
+
+### Uso
+
+Doble clic en `frecuencia_codigos.bat` (edita antes las rutas), o por terminal:
+
+```bat
+python frecuencia_codigos.py ^
+  --codigos "D:\CODIGOS_PROPUESTA_TARIFARIA_MUTUAL_SER.xlsx" ^
+  --origen "D:\RIPS 2026" ^
+  --origen "C:\Users\auxgerencia\Desktop\RIPS\RIPS AÑO 2024"
+```
+
+### Resultado: `_FRECUENCIA_CODIGOS.xlsx`
+
+| Hoja | Contenido |
+|------|-----------|
+| `POR_EPS_ANIO` | Matriz: una fila por código (con clasificación, servicio, tecnología, tarifa) y, por cada EPS/año, columnas **Frec** y **Valor**, más **TOTAL**. Incluye los códigos con frecuencia 0 (para ver cuáles no se usan). |
+| `DETALLE` | Formato largo: `codigo, EPS, ANIO, FRECUENCIA, VALOR_FACTURADO` (ideal para tablas dinámicas). |
+| `RESUMEN_EPS` | Totales por EPS y año: usos, valor facturado y cuántos códigos distintos se usaron. |
