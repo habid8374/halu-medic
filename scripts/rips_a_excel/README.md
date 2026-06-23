@@ -140,6 +140,8 @@ python frecuencia_codigos.py ^
 
 | Hoja | Contenido |
 |------|-----------|
-| `POR_EPS_ANIO` | Matriz: una fila por código (con clasificación, servicio, tecnología, tarifa) y, por cada EPS/año, columnas **Frec** y **Valor**, más **TOTAL**. Incluye los códigos con frecuencia 0 (para ver cuáles no se usan). |
+| `POR_EPS_ANIO` | Matriz: una fila por código de la propuesta (con clasificación, servicio, tecnología, tarifa) y, por cada EPS/año, columnas **Frec** y **Valor**, más **TOTAL**. Incluye los códigos con frecuencia 0. |
 | `DETALLE` | Formato largo: `codigo, EPS, ANIO, FRECUENCIA, VALOR_FACTURADO` (ideal para tablas dinámicas). |
 | `RESUMEN_EPS` | Totales por EPS y año: usos, valor facturado y cuántos códigos distintos se usaron. |
+| `NO_USADOS` | Códigos de la propuesta que **nunca se usaron** en los RIPS (frecuencia 0). |
+| `FUERA_PROPUESTA` | CUPS que **sí aparecen en los RIPS pero no están en la propuesta**, con su tipo, nombre (si lo trae el RIPS) y Frec/Valor por EPS/año. Ordenados por frecuencia — útil para detectar oportunidades de tarifa. |

@@ -49,15 +49,21 @@ except ImportError:
 
 
 # ── Campos donde buscar códigos ─────────────────────────────────────────────
+# sección JSON -> (campo del código, etiqueta de tipo)
 JSON_SECCION_CAMPO = {
-    'consultas': 'codConsulta',
-    'procedimientos': 'codProcedimiento',
-    'medicamentos': 'codTecnologiaSalud',
-    'otrosServicios': 'codTecnologiaSalud',
+    'consultas':      ('codConsulta',        'consulta'),
+    'procedimientos': ('codProcedimiento',   'procedimiento'),
+    'medicamentos':   ('codTecnologiaSalud', 'medicamento'),
+    'otrosServicios': ('codTecnologiaSalud', 'otroServicio'),
 }
-# prefijo TXT -> (índice del código, índice del valor vrServicio)
-TXT_CODIGO_VALOR = {'AC': (6, 14), 'AP': (6, 14), 'AM': (5, 13),
-                    'AT': (6, 10), 'AD': (6, 10)}
+# prefijo TXT -> (idx código, idx valor vrServicio, idx nombre|None, etiqueta tipo)
+TXT_CODIGO_VALOR = {
+    'AC': (6, 14, None, 'consulta'),
+    'AP': (6, 14, None, 'procedimiento'),
+    'AM': (5, 13, 7, 'medicamento'),
+    'AT': (6, 10, 7, 'otroServicio'),
+    'AD': (6, 10, 7, 'otroServicio'),
+}
 
 MESES = {'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO',
          'AGOSTO', 'SEPTIEMBRE', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'}
@@ -161,7 +167,18 @@ def cargar_codigos(path: Path):
 
 # ── Conteo en RIPS ──────────────────────────────────────────────────────────
 
-def contar_json(path: Path, codigos: set, eps, anio, acc):
+def _registrar(acc, info_rips, cod, eps, anio, valor, tipo, nombre):
+    """Acumula frecuencia/valor de CUALQUIER código y guarda su tipo/nombre."""
+    a = acc[(cod, eps, anio)]
+    a[0] += 1
+    a[1] += valor
+    meta = info_rips[cod]
+    meta['tipos'].add(tipo)
+    if nombre and not meta['nombre']:
+        meta['nombre'] = str(nombre).strip()
+
+
+def contar_json(path: Path, eps, anio, acc, info_rips):
     try:
         data = json.loads(leer_texto(path))
     except json.JSONDecodeError as e:
@@ -173,34 +190,33 @@ def contar_json(path: Path, codigos: set, eps, anio, acc):
             continue
         for usuario in trans.get('usuarios', []) or []:
             contenedor = usuario.get('servicios') or usuario
-            for seccion, campo in JSON_SECCION_CAMPO.items():
+            for seccion, (campo, tipo) in JSON_SECCION_CAMPO.items():
                 for serv in contenedor.get(seccion, []) or []:
                     cod = norm_cod(serv.get(campo))
-                    if cod in codigos:
-                        a = acc[(cod, eps, anio)]
-                        a[0] += 1
-                        a[1] += a_float(serv.get('vrServicio'))
+                    if cod:
+                        _registrar(acc, info_rips, cod, eps, anio,
+                                   a_float(serv.get('vrServicio')), tipo,
+                                   serv.get('nomTecnologiaSalud'))
 
 
-def contar_txt(path: Path, codigos: set, eps, anio, acc):
+def contar_txt(path: Path, eps, anio, acc, info_rips):
     pref = prefijo_txt(path.name)
     if pref is None:
         return
-    idx_cod, idx_val = TXT_CODIGO_VALOR[pref]
+    idx_cod, idx_val, idx_nom, tipo = TXT_CODIGO_VALOR[pref]
     texto = leer_texto(path)
     delim = ';' if texto.count(';') > texto.count(',') else ','
     for partes in csv.reader(texto.splitlines(), delimiter=delim):
         if len(partes) <= idx_cod:
             continue
         cod = norm_cod(partes[idx_cod])
-        if cod in codigos:
-            a = acc[(cod, eps, anio)]
-            a[0] += 1
-            if idx_val < len(partes):
-                a[1] += a_float(partes[idx_val])
+        if cod:
+            valor = a_float(partes[idx_val]) if idx_val < len(partes) else 0.0
+            nombre = partes[idx_nom] if idx_nom is not None and idx_nom < len(partes) else None
+            _registrar(acc, info_rips, cod, eps, anio, valor, tipo, nombre)
 
 
-def recolectar(origenes, codigos_set, acc):
+def recolectar(origenes, acc, info_rips):
     stats = {'archivos': 0, 'json': 0, 'txt': 0}
     for origen in origenes:
         if not origen.exists():
@@ -231,39 +247,49 @@ def recolectar(origenes, codigos_set, acc):
                     ext = f.suffix.lower()
                     if ext == '.json':
                         stats['archivos'] += 1; stats['json'] += 1
-                        contar_json(f, codigos_set, eps, anio, acc)
+                        contar_json(f, eps, anio, acc, info_rips)
                     elif ext == '.txt' and prefijo_txt(f.name):
                         stats['archivos'] += 1; stats['txt'] += 1
-                        contar_txt(f, codigos_set, eps, anio, acc)
+                        contar_txt(f, eps, anio, acc, info_rips)
     return stats
 
 
 # ── Escritura del informe ───────────────────────────────────────────────────
 
-def escribir(salida: Path, codigos, info, meta_cols, acc):
+def escribir(salida: Path, codigos, info, meta_cols, acc, info_rips):
     salida.parent.mkdir(parents=True, exist_ok=True)
+    codigos_set = set(codigos)
     combos = sorted({(eps, anio) for (_, eps, anio) in acc},
                     key=lambda x: (x[0], str(x[1])))
 
-    # ── Hoja POR_EPS_ANIO (matriz ancha) ──
+    def cols_combos(get_fv):
+        """Construye las columnas Frec/Valor por EPS/año + TOTAL."""
+        d = {}
+        tf = tv = 0
+        for eps, anio in combos:
+            f, v = get_fv(eps, anio)
+            etq = f"{eps} {anio if anio else 'SA'}"
+            d[f"{etq} | Frec"] = f
+            d[f"{etq} | Valor"] = round(v, 2)
+            tf += f; tv += v
+        d['TOTAL | Frec'] = tf
+        d['TOTAL | Valor'] = round(tv, 2)
+        return d, tf
+
+    # ── Hoja POR_EPS_ANIO (códigos de la propuesta) ──
     filas = []
     for c in codigos:
         fila = {mc: info[c][mc] for mc in meta_cols}
-        tot_f = tot_v = 0
-        for eps, anio in combos:
-            f, v = acc.get((c, eps, anio), [0, 0.0])
-            etq = f"{eps} {anio if anio else 'SA'}"
-            fila[f"{etq} | Frec"] = f
-            fila[f"{etq} | Valor"] = round(v, 2)
-            tot_f += f; tot_v += v
-        fila['TOTAL | Frec'] = tot_f
-        fila['TOTAL | Valor'] = round(tot_v, 2)
+        cols, _ = cols_combos(lambda e, a: acc.get((c, e, a), [0, 0.0]))
+        fila.update(cols)
         filas.append(fila)
     df_matriz = pd.DataFrame(filas)
 
-    # ── Hoja DETALLE (formato largo) ──
+    # ── Hoja DETALLE (solo propuesta, formato largo) ──
     det = []
     for (c, eps, anio), (f, v) in acc.items():
+        if c not in codigos_set:
+            continue
         reg = {mc: info[c][mc] for mc in meta_cols}
         reg.update({'EPS': eps, 'ANIO': anio, 'FRECUENCIA': f,
                     'VALOR_FACTURADO': round(v, 2)})
@@ -271,9 +297,11 @@ def escribir(salida: Path, codigos, info, meta_cols, acc):
     df_det = (pd.DataFrame(det).sort_values(['EPS', 'ANIO', 'FRECUENCIA'],
               ascending=[True, True, False]) if det else pd.DataFrame())
 
-    # ── Hoja RESUMEN_EPS ──
+    # ── Hoja RESUMEN_EPS (solo propuesta) ──
     res = defaultdict(lambda: [0, 0.0, set()])
     for (c, eps, anio), (f, v) in acc.items():
+        if c not in codigos_set:
+            continue
         r = res[(eps, anio)]
         r[0] += f; r[1] += v
         if f:
@@ -283,12 +311,35 @@ def escribir(salida: Path, codigos, info, meta_cols, acc):
           'Total_valor': round(r[1], 2), 'Codigos_distintos_usados': len(r[2])}
          for (eps, anio), r in sorted(res.items(), key=lambda x: (x[0][0], str(x[0][1])))])
 
+    # ── Hoja NO_USADOS (propuesta con frecuencia 0) ──
+    usados = {c for (c, _, _), (f, _) in acc.items() if f and c in codigos_set}
+    df_nou = pd.DataFrame([{mc: info[c][mc] for mc in meta_cols}
+                           for c in codigos if c not in usados])
+
+    # ── Hoja FUERA_PROPUESTA (códigos en RIPS que NO están en la propuesta) ──
+    fuera_codes = {c for (c, _, _) in acc if c not in codigos_set}
+    filas_f = []
+    for c in fuera_codes:
+        meta = info_rips.get(c, {'tipos': set(), 'nombre': ''})
+        fila = {'CODIGO': c,
+                'TIPO': ', '.join(sorted(meta['tipos'])),
+                'NOMBRE_RIPS': meta['nombre']}
+        cols, tf = cols_combos(lambda e, a: acc.get((c, e, a), [0, 0.0]))
+        fila.update(cols)
+        filas_f.append((tf, fila))
+    filas_f.sort(key=lambda x: x[0], reverse=True)
+    df_fuera = pd.DataFrame([f for _, f in filas_f])
+
     with pd.ExcelWriter(salida, engine='openpyxl') as w:
         df_matriz.to_excel(w, sheet_name='POR_EPS_ANIO', index=False)
         if not df_det.empty:
             df_det.to_excel(w, sheet_name='DETALLE', index=False)
         if not df_res.empty:
             df_res.to_excel(w, sheet_name='RESUMEN_EPS', index=False)
+        if not df_nou.empty:
+            df_nou.to_excel(w, sheet_name='NO_USADOS', index=False)
+        if not df_fuera.empty:
+            df_fuera.to_excel(w, sheet_name='FUERA_PROPUESTA', index=False)
         for ws in w.book.worksheets:
             for col in ws.columns:
                 ancho = max((len(str(c.value)) for c in col if c.value is not None),
@@ -314,16 +365,19 @@ def main():
     origenes = [Path(o) for o in args.origen]
     salida = Path(args.salida) if args.salida else origenes[0] / '_FRECUENCIA_CODIGOS.xlsx'
 
-    acc = defaultdict(lambda: [0, 0.0])   # (cod, eps, anio) -> [frecuencia, valor]
-    stats = recolectar(origenes, codigos_set, acc)
+    acc = defaultdict(lambda: [0, 0.0])          # (cod, eps, anio) -> [frecuencia, valor]
+    info_rips = defaultdict(lambda: {'tipos': set(), 'nombre': ''})
+    stats = recolectar(origenes, acc, info_rips)
 
     print("\n=== Generando informe ===")
-    escribir(salida, codigos, info, meta_cols, acc)
+    escribir(salida, codigos, info, meta_cols, acc, info_rips)
 
-    usados = len({c for (c, _, _) in acc})
+    usados_prop = len({c for (c, _, _), (f, _) in acc.items() if f and c in codigos_set})
+    fuera = len({c for (c, _, _) in acc if c not in codigos_set})
     print("\n────────────────────── RESUMEN ──────────────────────")
     print(f"  Archivos leídos : {stats['archivos']}  (JSON: {stats['json']}, TXT: {stats['txt']})")
-    print(f"  Códigos propuesta: {len(codigos)}  |  con uso encontrado: {usados}")
+    print(f"  Códigos propuesta: {len(codigos)}  |  usados: {usados_prop}  |  sin uso: {len(codigos) - usados_prop}")
+    print(f"  Códigos en RIPS fuera de la propuesta: {fuera}")
     print(f"  Informe          : {salida}")
     print(f"  Hora             : {datetime.now():%Y-%m-%d %H:%M:%S}")
     print("──────────────────────────────────────────────────────")
