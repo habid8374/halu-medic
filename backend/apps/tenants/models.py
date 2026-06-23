@@ -64,10 +64,13 @@ class Consultorio(TenantMixin):
                               help_text='Leyenda/texto legal que aparece en la representación gráfica (PDF)')
 
     # ── Datos IPS adicionales ─────────────────────────────────────────────────
+    # Régimen de los afiliados que atiende (habilitación MinSalud / REPS)
     class RegimenChoices(models.TextChoices):
         CONTRIBUTIVO = 'contributivo', 'Contributivo'
         SUBSIDIADO   = 'subsidiado',   'Subsidiado'
-        MIXTO        = 'mixto',        'Mixto'
+        MIXTO        = 'mixto',        'Mixto (Contributivo y Subsidiado)'
+        ESPECIAL     = 'especial',     'Especial y de excepción (FF.MM., Policía, Magisterio, Ecopetrol)'
+        NO_APLICA    = 'no_aplica',    'No aplica (servicios particulares)'
 
     class NivelAtencionChoices(models.TextChoices):
         UNO    = '1', 'Nivel I'
@@ -75,7 +78,8 @@ class Consultorio(TenantMixin):
         TRES   = '3', 'Nivel III'
         CUATRO = '4', 'Nivel IV'
 
-    regimen               = models.CharField(max_length=20, choices=RegimenChoices.choices, blank=True)
+    regimen               = models.CharField(max_length=20, choices=RegimenChoices.choices, blank=True,
+                              help_text='Régimen de salud de los afiliados que atiende (REPS/MinSalud)')
     nivel_atencion        = models.CharField(max_length=2, choices=NivelAtencionChoices.choices, blank=True)
     representante_legal   = models.CharField(max_length=200, blank=True)
     departamento          = models.CharField(max_length=100, blank=True)
@@ -86,11 +90,17 @@ class Consultorio(TenantMixin):
     firma_factura_nombre  = models.CharField(max_length=200, blank=True)
     firma_factura_cargo   = models.CharField(max_length=200, blank=True)
 
+    # Régimen tributario ante la DIAN (terminología vigente desde 2019)
     class RegimenTributarioChoices(models.TextChoices):
-        SIMPLIFICADO = 'simplificado', 'Régimen Simplificado'
-        COMUN        = 'comun',        'Régimen Común'
+        SIMPLE            = 'simple',            'Régimen Simple de Tributación (SIMPLE)'
+        ORDINARIO         = 'ordinario',          'Régimen Ordinario del Impuesto sobre la Renta'
+        NO_RESPONSABLE    = 'no_responsable_iva', 'No Responsable de IVA (antes Simplificado)'
+        RESPONSABLE       = 'responsable_iva',    'Responsable de IVA (antes Régimen Común)'
+        GRAN_CONTRIBUYENTE = 'gran_contribuyente', 'Gran Contribuyente'
+        ENTIDAD_PUBLICA   = 'entidad_publica',    'Entidad Pública'
 
-    regimen_tributario    = models.CharField(max_length=20, choices=RegimenTributarioChoices.choices, blank=True)
+    regimen_tributario    = models.CharField(max_length=30, choices=RegimenTributarioChoices.choices, blank=True,
+                              help_text='Régimen tributario ante la DIAN')
 
     creado_en       = models.DateTimeField(auto_now_add=True)
     actualizado_en  = models.DateTimeField(auto_now=True)
