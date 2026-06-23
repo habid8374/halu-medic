@@ -306,17 +306,21 @@ def parsear_json(path: Path, acumular) -> int:
             # USUARIOS
             acumular('USUARIOS', {c: usuario.get(c) for c in SHEET_COLUMNS['USUARIOS']})
 
+            # Los servicios pueden venir bajo usuario['servicios'] (esquema oficial)
+            # o directamente en el usuario. Se soportan ambos.
+            contenedor = usuario.get('servicios') or usuario
+
             # Servicios anidados
             for seccion, hoja in JSON_SECCION_HOJA.items():
-                for serv in usuario.get(seccion, []) or []:
+                for serv in contenedor.get(seccion, []) or []:
                     fila = {}
                     for col in SHEET_COLUMNS[hoja]:
-                        if col == 'tipoDocumentoIdentificacion':
-                            fila[col] = doc_tipo
-                        elif col == 'numDocumentoIdentificacion':
-                            fila[col] = doc_num
-                        else:
-                            fila[col] = serv.get(col)   # valor JSON tal cual (preserva tipos)
+                        val = serv.get(col)   # valor JSON tal cual (preserva tipos)
+                        # El documento del paciente se respeta del servicio; si el
+                        # servicio no lo trae (p. ej. hospitalización), se usa el del usuario.
+                        if col in COLS_DOC_PACIENTE and (val is None or val == ''):
+                            val = doc_tipo if col == 'tipoDocumentoIdentificacion' else doc_num
+                        fila[col] = val
                     acumular(hoja, fila)
                     n += 1
     return n
