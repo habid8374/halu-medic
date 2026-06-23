@@ -42,14 +42,13 @@ class Command(BaseCommand):
             domain=railway_domain,
             defaults={'tenant': pub, 'is_primary': True},
         )
-        if not created and dom.tenant_id != pub.pk:
-            dom.tenant = pub
-            dom.save(update_fields=['tenant'])
-            self.stdout.write(self.style.SUCCESS(f'✓ Dominio {railway_domain} reasignado → public'))
-        elif created:
+        if created:
             self.stdout.write(self.style.SUCCESS(f'✓ Dominio {railway_domain} registrado → public'))
         else:
-            self.stdout.write(f'  Dominio {railway_domain} ya apunta a public')
+            # No tocar si ya apunta a otro tenant — respeta la configuración existente
+            self.stdout.write(
+                f'  Dominio {railway_domain} ya existe → {dom.tenant.schema_name} (sin cambios)'
+            )
 
         # ── 3. Dominio localhost → public (desarrollo) ────────────────────────
         for dev_domain in ['localhost', '127.0.0.1']:
