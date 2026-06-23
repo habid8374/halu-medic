@@ -32,7 +32,12 @@ class Command(BaseCommand):
             self.stdout.write('  Tenant público ya existe')
 
         # ── 2. Dominio Railway → public ────────────────────────────────────────
-        railway_domain = 'halu-medic-production.up.railway.app'
+        import os
+        railway_domain = (
+            os.environ.get('RAILWAY_PUBLIC_DOMAIN') or
+            os.environ.get('RAILWAY_STATIC_URL', '').replace('https://', '').rstrip('/') or
+            'halu-medic-production.up.railway.app'
+        )
         dom, created = Dominio.objects.get_or_create(
             domain=railway_domain,
             defaults={'tenant': pub, 'is_primary': True},

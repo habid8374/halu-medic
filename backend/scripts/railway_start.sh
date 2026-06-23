@@ -7,7 +7,7 @@ echo "=== Halu Medic — Railway startup ==="
 echo "→ Migraciones shared..."
 python manage.py migrate_schemas --shared --noinput
 
-# Migraciones tenant (schemas por IPS — historia, farmacia, etc.)
+# Migraciones tenant (schemas por IPS)
 echo "→ Migraciones tenant..."
 python manage.py migrate_schemas --noinput
 
@@ -15,15 +15,11 @@ python manage.py migrate_schemas --noinput
 echo "→ Collectstatic..."
 python manage.py collectstatic --noinput
 
-# Catálogos en background (no bloquean el arranque)
-nohup bash -c "
-  sleep 8
-  python manage.py importar_cups          || echo 'CUPS ya OK'
-  python manage.py importar_cie10         || echo 'CIE10 ya OK'
-  python manage.py importar_aseguradoras  || echo 'Aseguradoras ya OK'
-" > /tmp/catalogos.log 2>&1 &
+# Tenant público y superusuario (idempotente)
+echo "→ Setup tenant público..."
+python manage.py setup_public_tenant
 
-# Levantar gunicorn inmediatamente
+# Levantar gunicorn
 echo "→ Levantando gunicorn..."
 exec gunicorn config.wsgi:application \
   --bind 0.0.0.0:${PORT:-8000} \
