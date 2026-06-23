@@ -2345,7 +2345,7 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
             item = manual.items.filter(cups=cups).first()
             if item is None:
                 # Fallback: buscar en cualquier tarifario activo
-                fallback = ITar.objects.filter(cups=cups, tarifario__activo=True).order_by('-valor_base').first()
+                fallback = ITar.objects.filter(cups=cups, manual__activo=True).order_by('-valor_base').first()
                 if fallback is None:
                     return valor_default
                 item = fallback
@@ -2471,7 +2471,12 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
         # ── 5. Cirugías — desde Liquidación CX (valores ISS/SOAT ya calculados) ─
         if pre.ingreso:
             from apps.historia.models import LiquidacionCirugia
-            for liq in LiquidacionCirugia.objects.filter(ingreso=pre.ingreso):
+            from django.db.models import Q
+            liqs_qs = LiquidacionCirugia.objects.filter(
+                Q(ingreso=pre.ingreso) |
+                Q(descripcion_qx__programacion__ingreso=pre.ingreso)
+            ).distinct()
+            for liq in liqs_qs:
                 # Auto-recalculate if totals are still 0 (e.g. created before UVR fix)
                 if float(liq.total_general or 0) == 0:
                     for proc in liq.procedimientos.all():
@@ -2519,8 +2524,10 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
 
             # Fallback: cirugías programadas/realizadas sin liquidación
             ids_liq_dqx = set(
-                LiquidacionCirugia.objects.filter(ingreso=pre.ingreso)
-                .exclude(descripcion_qx=None)
+                LiquidacionCirugia.objects.filter(
+                    Q(ingreso=pre.ingreso) |
+                    Q(descripcion_qx__programacion__ingreso=pre.ingreso)
+                ).exclude(descripcion_qx=None)
                 .values_list('descripcion_qx__programacion', flat=True)
             )
             for cx in ProgramacionCx.objects.filter(ingreso=pre.ingreso, estado='realizada'):
@@ -2539,8 +2546,19 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                 )
 
         pre.recalcular_totales()
+        # Diagnóstico: CUPS sin precio en ningún tarifario
+        cups_sin_precio = []
+        for item in pre.items.filter(valor_unitario=0):
+            if item.cups:
+                en_tarifario = ITar.objects.filter(cups=item.cups, manual__activo=True).exists()
+                cups_sin_precio.append({
+                    'cups': item.cups,
+                    'descripcion': item.descripcion,
+                    'en_tarifario': en_tarifario,
+                })
         return Response({
             'message': f'{creados} ítems cargados automáticamente.',
+            'cups_sin_precio': cups_sin_precio,
             'prefactura': PrefacturaSerializer(pre).data,
         })
 
