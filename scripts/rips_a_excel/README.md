@@ -154,3 +154,17 @@ El cruce normaliza los códigos para evitar falsos negativos:
   El cruce rellena con ceros a la izquierda hasta 6 dígitos.
 - **Sufijos con guion**: `325401-1` se cruza por su base `325401`.
 - Se ignora el `.0` de los números float.
+
+### Agregar códigos que no están en el Excel
+
+Si necesitas incluir códigos que no aparecen en el Excel de propuesta (p. ej.
+`876122`), usa `--codigo-extra` (repetible):
+
+```bat
+python frecuencia_codigos.py --codigos "...propuesta.xlsx" --origen "D:\RIPS 2026" ^
+  --codigo-extra "876122=ARTERIOGRAFIA CORONARIA CON CATETERISMO IZQUIERDO" ^
+  --codigo-extra "OTRO_CODIGO=Descripcion"
+```
+
+Estos códigos se marcan en la columna de tarifa como **`AGREGADO MANUAL`** para
+distinguirlos de los que sí venían en el Excel.

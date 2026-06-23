@@ -183,6 +183,42 @@ def cargar_codigos(path: Path):
     return codigos, info, meta_cols
 
 
+def agregar_extras(extras, codigos, info, meta_cols):
+    """Agrega códigos manuales (no presentes en el Excel) a la lista de propuesta.
+
+    Cada extra puede ser 'CODIGO' o 'CODIGO=Descripción'. Se marcan en la
+    columna de tarifa como 'AGREGADO MANUAL' para distinguirlos en el informe.
+    """
+    if not extras:
+        return
+    cod_col = next((mc for mc in meta_cols if mc.upper().strip() == 'CODIGO'), None)
+    agregados = 0
+    for item in extras:
+        codigo, _, desc = str(item).partition('=')
+        clave = clave_match(codigo)
+        if not clave:
+            continue
+        if clave in info:
+            print(f"  [i] '{codigo}' ya estaba en la propuesta; no se duplica.")
+            continue
+        registro = {}
+        for mc in meta_cols:
+            nom = mc.upper().strip()
+            if mc == cod_col:
+                registro[mc] = norm_cod(codigo)
+            elif 'TECNOLOGIA' in nom or 'SERVICIO' in nom:
+                registro[mc] = desc.strip() or None
+            elif 'TARIFA' in nom:
+                registro[mc] = 'AGREGADO MANUAL'
+            else:
+                registro[mc] = None
+        info[clave] = registro
+        codigos.append(clave)
+        agregados += 1
+    if agregados:
+        print(f"  Códigos agregados manualmente: {agregados}")
+
+
 # ── Conteo en RIPS ──────────────────────────────────────────────────────────
 
 def _registrar(acc, info_rips, cod, eps, anio, valor, tipo, nombre):
@@ -373,11 +409,15 @@ def main():
     ap.add_argument('--codigos', required=True, help='Excel con la columna CODIGO.')
     ap.add_argument('--origen', action='append', required=True,
                     help='Carpeta raíz de RIPS (repetible).')
+    ap.add_argument('--codigo-extra', action='append', default=[], dest='extras',
+                    help='Código adicional que NO está en el Excel de propuesta. '
+                         'Repetible. Formato: CODIGO o "CODIGO=Descripción".')
     ap.add_argument('--salida', default=None)
     args = ap.parse_args()
 
     print("=== Cargando códigos de la propuesta ===")
     codigos, info, meta_cols = cargar_codigos(Path(args.codigos))
+    agregar_extras(args.extras, codigos, info, meta_cols)
     codigos_set = set(codigos)
 
     origenes = [Path(o) for o in args.origen]
