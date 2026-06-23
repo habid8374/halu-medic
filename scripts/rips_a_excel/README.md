@@ -136,22 +136,26 @@ python frecuencia_codigos.py ^
   --origen "C:\Users\auxgerencia\Desktop\RIPS\RIPS AÑO 2024"
 ```
 
-### Resultado: carpeta `_FRECUENCIA_CODIGOS\` con **un Excel por EPS**
+### Resultado: carpeta `_FRECUENCIA_CODIGOS\` con **un Excel por EPS + régimen + año**
 
-Genera un archivo por cada EPS (p. ej. `COOSALUD.xlsx`, `NUEVA_EPS.xlsx`). Todo
-"COOSALUD" queda en un solo libro, juntando contributivo y subsidiado. El
-**régimen se toma del nombre de la subcarpeta** (`COOSALUD CONTRIBUTIVO`,
-`COOSALUD SUBSIDIADO` → EPS `COOSALUD`, regímenes `Contributivo`/`Subsidiado`).
+Genera un archivo **independiente** por cada combinación, p. ej.:
+- `COOSALUD CONTRIBUTIVO 2024.xlsx`
+- `COOSALUD SUBSIDIADO 2024.xlsx`
+- `COOSALUD CONTRIBUTIVO 2026.xlsx`
+- `COOSALUD SUBSIDIADO 2026.xlsx`
 
-Cada libro de EPS trae estas hojas:
+El **régimen y la EPS se toman del nombre de la subcarpeta** (`COOSALUD
+CONTRIBUTIVO`, `COOSALUD SUBSIDIADO` → EPS `COOSALUD` + régimen
+`Contributivo`/`Subsidiado`) y el **año** del nombre de la carpeta del mes.
+
+Cada archivo trae estas hojas:
 
 | Hoja | Contenido |
 |------|-----------|
-| `POR_REGIMEN_ANIO` | Matriz: una fila por código de la propuesta (clasificación, servicio, tecnología, tarifa) y, por cada **régimen + año** (Contributivo 2024, Subsidiado 2026, …), columnas **Frec** y **Valor**, más **TOTAL**. Incluye códigos con frecuencia 0. |
-| `DETALLE` | Formato largo: `codigo, REGIMEN, ANIO, FRECUENCIA, VALOR_FACTURADO` (ideal para tablas dinámicas). |
-| `RESUMEN` | Totales por régimen y año: usos, valor facturado y códigos distintos usados. |
-| `NO_USADOS` | Códigos de la propuesta que **nunca se usaron** en esa EPS (frecuencia 0). |
-| `FUERA_PROPUESTA` | CUPS que **sí aparecen en los RIPS de esa EPS pero no están en la propuesta**, con tipo, nombre (si lo trae el RIPS) y Frec/Valor por régimen/año. Ordenados por frecuencia — útil para detectar oportunidades de tarifa. |
+| `RESUMEN` | Una fila: EPS, régimen, año, códigos usados/sin uso, total de usos, valor facturado y códigos fuera de la propuesta. |
+| `FRECUENCIA` | Una fila por código de la propuesta (clasificación, servicio, tecnología, tarifa) con su **FRECUENCIA** y **VALOR_FACTURADO** en ese grupo. Incluye códigos con frecuencia 0. |
+| `NO_USADOS` | Códigos de la propuesta que **no se usaron** en ese grupo (frecuencia 0). |
+| `FUERA_PROPUESTA` | CUPS usados en ese grupo que **no están en la propuesta**, con tipo, nombre (si lo trae el RIPS), frecuencia y valor. Ordenados por frecuencia — útil para detectar oportunidades de tarifa. |
 
 > El régimen se detecta por las palabras `CONTRIB…`/`SUBSID…` en el nombre de la
 > carpeta. Lo demás se toma como nombre de la EPS (la palabra `EPS` **no** se

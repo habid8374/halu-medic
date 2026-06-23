@@ -348,100 +348,77 @@ def _ajustar_anchos(ws):
         ws.column_dimensions[col[0].column_letter].width = min(max(ancho + 2, 10), 45)
 
 
+def limpiar_nombre(s):
+    """Nombre de archivo válido en Windows (conserva espacios)."""
+    s = re.sub(r'[\\/:*?"<>|]+', ' ', str(s))
+    return re.sub(r'\s+', ' ', s).strip() or 'SIN_CLASIFICAR'
+
+
 def escribir(salida_dir: Path, codigos, info, meta_cols, acc, info_rips):
-    """Genera UN libro de Excel por EPS, con columnas por régimen y año."""
+    """Genera UN libro independiente por cada EPS + régimen + año.
+
+    Ej.: 'COOSALUD CONTRIBUTIVO 2024.xlsx', 'COOSALUD SUBSIDIADO 2026.xlsx'.
+    """
     salida_dir.mkdir(parents=True, exist_ok=True)
     codigos_set = set(codigos)
-    eps_todas = sorted({eps for (_, eps, _, _) in acc})
+    grupos = sorted({(eps, reg, anio) for (_, eps, reg, anio) in acc},
+                    key=lambda x: (x[0], REG_ORDER.get(x[1], 9), str(x[2])))
     generados = 0
 
-    for eps in eps_todas:
-        combos = sorted({(reg, anio) for (c, e, reg, anio) in acc if e == eps},
-                        key=lambda x: (REG_ORDER.get(x[0], 9), str(x[1])))
+    for eps, regimen, anio in grupos:
+        anio_txt = anio if anio else 'SIN_ANIO'
 
-        def cols_combos(get_fv, _combos=combos):
-            d = {}
-            tf = tv = 0
-            for reg, anio in _combos:
-                f, v = get_fv(reg, anio)
-                etq = f"{reg} {anio if anio else 'SA'}"
-                d[f"{etq} | Frec"] = f
-                d[f"{etq} | Valor"] = round(v, 2)
-                tf += f; tv += v
-            d['TOTAL | Frec'] = tf
-            d['TOTAL | Valor'] = round(tv, 2)
-            return d, tf
-
-        # ── POR_REGIMEN_ANIO (códigos de la propuesta) ──
+        # ── FRECUENCIA (todos los códigos de la propuesta) ──
         filas = []
         for c in codigos:
+            f, v = acc.get((c, eps, regimen, anio), [0, 0.0])
             fila = {mc: info[c][mc] for mc in meta_cols}
-            cols, _ = cols_combos(lambda r, a, _c=c: acc.get((_c, eps, r, a), [0, 0.0]))
-            fila.update(cols)
+            fila['FRECUENCIA'] = f
+            fila['VALOR_FACTURADO'] = round(v, 2)
             filas.append(fila)
-        df_matriz = pd.DataFrame(filas)
+        df_frec = pd.DataFrame(filas)
 
-        # ── DETALLE (solo propuesta) ──
-        det = []
-        for (c, e, reg, anio), (f, v) in acc.items():
-            if e != eps or c not in codigos_set:
-                continue
-            r = {mc: info[c][mc] for mc in meta_cols}
-            r.update({'REGIMEN': reg, 'ANIO': anio, 'FRECUENCIA': f,
-                      'VALOR_FACTURADO': round(v, 2)})
-            det.append(r)
-        df_det = (pd.DataFrame(det).sort_values(['REGIMEN', 'ANIO', 'FRECUENCIA'],
-                  ascending=[True, True, False]) if det else pd.DataFrame())
+        # ── NO_USADOS (frecuencia 0) ──
+        df_nou = pd.DataFrame([{mc: info[c][mc] for mc in meta_cols} for c in codigos
+                               if acc.get((c, eps, regimen, anio), [0, 0.0])[0] == 0])
 
-        # ── RESUMEN (por régimen y año) ──
-        res = defaultdict(lambda: [0, 0.0, set()])
-        for (c, e, reg, anio), (f, v) in acc.items():
-            if e != eps or c not in codigos_set:
-                continue
-            rr = res[(reg, anio)]
-            rr[0] += f; rr[1] += v
-            if f:
-                rr[2].add(c)
-        df_res = pd.DataFrame(
-            [{'REGIMEN': reg, 'ANIO': anio, 'Total_usos': rr[0],
-              'Total_valor': round(rr[1], 2), 'Codigos_distintos_usados': len(rr[2])}
-             for (reg, anio), rr in sorted(res.items(),
-                 key=lambda x: (REG_ORDER.get(x[0][0], 9), str(x[0][1])))])
-
-        # ── NO_USADOS (propuesta con frecuencia 0 en esta EPS) ──
-        usados = {c for (c, e, _, _), (f, _) in acc.items()
-                  if e == eps and f and c in codigos_set}
-        df_nou = pd.DataFrame([{mc: info[c][mc] for mc in meta_cols}
-                               for c in codigos if c not in usados])
-
-        # ── FUERA_PROPUESTA (códigos de esta EPS que no están en la propuesta) ──
-        fuera_codes = {c for (c, e, _, _) in acc if e == eps and c not in codigos_set}
+        # ── FUERA_PROPUESTA (usados en este grupo y no están en la propuesta) ──
         filas_f = []
-        for c in fuera_codes:
-            meta = info_rips.get(c, {'tipos': set(), 'nombre': ''})
-            fila = {'CODIGO': c,
-                    'TIPO': ', '.join(sorted(meta['tipos'])),
-                    'NOMBRE_RIPS': meta['nombre']}
-            cols, tf = cols_combos(lambda r, a, _c=c: acc.get((_c, eps, r, a), [0, 0.0]))
-            fila.update(cols)
-            filas_f.append((tf, fila))
+        for (c, e, r, a), (f, v) in acc.items():
+            if e == eps and r == regimen and a == anio and f and c not in codigos_set:
+                meta = info_rips.get(c, {'tipos': set(), 'nombre': ''})
+                filas_f.append((f, {'CODIGO': c,
+                                    'TIPO': ', '.join(sorted(meta['tipos'])),
+                                    'NOMBRE_RIPS': meta['nombre'],
+                                    'FRECUENCIA': f,
+                                    'VALOR_FACTURADO': round(v, 2)}))
         filas_f.sort(key=lambda x: x[0], reverse=True)
-        df_fuera = pd.DataFrame([f for _, f in filas_f])
+        df_fuera = pd.DataFrame([x for _, x in filas_f])
 
-        ruta = salida_dir / f"{eps_archivo(eps)}.xlsx"
+        # ── RESUMEN (una fila) ──
+        tot_f = int(df_frec['FRECUENCIA'].sum())
+        tot_v = round(float(df_frec['VALOR_FACTURADO'].sum()), 2)
+        usados = int((df_frec['FRECUENCIA'] > 0).sum())
+        df_res = pd.DataFrame([{
+            'EPS': eps, 'REGIMEN': regimen, 'ANIO': anio_txt,
+            'Codigos_propuesta': len(codigos), 'Codigos_usados': usados,
+            'Codigos_sin_uso': len(codigos) - usados,
+            'Total_usos': tot_f, 'Total_valor': tot_v,
+            'Codigos_fuera_propuesta': len(filas_f),
+        }])
+
+        nombre = limpiar_nombre(f"{eps} {regimen.upper()} {anio_txt}")
+        ruta = salida_dir / f"{nombre}.xlsx"
         with pd.ExcelWriter(ruta, engine='openpyxl') as w:
-            df_matriz.to_excel(w, sheet_name='POR_REGIMEN_ANIO', index=False)
-            if not df_det.empty:
-                df_det.to_excel(w, sheet_name='DETALLE', index=False)
-            if not df_res.empty:
-                df_res.to_excel(w, sheet_name='RESUMEN', index=False)
+            df_res.to_excel(w, sheet_name='RESUMEN', index=False)
+            df_frec.to_excel(w, sheet_name='FRECUENCIA', index=False)
             if not df_nou.empty:
                 df_nou.to_excel(w, sheet_name='NO_USADOS', index=False)
             if not df_fuera.empty:
                 df_fuera.to_excel(w, sheet_name='FUERA_PROPUESTA', index=False)
             for ws in w.book.worksheets:
                 _ajustar_anchos(ws)
-        print(f"  ✔ {ruta.name}  (regímenes/años: {len(combos)})")
+        print(f"  ✔ {ruta.name}  (usos: {tot_f})")
         generados += 1
 
     return generados
