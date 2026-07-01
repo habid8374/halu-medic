@@ -80,6 +80,12 @@ class CodigoCUPS(models.Model):
     ambito_rips          = models.CharField(max_length=1, blank=True,
                                              help_text='1=Ambulatorio, 2=Hospitalario, 3=Urgencias')
 
+    # ── Liquidación de cirugías ───────────────────────────────────────────────
+    uvr                  = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                             help_text='Puntos UVR ISS 2001 del procedimiento (liquidación de cirugías)')
+    grupo_soat           = models.PositiveSmallIntegerField(null=True, blank=True,
+                                             help_text='Grupo quirúrgico SOAT (2-13, 20-23) del procedimiento')
+
     class Meta:
         ordering = ['codigo']
         verbose_name = 'Código CUPS'

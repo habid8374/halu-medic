@@ -5,7 +5,8 @@ from apps.catalogos.models import CodigoCUPS, CodigoCIE10
 
 @admin.register(CodigoCUPS)
 class CodigoCUPSAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'descripcion', 'grupo_servicio', 'cobertura', 'codigo_reps')
+    list_display = ('codigo', 'descripcion', 'grupo_servicio', 'cobertura', 'codigo_reps', 'uvr', 'grupo_soat')
+    list_editable = ('uvr', 'grupo_soat')
     list_filter = ('cobertura', 'grupo_servicio')
     search_fields = ('codigo', 'descripcion', 'nombre_servicio')
 

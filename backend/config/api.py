@@ -4256,7 +4256,28 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
             valor = uvr_de(item)
             if valor:
                 return valor, item.descripcion or desc
+
+        # Fallback final: catálogo nacional CUPS (campo uvr, schema público)
+        try:
+            from apps.catalogos.models import CodigoCUPS
+            cat = CodigoCUPS.objects.filter(codigo=cups).first()
+            if cat:
+                if not desc:
+                    desc = cat.descripcion or desc
+                if cat.uvr and float(cat.uvr) > 0:
+                    return float(cat.uvr), desc
+        except Exception:
+            pass
         return 0, desc
+
+    def _buscar_grupo_soat(self, cups):
+        """Grupo quirúrgico SOAT del CUPS desde el catálogo nacional."""
+        try:
+            from apps.catalogos.models import CodigoCUPS
+            cat = CodigoCUPS.objects.filter(codigo=cups).first()
+            return cat.grupo_soat if cat else None
+        except Exception:
+            return None
 
     def perform_create(self, serializer):
         liq = serializer.save()
@@ -4273,6 +4294,7 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
                 proc = ProcedimientoLiquidacion(
                     liquidacion=liq, orden=i,
                     cups=cups, descripcion=desc, valor_base=valor,
+                    grupo_soat=self._buscar_grupo_soat(cups),
                 )
                 proc.aplicar_porcentajes()
                 proc.save()
@@ -4299,7 +4321,7 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
         proc = ProcedimientoLiquidacion(
             liquidacion=liq, orden=liq.procedimientos.count() + 1,
             cups=cups, descripcion=desc, valor_base=valor,
-            grupo_soat=int(grupo) if grupo else None,
+            grupo_soat=int(grupo) if grupo else self._buscar_grupo_soat(cups),
         )
         proc.aplicar_porcentajes()
         proc.save()
@@ -4386,6 +4408,7 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
                     ProcedimientoLiquidacion.objects.create(
                         liquidacion=liq, orden=liq.procedimientos.count() + 1,
                         cups=cups, descripcion=desc, valor_base=valor,
+                        grupo_soat=self._buscar_grupo_soat(cups),
                     )
                     existentes.add(cups)
             for proc in liq.procedimientos.all():
