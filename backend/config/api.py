@@ -4127,7 +4127,7 @@ class LiquidacionCirugiaSerializer(serializers.ModelSerializer):
         model  = LiquidacionCirugia
         fields = [
             'id', 'descripcion_qx', 'ingreso', 'tipo_tarifario', 'tipo_liquidacion', 'estado',
-            'observaciones',
+            'ajuste_pct', 'observaciones',
             'total_cirujano', 'total_anestesiologo', 'total_ayudante',
             'total_quirofano', 'total_materiales', 'total_general',
             'creado_en', 'actualizado_en',
@@ -4200,27 +4200,32 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
         return qs
 
     def _buscar_uvr(self, cups, liq, desc_fallback=''):
-        """Busca UVR del CUPS en el tarifario de la aseguradora del paciente."""
+        """
+        Busca los PUNTOS UVR del CUPS (campo ItemTarifario.uvr).
+        Nunca usa valor_base: ese campo está en pesos y mezclarlo con la
+        fórmula UVR × multiplicador produce valores absurdos.
+        """
         from apps.tarifas.models import ItemTarifario
-        valor = 0
-        desc  = desc_fallback
+        desc = desc_fallback
 
         # Cadena: ingreso → paciente → aseguradora → tarifario
         try:
             tarifario = liq.ingreso.paciente.aseguradora.tarifario
             if tarifario:
                 item = tarifario.items.filter(cups=cups).first()
-                if item and float(item.valor_base or 0) > 0:
-                    return float(item.valor_base), item.descripcion or desc
+                if item:
+                    if not desc:
+                        desc = item.descripcion or desc
+                    if item.uvr and float(item.uvr) > 0:
+                        return float(item.uvr), desc
         except Exception:
             pass
 
-        # Fallback: cualquier ItemTarifario con ese CUPS
-        item = ItemTarifario.objects.filter(cups=cups).order_by('-valor_base').first()
-        if item and float(item.valor_base or 0) > 0:
-            valor = float(item.valor_base)
-            desc  = item.descripcion or desc
-        return valor, desc
+        # Fallback: cualquier ítem con UVR registrado para ese CUPS
+        item = ItemTarifario.objects.filter(cups=cups, uvr__isnull=False, uvr__gt=0).order_by('-uvr').first()
+        if item:
+            return float(item.uvr), item.descripcion or desc
+        return 0, desc
 
     def perform_create(self, serializer):
         liq = serializer.save()
@@ -4243,50 +4248,81 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='agregar-procedimiento')
     def agregar_procedimiento(self, request, pk=None):
         liq = self.get_object()
+        if not liq.editable:
+            return Response(
+                {'error': f'La liquidación está {liq.get_estado_display().lower()}. Reábrala para modificarla.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         cups  = request.data.get('cups', '')
         desc  = request.data.get('descripcion', '')
         valor = request.data.get('valor_base', 0)
-        orden = request.data.get('orden')
-
-        if not orden:
-            orden = liq.procedimientos.count() + 1
 
         if not float(valor or 0):
             valor, desc_found = self._buscar_uvr(cups, liq, desc)
             desc = desc or desc_found
 
-        liq.procedimientos.filter(orden=orden).delete()
-
+        # El orden definitivo lo asigna reordenar_por_uvr (mayor UVR = orden 1)
         proc = ProcedimientoLiquidacion(
-            liquidacion=liq, orden=orden, cups=cups,
-            descripcion=desc, valor_base=valor,
+            liquidacion=liq, orden=liq.procedimientos.count() + 1,
+            cups=cups, descripcion=desc, valor_base=valor,
         )
         proc.aplicar_porcentajes()
         proc.save()
-        liq.calcular_totales()
-        return Response(ProcedimientoLiquidacionSerializer(proc).data, status=201)
+        liq.reordenar_por_uvr()
+        return Response(LiquidacionCirugiaSerializer(liq).data, status=201)
+
+    @action(detail=True, methods=['delete'],
+            url_path='procedimientos/(?P<proc_id>[^/.]+)')
+    def eliminar_procedimiento(self, request, pk=None, proc_id=None):
+        liq = self.get_object()
+        if not liq.editable:
+            return Response(
+                {'error': f'La liquidación está {liq.get_estado_display().lower()}. Reábrala para modificarla.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        deleted, _ = liq.procedimientos.filter(id=proc_id).delete()
+        if not deleted:
+            return Response({'error': 'Procedimiento no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        liq.reordenar_por_uvr()
+        return Response(LiquidacionCirugiaSerializer(liq).data)
 
     @action(detail=True, methods=['post'], url_path='recalcular')
     def recalcular(self, request, pk=None):
         liq = self.get_object()
-        changed = False
-        for campo in ('tipo_tarifario', 'tipo_liquidacion', 'estado', 'observaciones'):
-            if campo in request.data:
-                setattr(liq, campo, request.data[campo])
-                changed = True
-        if changed:
+
+        # Cambio de estado siempre permitido (finalizar / reabrir / facturar)
+        if 'estado' in request.data:
+            liq.estado = request.data['estado']
+            liq.save(update_fields=['estado', 'actualizado_en'])
+
+        # Observaciones siempre permitidas (no alteran valores)
+        if 'observaciones' in request.data:
+            liq.observaciones = request.data['observaciones']
+            liq.save(update_fields=['observaciones', 'actualizado_en'])
+
+        # Cambios que alteran valores: solo en borrador
+        campos_valor = [c for c in ('tipo_tarifario', 'tipo_liquidacion', 'ajuste_pct') if c in request.data]
+        if campos_valor and not liq.editable:
+            return Response(
+                {'error': f'La liquidación está {liq.get_estado_display().lower()}. Reábrala para modificar valores.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        for campo in campos_valor:
+            setattr(liq, campo, request.data[campo])
+        if campos_valor:
             liq.save()
-        for proc in liq.procedimientos.all():
-            # Si el UVR es 0, intentar re-leer del tarifario de la aseguradora
-            if float(proc.valor_base or 0) == 0:
-                uvr, desc = self._buscar_uvr(proc.cups, liq, proc.descripcion)
-                if uvr:
-                    proc.valor_base = uvr
-                    if not proc.descripcion and desc:
-                        proc.descripcion = desc
-            proc.aplicar_porcentajes()
-            proc.save()
-        liq.calcular_totales()
+
+        if liq.editable:
+            for proc in liq.procedimientos.all():
+                # Si el UVR es 0, intentar re-leer del tarifario de la aseguradora
+                if float(proc.valor_base or 0) == 0:
+                    uvr, desc = self._buscar_uvr(proc.cups, liq, proc.descripcion)
+                    if uvr:
+                        proc.valor_base = uvr
+                        if not proc.descripcion and desc:
+                            proc.descripcion = desc
+                        proc.save(update_fields=['valor_base', 'descripcion'])
+            liq.reordenar_por_uvr()
         return Response(LiquidacionCirugiaSerializer(liq).data)
 
     @action(detail=False, methods=['get'], url_path='buscar-dqx')

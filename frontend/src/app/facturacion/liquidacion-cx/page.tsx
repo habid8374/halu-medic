@@ -42,6 +42,7 @@ interface Liquidacion {
   tipo_tarifario: string
   tipo_liquidacion: string
   estado: string
+  ajuste_pct: string
   observaciones: string
   total_cirujano: string; total_anestesiologo: string; total_ayudante: string
   total_quirofano: string; total_materiales: string; total_general: string
@@ -91,8 +92,8 @@ export default function LiquidacionCXPage() {
   const [addCups, setAddCups]         = useState('')
   const [addDesc, setAddDesc]         = useState('')
   const [addValor, setAddValor]       = useState('')
-  const [addOrden, setAddOrden]       = useState('')
   const [adding, setAdding]           = useState(false)
+  const [ajusteInput, setAjusteInput] = useState('')
 
   // ── Search DQX ──────────────────────────────────────────────────────────────
   const handleSearch = useCallback(async () => {
@@ -198,17 +199,15 @@ export default function LiquidacionCXPage() {
     if (!liq || !addCups) return
     setAdding(true)
     try {
-      await liquidacionCxAPI.agregarProcedimiento(liq.id, {
+      const res = await liquidacionCxAPI.agregarProcedimiento(liq.id, {
         cups: addCups,
         descripcion: addDesc,
         valor_base: addValor || 0,
-        orden: addOrden ? Number(addOrden) : undefined,
       })
-      const res = await liquidacionCxAPI.get(liq.id)
       setLiq(res.data)
       setShowAddForm(false)
-      setAddCups(''); setAddDesc(''); setAddValor(''); setAddOrden('')
-      toast.success('Procedimiento agregado')
+      setAddCups(''); setAddDesc(''); setAddValor('')
+      toast.success('Procedimiento agregado — orden asignado por UVR')
     } catch (e) {
       toast.error(mensajeError(e))
     } finally {
@@ -221,16 +220,11 @@ export default function LiquidacionCXPage() {
     if (!liq) return
     if (!confirm('¿Eliminar este procedimiento?')) return
     try {
-      await liquidacionCxAPI.update(liq.id + '/procedimientos/' + procId, {})
-      // Refetch
-      const res = await liquidacionCxAPI.get(liq.id)
+      const res = await liquidacionCxAPI.eliminarProcedimiento(liq.id, procId)
       setLiq(res.data)
-    } catch {
-      // fallback: just refetch
-      try {
-        const res = await liquidacionCxAPI.get(liq.id)
-        setLiq(res.data)
-      } catch { /* ignore */ }
+      toast.success('Procedimiento eliminado')
+    } catch (e) {
+      toast.error(mensajeError(e))
     }
   }
 
@@ -240,6 +234,12 @@ export default function LiquidacionCXPage() {
     await recalcular({ estado: liq.estado === 'borrador' ? 'finalizada' : 'borrador' })
     toast.success(liq.estado === 'borrador' ? 'Liquidación finalizada' : 'Volvió a borrador')
   }
+
+  const editable = liq?.estado === 'borrador'
+
+  useEffect(() => {
+    if (liq) setAjusteInput(String(Number(liq.ajuste_pct ?? 0)))
+  }, [liq?.id, liq?.ajuste_pct])
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -362,8 +362,9 @@ export default function LiquidacionCXPage() {
                   <button
                     key={t.value}
                     onClick={() => onChangeTarifario(t.value)}
+                    disabled={!editable}
                     className={clsx(
-                      'px-3 py-1.5 text-xs rounded font-medium border transition-colors',
+                      'px-3 py-1.5 text-xs rounded font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
                       liq.tipo_tarifario === t.value
                         ? 'bg-halu-600 text-white border-halu-600'
                         : 'bg-white text-slate-600 border-slate-300 hover:border-halu-400'
@@ -380,12 +381,32 @@ export default function LiquidacionCXPage() {
               <select
                 value={liq.tipo_liquidacion}
                 onChange={e => onChangeTipoLiq(e.target.value)}
-                className="text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-halu-500 pr-6"
+                disabled={!editable}
+                className="text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-halu-500 pr-6 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {TIPOS_LIQUIDACION.map(t => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">
+                Ajuste % {liq.tipo_tarifario === 'SOAT' && <span className="text-amber-600">(SOAT = ISS 2001 + X%)</span>}
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={ajusteInput}
+                onChange={e => setAjusteInput(e.target.value)}
+                onBlur={() => {
+                  const v = ajusteInput === '' ? '0' : ajusteInput
+                  if (Number(v) !== Number(liq.ajuste_pct)) recalcular({ ajuste_pct: v })
+                }}
+                disabled={!editable}
+                className="w-24 text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-halu-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                placeholder="0"
+              />
             </div>
 
             <div className="flex items-end gap-2 ml-auto">
@@ -420,22 +441,19 @@ export default function LiquidacionCXPage() {
           <div className="bg-white border rounded-lg overflow-hidden">
             <div className="px-3 py-2 bg-slate-50 border-b flex items-center justify-between">
               <span className="text-xs font-medium text-slate-700">Procedimientos ({liq.procedimientos.length})</span>
-              <button
-                onClick={() => setShowAddForm(v => !v)}
-                className="flex items-center gap-1 text-xs text-halu-600 hover:text-halu-800 font-medium"
-              >
-                <Plus size={13} /> Agregar procedimiento
-              </button>
+              {editable && (
+                <button
+                  onClick={() => setShowAddForm(v => !v)}
+                  className="flex items-center gap-1 text-xs text-halu-600 hover:text-halu-800 font-medium"
+                >
+                  <Plus size={13} /> Agregar procedimiento
+                </button>
+              )}
             </div>
 
             {/* Add form */}
-            {showAddForm && (
+            {showAddForm && editable && (
               <div className="px-3 py-2 bg-blue-50 border-b flex flex-wrap gap-2 items-end">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-0.5">Orden</label>
-                  <input type="number" min="1" value={addOrden} onChange={e => setAddOrden(e.target.value)}
-                    placeholder="Auto" className="w-16 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-halu-500" />
-                </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-0.5">CUPS *</label>
                   <input value={addCups} onChange={e => setAddCups(e.target.value)}
@@ -492,8 +510,11 @@ export default function LiquidacionCXPage() {
                     </tr>
                   )}
                   {liq.procedimientos.map(p => (
-                    <tr key={p.id} className="hover:bg-slate-50">
-                      <td className="px-2 py-1.5 font-mono font-bold text-slate-500">{p.orden}</td>
+                    <tr key={p.id} className={clsx('hover:bg-slate-50', p.orden > 3 && 'bg-amber-50')}>
+                      <td className="px-2 py-1.5 font-mono font-bold text-slate-500">
+                        {p.orden}
+                        {p.orden > 3 && <span title="Del 4° procedimiento en adelante no liquida (0%)" className="ml-1 text-amber-600">⚠</span>}
+                      </td>
                       <td className="px-2 py-1.5 font-mono">{p.cups}</td>
                       <td className="px-2 py-1.5 text-slate-600 max-w-[160px] truncate">{p.descripcion}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-slate-500">{Number(p.valor_base).toLocaleString('es-CO')} uvr</td>
@@ -509,14 +530,21 @@ export default function LiquidacionCXPage() {
                       <td className="px-2 py-1.5 text-right font-mono text-orange-700">{fmt(p.valor_materiales)}</td>
                       <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-800">{fmt(p.subtotal)}</td>
                       <td className="px-2 py-1.5 text-center">
-                        <button onClick={() => handleEliminar(p.id)} className="text-red-400 hover:text-red-600">
-                          <Trash2 size={12} />
-                        </button>
+                        {editable && (
+                          <button onClick={() => handleEliminar(p.id)} className="text-red-400 hover:text-red-600">
+                            <Trash2 size={12} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="px-3 py-1.5 bg-slate-50 border-t text-[11px] text-slate-400">
+              El orden se asigna automáticamente por UVR descendente (norma ISS: mayor UVR liquida al 100%).
+              {liq.procedimientos.some(p => p.orden > 3) &&
+                <span className="text-amber-600"> Los procedimientos del 4° en adelante liquidan en $0.</span>}
             </div>
           </div>
 
@@ -565,7 +593,10 @@ export default function LiquidacionCXPage() {
               rows={2}
               value={liq.observaciones}
               onChange={e => setLiq(prev => prev ? { ...prev, observaciones: e.target.value } : prev)}
-              onBlur={e => recalcular({ observaciones: e.target.value })}
+              onBlur={async e => {
+                try { await liquidacionCxAPI.update(liq.id, { observaciones: e.target.value }) }
+                catch (err) { toast.error(mensajeError(err)) }
+              }}
               className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-halu-500 resize-none"
               placeholder="Observaciones adicionales..."
             />

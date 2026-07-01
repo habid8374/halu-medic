@@ -1494,6 +1494,10 @@ class LiquidacionCirugia(models.Model):
     tipo_tarifario   = models.CharField(max_length=10, choices=TARIFARIO_CHOICES, default='ISS_2001')
     tipo_liquidacion = models.CharField(max_length=25, choices=TIPO_CHOICES, default='misma_via')
     estado           = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='borrador')
+    # % de ajuste contractual sobre la base (usado sobre todo en SOAT, que suele
+    # pactarse como ISS 2001 + X%). 30 = +30%. No aplica sobre porcentajes de la tabla.
+    ajuste_pct       = models.DecimalField(max_digits=6, decimal_places=2, default=0,
+                          help_text='% de ajuste sobre la base tarifaria (ej: SOAT = ISS 2001 + 30%)')
     observaciones    = models.TextField(blank=True)
     total_cirujano      = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total_anestesiologo = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -1526,6 +1530,27 @@ class LiquidacionCirugia(models.Model):
         self.total_general       = sum(tots.values())
         self.save(update_fields=['total_cirujano','total_anestesiologo','total_ayudante',
                                   'total_quirofano','total_materiales','total_general','actualizado_en'])
+
+    @property
+    def editable(self):
+        return self.estado == 'borrador'
+
+    def reordenar_por_uvr(self):
+        """
+        Reasigna el orden por UVR descendente (norma ISS: el procedimiento de
+        mayor UVR liquida al 100%, los siguientes al porcentaje reducido),
+        recalcula porcentajes y totales.
+        """
+        procs = list(self.procedimientos.all().order_by('-valor_base', 'cups'))
+        # Dos pasadas para no chocar con el unique(liquidacion, orden)
+        for i, p in enumerate(procs):
+            p.orden = 1000 + i
+            p.save(update_fields=['orden'])
+        for i, p in enumerate(procs, start=1):
+            p.orden = i
+            p.aplicar_porcentajes()
+            p.save()
+        self.calcular_totales()
 
 
 class ProcedimientoLiquidacion(models.Model):
@@ -1572,12 +1597,26 @@ class ProcedimientoLiquidacion(models.Model):
             b_ayud  = (uvr * Decimal('28')).quantize(Decimal('1'))
             b_sala  = (uvr * Decimal('100')).quantize(Decimal('1'))
             b_mat   = Decimal('0')   # ISS 2004 incluye materiales en tarifa integral
-        else:  # SOAT — usa mismos multiplicadores que ISS 2001
+        else:
+            # SOAT: el manual oficial (Decreto 2423/96) liquida por grupos
+            # quirúrgicos en SMDLV. En la práctica la mayoría de convenios SOAT
+            # se pactan como ISS 2001 + X%. Aquí se usa base ISS 2001 y el
+            # ajuste contractual se aplica vía liquidacion.ajuste_pct.
             b_cir   = (uvr * Decimal('1270')).quantize(Decimal('1'))
             b_anest = (uvr * Decimal('960')).quantize(Decimal('1'))
             b_ayud  = (uvr * Decimal('360')).quantize(Decimal('1'))
             b_sala  = _sala_iss2001(uvr)
             b_mat   = _mat_iss2001(uvr)
+
+        # Ajuste contractual sobre la base (ej. SOAT = ISS 2001 + 30%)
+        ajuste = Decimal(str(self.liquidacion.ajuste_pct or 0))
+        if ajuste:
+            factor  = (Decimal('100') + ajuste) / Decimal('100')
+            b_cir   = (b_cir   * factor).quantize(Decimal('1'))
+            b_anest = (b_anest * factor).quantize(Decimal('1'))
+            b_ayud  = (b_ayud  * factor).quantize(Decimal('1'))
+            b_sala  = (b_sala  * factor).quantize(Decimal('1'))
+            b_mat   = (b_mat   * factor).quantize(Decimal('1'))
 
         # Aplicar porcentajes de la tabla de liquidación (múltiples procedimientos)
         tabla = TABLA_PCT_LIQUIDACION.get(self.liquidacion.tipo_liquidacion, {})

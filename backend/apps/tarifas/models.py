@@ -118,7 +118,9 @@ class ItemTarifario(models.Model):
     manual      = models.ForeignKey(ManualTarifario, on_delete=models.CASCADE, related_name='items')
     cups        = models.CharField(max_length=15, help_text='Código CUPS (o código paquete, ej: 876122-1)')
     descripcion = models.CharField(max_length=400, blank=True, help_text='Descripción del procedimiento o paquete')
-    valor_base  = models.DecimalField(max_digits=14, decimal_places=2, help_text='Valor base del manual')
+    valor_base  = models.DecimalField(max_digits=14, decimal_places=2, help_text='Valor base del manual (pesos)')
+    uvr         = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                       help_text='Puntos UVR del procedimiento (para liquidación de cirugías ISS/SOAT)')
     es_paquete  = models.BooleanField(default=False,
                                        help_text='True si este ítem es un paquete tarifario con sufijo')
     cups_rips   = models.CharField(max_length=10, blank=True,
