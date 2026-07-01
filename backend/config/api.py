@@ -4217,12 +4217,25 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
 
     def _buscar_uvr(self, cups, liq, desc_fallback=''):
         """
-        Busca los PUNTOS UVR del CUPS (campo ItemTarifario.uvr).
-        Nunca usa valor_base: ese campo está en pesos y mezclarlo con la
-        fórmula UVR × multiplicador produce valores absurdos.
+        Busca los PUNTOS UVR del CUPS en el tarifario.
+        Prioridad: campo ItemTarifario.uvr; si no está diligenciado se usa
+        valor_base (los manuales ISS cargados en el sistema guardan ahí los
+        puntos UVR del procedimiento).
+        Umbral de sanidad: un valor > 20.000 no puede ser UVR (ninguna
+        cirugía supera ese puntaje) — se asume que es un precio en pesos
+        y se descarta para no producir liquidaciones absurdas.
         """
         from apps.tarifas.models import ItemTarifario
         desc = desc_fallback
+        MAX_UVR = 20000
+
+        def uvr_de(item):
+            if item.uvr and float(item.uvr) > 0:
+                return float(item.uvr)
+            vb = float(item.valor_base or 0)
+            if 0 < vb <= MAX_UVR:
+                return vb
+            return 0
 
         # Cadena: ingreso → paciente → aseguradora → tarifario
         try:
@@ -4232,15 +4245,17 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
                 if item:
                     if not desc:
                         desc = item.descripcion or desc
-                    if item.uvr and float(item.uvr) > 0:
-                        return float(item.uvr), desc
+                    valor = uvr_de(item)
+                    if valor:
+                        return valor, desc
         except Exception:
             pass
 
-        # Fallback: cualquier ítem con UVR registrado para ese CUPS
-        item = ItemTarifario.objects.filter(cups=cups, uvr__isnull=False, uvr__gt=0).order_by('-uvr').first()
-        if item:
-            return float(item.uvr), item.descripcion or desc
+        # Fallback: cualquier ítem tarifario con ese CUPS
+        for item in ItemTarifario.objects.filter(cups=cups).order_by('-valor_base'):
+            valor = uvr_de(item)
+            if valor:
+                return valor, item.descripcion or desc
         return 0, desc
 
     def perform_create(self, serializer):
