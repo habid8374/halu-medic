@@ -1,10 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { programacionCxAPI, mensajeError } from '@/lib/api'
-import { ProgramacionCx, EstadoProgramacionCx } from '@/types'
-import { PageHeader, Spinner, EmptyState } from '@/components/ui'
-import { Scissors, FileText, Search } from 'lucide-react'
+import { programacionCxAPI, medicosAPI, mensajeError } from '@/lib/api'
+import { ProgramacionCx, EstadoProgramacionCx, MedicoProfesional } from '@/types'
+import { PageHeader, Spinner, EmptyState, Button } from '@/components/ui'
+import BuscadorPacienteIngreso, { PacienteResumen, IngresoResumen } from '@/components/ui/BuscadorPacienteIngreso'
+import ModalProgramacionCx from '@/components/salud/ModalProgramacionCx'
+import { Scissors, FileText, Search, PlusCircle, Pencil } from 'lucide-react'
 import clsx from 'clsx'
 
 const ESTADO_BADGE: Record<EstadoProgramacionCx, { label: string; color: string }> = {
@@ -22,8 +24,13 @@ export default function ProgramacionCxPage() {
   const [estado, setEstado]   = useState<EstadoProgramacionCx | ''>('')
   const [fecha, setFecha]     = useState('')
   const [busq, setBusq]       = useState('')
+  const [medicos, setMedicos] = useState<MedicoProfesional[]>([])
+  // Flujo programar: buscar paciente → modal
+  const [buscandoPaciente, setBuscandoPaciente] = useState(false)
+  const [nuevoPara, setNuevoPara] = useState<{ paciente: PacienteResumen; ingreso: IngresoResumen | null } | null>(null)
+  const [editandoCx, setEditandoCx] = useState<ProgramacionCx | null>(null)
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
     setLoading(true)
     const params: Record<string, string> = {}
     if (estado) params.estado = estado
@@ -33,6 +40,14 @@ export default function ProgramacionCxPage() {
       .catch(e => console.error(mensajeError(e)))
       .finally(() => setLoading(false))
   }, [estado, fecha])
+
+  useEffect(() => { cargar() }, [cargar])
+
+  useEffect(() => {
+    medicosAPI.list()
+      .then(({ data }) => setMedicos(Array.isArray(data) ? data : data.results ?? []))
+      .catch(() => {/* silencioso */})
+  }, [])
 
   const filtrados = busq
     ? lista.filter(cx =>
@@ -44,10 +59,15 @@ export default function ProgramacionCxPage() {
 
   return (
     <div className="page-padding animate-fade-in">
-      <PageHeader
-        title="Programación quirúrgica"
-        description="Agenda de cirugías programadas"
-      />
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <PageHeader
+          title="Programación quirúrgica"
+          description="Agenda de cirugías programadas"
+        />
+        <Button onClick={() => setBuscandoPaciente(true)}>
+          <PlusCircle className="w-4 h-4" /> Programar cirugía
+        </Button>
+      </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 space-y-3">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -83,7 +103,7 @@ export default function ProgramacionCxPage() {
       {loading && <div className="flex justify-center py-16"><Spinner size="lg" /></div>}
 
       {!loading && filtrados.length === 0 && (
-        <EmptyState icon={<Scissors className="w-8 h-8" />}
+        <EmptyState
           title="Sin cirugías programadas"
           description="No hay cirugías en el período seleccionado" />
       )}
@@ -120,17 +140,62 @@ export default function ProgramacionCxPage() {
                     {cx.numero_autorizacion && <span>Auth: {cx.numero_autorizacion}</span>}
                   </div>
                 </div>
-                <Link href={`/salud/cx/${cx.id}/descripcion`}>
-                  <button className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all whitespace-nowrap">
-                    <FileText className="w-3.5 h-3.5" />
-                    Informe operatorio
-                  </button>
-                </Link>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  {cx.estado !== 'cancelada' && (
+                    <button
+                      onClick={() => setEditandoCx(cx)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all whitespace-nowrap"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Editar
+                    </button>
+                  )}
+                  <Link href={`/salud/cx/${cx.id}/descripcion`}>
+                    <button className="w-full flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all whitespace-nowrap">
+                      <FileText className="w-3.5 h-3.5" />
+                      Informe operatorio
+                    </button>
+                  </Link>
+                </div>
               </div>
             </div>
           )
         })}
       </div>
+
+      {/* Buscar paciente para programar */}
+      {buscandoPaciente && (
+        <BuscadorPacienteIngreso
+          titulo="Programar cirugía — buscar paciente"
+          onClose={() => setBuscandoPaciente(false)}
+          onSelect={(paciente, ingreso) => {
+            setBuscandoPaciente(false)
+            setNuevoPara({ paciente, ingreso })
+          }}
+        />
+      )}
+
+      {/* Modal crear */}
+      {nuevoPara && (
+        <ModalProgramacionCx
+          pacienteId={nuevoPara.paciente.id}
+          pacienteNombre={nuevoPara.paciente.nombre_completo}
+          ingresoId={nuevoPara.ingreso?.id ?? null}
+          medicos={medicos}
+          onClose={() => setNuevoPara(null)}
+          onSaved={() => { setNuevoPara(null); cargar() }}
+        />
+      )}
+
+      {/* Modal editar */}
+      {editandoCx && (
+        <ModalProgramacionCx
+          cx={editandoCx}
+          medicos={medicos}
+          onClose={() => setEditandoCx(null)}
+          onSaved={() => { setEditandoCx(null); cargar() }}
+        />
+      )}
     </div>
   )
 }

@@ -361,6 +361,7 @@ export interface ProgramacionCx {
   paciente_nombre: string
   cups_principal: string
   descripcion_cups: string
+  cups_secundarios?: { cups: string; descripcion: string }[]
   diagnostico_preop: string
   desc_diagnostico_preop: string
   tipo_cirugia: 'electiva' | 'urgente' | 'emergencia'
