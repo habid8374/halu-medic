@@ -152,6 +152,43 @@ class ItemTarifario(models.Model):
         return round(self.valor_base * factor, 0)
 
 
+class GrupoQuirurgicoSOAT(models.Model):
+    """
+    Tabla de liquidación quirúrgica del manual SOAT (Decreto 2423/1996).
+    Valores en SMDLV (salarios mínimos diarios legales vigentes) por grupo
+    quirúrgico. Grupos 2-13 y especiales 20-23.
+
+    Los valores SMDLV deben cargarse desde el manual oficial vigente
+    (el decreto se actualiza por SMDLV/UVT cada año automáticamente
+    al multiplicar por el valor del día del año de la atención).
+    """
+    GRUPOS = [(g, f'Grupo {g}') for g in list(range(2, 14)) + [20, 21, 22, 23]]
+
+    grupo               = models.PositiveSmallIntegerField(choices=GRUPOS, unique=True)
+    smdlv_cirujano      = models.DecimalField(max_digits=8, decimal_places=2, default=0,
+                            help_text='Honorarios cirujano en SMDLV')
+    smdlv_anestesiologo = models.DecimalField(max_digits=8, decimal_places=2, default=0,
+                            help_text='Honorarios anestesiólogo en SMDLV')
+    smdlv_ayudante      = models.DecimalField(max_digits=8, decimal_places=2, default=0,
+                            help_text='Ayudantía quirúrgica en SMDLV (grupos ≤5 no liquidan ayudante)')
+    smdlv_sala          = models.DecimalField(max_digits=8, decimal_places=2, default=0,
+                            help_text='Derechos de sala en SMDLV')
+    smdlv_materiales    = models.DecimalField(max_digits=8, decimal_places=2, default=0,
+                            help_text='Materiales de sutura y curación en SMDLV')
+
+    class Meta:
+        ordering = ['grupo']
+        verbose_name = 'Grupo quirúrgico SOAT'
+        verbose_name_plural = 'Grupos quirúrgicos SOAT'
+
+    def __str__(self):
+        return f'Grupo {self.grupo}'
+
+    @property
+    def configurado(self):
+        return any([self.smdlv_cirujano, self.smdlv_anestesiologo, self.smdlv_sala])
+
+
 class TarifaMedicamento(models.Model):
     """
     Tarifa de un medicamento CUM dentro de un manual tarifario.

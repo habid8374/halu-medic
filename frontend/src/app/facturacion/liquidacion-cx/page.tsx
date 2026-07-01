@@ -28,6 +28,7 @@ interface Procedimiento {
   cups: string
   descripcion: string
   valor_base: string
+  grupo_soat: number | null
   pct_cirujano: string; pct_anestesiologo: string; pct_ayudante: string
   pct_quirofano: string; pct_materiales: string
   valor_cirujano: string; valor_anestesiologo: string; valor_ayudante: string
@@ -43,6 +44,7 @@ interface Liquidacion {
   tipo_liquidacion: string
   estado: string
   ajuste_pct: string
+  valor_smdlv: string
   observaciones: string
   total_cirujano: string; total_anestesiologo: string; total_ayudante: string
   total_quirofano: string; total_materiales: string; total_general: string
@@ -92,8 +94,10 @@ export default function LiquidacionCXPage() {
   const [addCups, setAddCups]         = useState('')
   const [addDesc, setAddDesc]         = useState('')
   const [addValor, setAddValor]       = useState('')
+  const [addGrupo, setAddGrupo]       = useState('')
   const [adding, setAdding]           = useState(false)
   const [ajusteInput, setAjusteInput] = useState('')
+  const [smdlvInput, setSmdlvInput]   = useState('')
 
   // ── Search DQX ──────────────────────────────────────────────────────────────
   const handleSearch = useCallback(async () => {
@@ -203,10 +207,11 @@ export default function LiquidacionCXPage() {
         cups: addCups,
         descripcion: addDesc,
         valor_base: addValor || 0,
+        grupo_soat: addGrupo || null,
       })
       setLiq(res.data)
       setShowAddForm(false)
-      setAddCups(''); setAddDesc(''); setAddValor('')
+      setAddCups(''); setAddDesc(''); setAddValor(''); setAddGrupo('')
       toast.success('Procedimiento agregado — orden asignado por UVR')
     } catch (e) {
       toast.error(mensajeError(e))
@@ -238,8 +243,11 @@ export default function LiquidacionCXPage() {
   const editable = liq?.estado === 'borrador'
 
   useEffect(() => {
-    if (liq) setAjusteInput(String(Number(liq.ajuste_pct ?? 0)))
-  }, [liq?.id, liq?.ajuste_pct])
+    if (liq) {
+      setAjusteInput(String(Number(liq.ajuste_pct ?? 0)))
+      setSmdlvInput(String(Number(liq.valor_smdlv ?? 0)))
+    }
+  }, [liq?.id, liq?.ajuste_pct, liq?.valor_smdlv])
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -390,9 +398,28 @@ export default function LiquidacionCXPage() {
               </select>
             </div>
 
+            {liq.tipo_tarifario === 'SOAT' && (
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Valor SMDLV del año</label>
+                <input
+                  type="number"
+                  step="1"
+                  value={smdlvInput}
+                  onChange={e => setSmdlvInput(e.target.value)}
+                  onBlur={() => {
+                    const v = smdlvInput === '' ? '0' : smdlvInput
+                    if (Number(v) !== Number(liq.valor_smdlv)) recalcular({ valor_smdlv: v })
+                  }}
+                  disabled={!editable}
+                  className="w-28 text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-halu-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  placeholder="ej. 54117"
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-xs text-slate-500 mb-1">
-                Ajuste % {liq.tipo_tarifario === 'SOAT' && <span className="text-amber-600">(SOAT = ISS 2001 + X%)</span>}
+                Ajuste % {liq.tipo_tarifario === 'SOAT' && <span className="text-amber-600">(contractual)</span>}
               </label>
               <input
                 type="number"
@@ -464,11 +491,24 @@ export default function LiquidacionCXPage() {
                   <input value={addDesc} onChange={e => setAddDesc(e.target.value)}
                     placeholder="Descripción (opcional)" className="w-48 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-halu-500" />
                 </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-0.5">Puntos UVR</label>
-                  <input type="number" min="0" value={addValor} onChange={e => setAddValor(e.target.value)}
-                    placeholder="0 = buscar tarifario" className="w-36 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-halu-500" />
-                </div>
+                {liq.tipo_tarifario === 'SOAT' ? (
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-0.5">Grupo Qx SOAT *</label>
+                    <select value={addGrupo} onChange={e => setAddGrupo(e.target.value)}
+                      className="w-32 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-halu-500">
+                      <option value="">Seleccione...</option>
+                      {[2,3,4,5,6,7,8,9,10,11,12,13,20,21,22,23].map(g => (
+                        <option key={g} value={g}>Grupo {g}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-0.5">Puntos UVR</label>
+                    <input type="number" min="0" value={addValor} onChange={e => setAddValor(e.target.value)}
+                      placeholder="0 = buscar tarifario" className="w-36 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-halu-500" />
+                  </div>
+                )}
                 <button onClick={handleAgregar} disabled={adding || !addCups}
                   className="flex items-center gap-1 px-3 py-1 bg-halu-600 text-white text-xs rounded hover:bg-halu-700 disabled:opacity-50">
                   {adding ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Agregar
@@ -486,7 +526,7 @@ export default function LiquidacionCXPage() {
                     <th className="px-2 py-1.5 text-left text-slate-600 font-medium w-8">#</th>
                     <th className="px-2 py-1.5 text-left text-slate-600 font-medium">CUPS</th>
                     <th className="px-2 py-1.5 text-left text-slate-600 font-medium">Descripción</th>
-                    <th className="px-2 py-1.5 text-right text-slate-600 font-medium">UVR</th>
+                    <th className="px-2 py-1.5 text-right text-slate-600 font-medium">UVR / Grupo</th>
                     <th className="px-2 py-1.5 text-right text-blue-600 font-medium">% Cir</th>
                     <th className="px-2 py-1.5 text-right text-blue-600 font-medium">Cirujano</th>
                     <th className="px-2 py-1.5 text-right text-purple-600 font-medium">% Anest</th>
@@ -517,7 +557,11 @@ export default function LiquidacionCXPage() {
                       </td>
                       <td className="px-2 py-1.5 font-mono">{p.cups}</td>
                       <td className="px-2 py-1.5 text-slate-600 max-w-[160px] truncate">{p.descripcion}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-slate-500">{Number(p.valor_base).toLocaleString('es-CO')} uvr</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-slate-500">
+                        {p.grupo_soat
+                          ? <span className="text-halu-700 font-semibold">G{p.grupo_soat}</span>
+                          : `${Number(p.valor_base).toLocaleString('es-CO')} uvr`}
+                      </td>
                       <td className="px-2 py-1.5 text-right text-blue-600">{p.pct_cirujano}%</td>
                       <td className="px-2 py-1.5 text-right font-mono text-blue-700">{fmt(p.valor_cirujano)}</td>
                       <td className="px-2 py-1.5 text-right text-purple-600">{p.pct_anestesiologo}%</td>
@@ -542,7 +586,9 @@ export default function LiquidacionCXPage() {
               </table>
             </div>
             <div className="px-3 py-1.5 bg-slate-50 border-t text-[11px] text-slate-400">
-              El orden se asigna automáticamente por UVR descendente (norma ISS: mayor UVR liquida al 100%).
+              El orden se asigna automáticamente ({liq.tipo_tarifario === 'SOAT' ? 'mayor grupo quirúrgico' : 'mayor UVR'} liquida al 100%).
+              {liq.tipo_tarifario === 'SOAT' && Number(liq.valor_smdlv) === 0 &&
+                <span className="text-amber-600"> Configure el valor SMDLV del año y los grupos quirúrgicos en Tarifas para liquidar por manual SOAT; sin ellos se usa base ISS 2001 + ajuste %.</span>}
               {liq.procedimientos.some(p => p.orden > 3) &&
                 <span className="text-amber-600"> Los procedimientos del 4° en adelante liquidan en $0.</span>}
             </div>

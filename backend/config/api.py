@@ -4102,7 +4102,7 @@ class ProcedimientoLiquidacionSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ProcedimientoLiquidacion
         fields = [
-            'id', 'orden', 'cups', 'descripcion', 'valor_base',
+            'id', 'orden', 'cups', 'descripcion', 'valor_base', 'grupo_soat',
             'pct_cirujano', 'pct_anestesiologo', 'pct_ayudante', 'pct_quirofano', 'pct_materiales',
             'valor_cirujano', 'valor_anestesiologo', 'valor_ayudante', 'valor_quirofano', 'valor_materiales',
             'subtotal',
@@ -4127,7 +4127,7 @@ class LiquidacionCirugiaSerializer(serializers.ModelSerializer):
         model  = LiquidacionCirugia
         fields = [
             'id', 'descripcion_qx', 'ingreso', 'tipo_tarifario', 'tipo_liquidacion', 'estado',
-            'ajuste_pct', 'observaciones',
+            'ajuste_pct', 'valor_smdlv', 'observaciones',
             'total_cirujano', 'total_anestesiologo', 'total_ayudante',
             'total_quirofano', 'total_materiales', 'total_general',
             'creado_en', 'actualizado_en',
@@ -4256,22 +4256,24 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
         cups  = request.data.get('cups', '')
         desc  = request.data.get('descripcion', '')
         valor = request.data.get('valor_base', 0)
+        grupo = request.data.get('grupo_soat') or None
 
         if not float(valor or 0):
             valor, desc_found = self._buscar_uvr(cups, liq, desc)
             desc = desc or desc_found
 
-        # El orden definitivo lo asigna reordenar_por_uvr (mayor UVR = orden 1)
+        # El orden definitivo lo asigna reordenar_por_uvr (mayor UVR/grupo = orden 1)
         proc = ProcedimientoLiquidacion(
             liquidacion=liq, orden=liq.procedimientos.count() + 1,
             cups=cups, descripcion=desc, valor_base=valor,
+            grupo_soat=int(grupo) if grupo else None,
         )
         proc.aplicar_porcentajes()
         proc.save()
         liq.reordenar_por_uvr()
         return Response(LiquidacionCirugiaSerializer(liq).data, status=201)
 
-    @action(detail=True, methods=['delete'],
+    @action(detail=True, methods=['delete', 'patch'],
             url_path='procedimientos/(?P<proc_id>[^/.]+)')
     def eliminar_procedimiento(self, request, pk=None, proc_id=None):
         liq = self.get_object()
@@ -4280,6 +4282,20 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
                 {'error': f'La liquidación está {liq.get_estado_display().lower()}. Reábrala para modificarla.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if request.method == 'PATCH':
+            proc = liq.procedimientos.filter(id=proc_id).first()
+            if not proc:
+                return Response({'error': 'Procedimiento no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+            if 'valor_base' in request.data:
+                proc.valor_base = request.data['valor_base'] or 0
+            if 'grupo_soat' in request.data:
+                g = request.data['grupo_soat']
+                proc.grupo_soat = int(g) if g else None
+            if 'descripcion' in request.data:
+                proc.descripcion = request.data['descripcion']
+            proc.save()
+            liq.reordenar_por_uvr()
+            return Response(LiquidacionCirugiaSerializer(liq).data)
         deleted, _ = liq.procedimientos.filter(id=proc_id).delete()
         if not deleted:
             return Response({'error': 'Procedimiento no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
@@ -4301,7 +4317,7 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
             liq.save(update_fields=['observaciones', 'actualizado_en'])
 
         # Cambios que alteran valores: solo en borrador
-        campos_valor = [c for c in ('tipo_tarifario', 'tipo_liquidacion', 'ajuste_pct') if c in request.data]
+        campos_valor = [c for c in ('tipo_tarifario', 'tipo_liquidacion', 'ajuste_pct', 'valor_smdlv') if c in request.data]
         if campos_valor and not liq.editable:
             return Response(
                 {'error': f'La liquidación está {liq.get_estado_display().lower()}. Reábrala para modificar valores.'},

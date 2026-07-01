@@ -1494,10 +1494,13 @@ class LiquidacionCirugia(models.Model):
     tipo_tarifario   = models.CharField(max_length=10, choices=TARIFARIO_CHOICES, default='ISS_2001')
     tipo_liquidacion = models.CharField(max_length=25, choices=TIPO_CHOICES, default='misma_via')
     estado           = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='borrador')
-    # % de ajuste contractual sobre la base (usado sobre todo en SOAT, que suele
-    # pactarse como ISS 2001 + X%). 30 = +30%. No aplica sobre porcentajes de la tabla.
+    # % de ajuste contractual sobre la base. 30 = +30%. No aplica sobre porcentajes de la tabla.
     ajuste_pct       = models.DecimalField(max_digits=6, decimal_places=2, default=0,
-                          help_text='% de ajuste sobre la base tarifaria (ej: SOAT = ISS 2001 + 30%)')
+                          help_text='% de ajuste contractual sobre la base tarifaria')
+    # Valor del SMDLV del año de la atención (para SOAT por grupos quirúrgicos).
+    # SMDLV = salario mínimo mensual / 30. Editable por liquidación.
+    valor_smdlv      = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                          help_text='Valor del SMDLV del año de atención (SOAT). 0 = no configurado')
     observaciones    = models.TextField(blank=True)
     total_cirujano      = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total_anestesiologo = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -1541,7 +1544,14 @@ class LiquidacionCirugia(models.Model):
         mayor UVR liquida al 100%, los siguientes al porcentaje reducido),
         recalcula porcentajes y totales.
         """
-        procs = list(self.procedimientos.all().order_by('-valor_base', 'cups'))
+        if self.tipo_tarifario == 'SOAT':
+            # SOAT: la intervención mayor es la de mayor grupo quirúrgico
+            procs = sorted(
+                self.procedimientos.all(),
+                key=lambda p: (-(p.grupo_soat or 0), -p.valor_base, p.cups),
+            )
+        else:
+            procs = list(self.procedimientos.all().order_by('-valor_base', 'cups'))
         # Dos pasadas para no chocar con el unique(liquidacion, orden)
         for i, p in enumerate(procs):
             p.orden = 1000 + i
@@ -1556,10 +1566,13 @@ class LiquidacionCirugia(models.Model):
 class ProcedimientoLiquidacion(models.Model):
     id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     liquidacion  = models.ForeignKey(LiquidacionCirugia, on_delete=models.CASCADE, related_name='procedimientos')
-    orden        = models.PositiveSmallIntegerField(help_text='1=mayor UVR, 2, 3...')
+    orden        = models.PositiveSmallIntegerField(help_text='1=mayor UVR/grupo, 2, 3...')
     cups         = models.CharField(max_length=15)
     descripcion  = models.CharField(max_length=300, blank=True)
     valor_base   = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # Grupo quirúrgico SOAT (2-13, 20-23). Solo aplica con tarifario SOAT.
+    grupo_soat   = models.PositiveSmallIntegerField(null=True, blank=True,
+                     help_text='Grupo quirúrgico del manual SOAT (Decreto 2423/96)')
     pct_cirujano      = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     pct_anestesiologo = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     pct_ayudante      = models.DecimalField(max_digits=6, decimal_places=2, default=0)
@@ -1598,15 +1611,28 @@ class ProcedimientoLiquidacion(models.Model):
             b_sala  = (uvr * Decimal('100')).quantize(Decimal('1'))
             b_mat   = Decimal('0')   # ISS 2004 incluye materiales en tarifa integral
         else:
-            # SOAT: el manual oficial (Decreto 2423/96) liquida por grupos
-            # quirúrgicos en SMDLV. En la práctica la mayoría de convenios SOAT
-            # se pactan como ISS 2001 + X%. Aquí se usa base ISS 2001 y el
-            # ajuste contractual se aplica vía liquidacion.ajuste_pct.
-            b_cir   = (uvr * Decimal('1270')).quantize(Decimal('1'))
-            b_anest = (uvr * Decimal('960')).quantize(Decimal('1'))
-            b_ayud  = (uvr * Decimal('360')).quantize(Decimal('1'))
-            b_sala  = _sala_iss2001(uvr)
-            b_mat   = _mat_iss2001(uvr)
+            # SOAT (Decreto 2423/96): liquida por grupo quirúrgico en SMDLV.
+            # Base = SMDLV asignados al grupo × valor del SMDLV del año de atención.
+            # La tabla de grupos (GrupoQuirurgicoSOAT) se administra en Tarifas.
+            b_cir = b_anest = b_ayud = b_sala = b_mat = Decimal('0')
+            smdlv = Decimal(str(self.liquidacion.valor_smdlv or 0))
+            if self.grupo_soat and smdlv > 0:
+                from apps.tarifas.models import GrupoQuirurgicoSOAT
+                fila = GrupoQuirurgicoSOAT.objects.filter(grupo=self.grupo_soat).first()
+                if fila:
+                    b_cir   = (fila.smdlv_cirujano      * smdlv).quantize(Decimal('1'))
+                    b_anest = (fila.smdlv_anestesiologo * smdlv).quantize(Decimal('1'))
+                    b_ayud  = (fila.smdlv_ayudante      * smdlv).quantize(Decimal('1'))
+                    b_sala  = (fila.smdlv_sala          * smdlv).quantize(Decimal('1'))
+                    b_mat   = (fila.smdlv_materiales    * smdlv).quantize(Decimal('1'))
+            if not any([b_cir, b_anest, b_sala]):
+                # Fallback: sin grupo/SMDLV configurado, base ISS 2001 por UVR
+                # (convenios SOAT pactados como ISS + X% vía ajuste_pct)
+                b_cir   = (uvr * Decimal('1270')).quantize(Decimal('1'))
+                b_anest = (uvr * Decimal('960')).quantize(Decimal('1'))
+                b_ayud  = (uvr * Decimal('360')).quantize(Decimal('1'))
+                b_sala  = _sala_iss2001(uvr)
+                b_mat   = _mat_iss2001(uvr)
 
         # Ajuste contractual sobre la base (ej. SOAT = ISS 2001 + 30%)
         ajuste = Decimal(str(self.liquidacion.ajuste_pct or 0))

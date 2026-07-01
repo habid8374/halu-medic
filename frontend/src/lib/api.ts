@@ -593,6 +593,8 @@ export const liquidacionCxAPI = {
     api.post(`/api/liquidacion/cirugias/${id}/agregar-procedimiento/`, data),
   eliminarProcedimiento: (id: string, procId: string) =>
     api.delete(`/api/liquidacion/cirugias/${id}/procedimientos/${procId}/`),
+  editarProcedimiento: (id: string, procId: string, data: Record<string, unknown>) =>
+    api.patch(`/api/liquidacion/cirugias/${id}/procedimientos/${procId}/`, data),
   recalcular: (id: string, data: Record<string, unknown>) =>
     api.post(`/api/liquidacion/cirugias/${id}/recalcular/`, data),
   buscarDQX: (q: string) => api.get('/api/liquidacion/cirugias/buscar-dqx/', { params: { q } }),
