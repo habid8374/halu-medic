@@ -4347,6 +4347,32 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
             liq.save()
 
         if liq.editable:
+            # Sincronizar con el DQX: agregar procedimientos (principal +
+            # secundarios) que aún no estén en la liquidación
+            dqx = liq.descripcion_qx
+            if dqx:
+                existentes = set(liq.procedimientos.values_list('cups', flat=True))
+                fuentes = []
+                if dqx.cups_principal:
+                    fuentes.append((dqx.cups_principal, dqx.descripcion_procedimiento or ''))
+                # Secundarios del DQX; si el DQX no los tiene (creado antes de
+                # esta función), caer a los de la programación
+                secundarios = dqx.cups_secundarios or (
+                    dqx.programacion.cups_secundarios if dqx.programacion else []
+                ) or []
+                for extra in secundarios[:2]:
+                    cups_extra = (extra or {}).get('cups', '')
+                    if cups_extra:
+                        fuentes.append((cups_extra, (extra or {}).get('descripcion', '')))
+                for cups, desc_src in fuentes:
+                    if cups in existentes:
+                        continue
+                    valor, desc = self._buscar_uvr(cups, liq, desc_src)
+                    ProcedimientoLiquidacion.objects.create(
+                        liquidacion=liq, orden=liq.procedimientos.count() + 1,
+                        cups=cups, descripcion=desc, valor_base=valor,
+                    )
+                    existentes.add(cups)
             for proc in liq.procedimientos.all():
                 # Si el UVR es 0, intentar re-leer del tarifario de la aseguradora
                 if float(proc.valor_base or 0) == 0:

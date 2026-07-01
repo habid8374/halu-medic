@@ -220,6 +220,17 @@ export default function LiquidacionCXPage() {
     }
   }
 
+  // ── Editar UVR/grupo de un procedimiento ────────────────────────────────────
+  const handleEditarProc = async (procId: string, data: Record<string, unknown>) => {
+    if (!liq) return
+    try {
+      const res = await liquidacionCxAPI.editarProcedimiento(liq.id, procId, data)
+      setLiq(res.data)
+    } catch (e) {
+      toast.error(mensajeError(e))
+    }
+  }
+
   // ── Eliminar procedimiento ──────────────────────────────────────────────────
   const handleEliminar = async (procId: string) => {
     if (!liq) return
@@ -558,9 +569,39 @@ export default function LiquidacionCXPage() {
                       <td className="px-2 py-1.5 font-mono">{p.cups}</td>
                       <td className="px-2 py-1.5 text-slate-600 max-w-[160px] truncate">{p.descripcion}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-slate-500">
-                        {p.grupo_soat
-                          ? <span className="text-halu-700 font-semibold">G{p.grupo_soat}</span>
-                          : `${Number(p.valor_base).toLocaleString('es-CO')} uvr`}
+                        {liq.tipo_tarifario === 'SOAT' ? (
+                          editable ? (
+                            <select
+                              key={`${p.id}-${p.grupo_soat ?? ''}`}
+                              defaultValue={p.grupo_soat ?? ''}
+                              onChange={e => handleEditarProc(p.id, { grupo_soat: e.target.value || null })}
+                              className="w-16 text-xs border rounded px-1 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-halu-500"
+                            >
+                              <option value="">—</option>
+                              {[2,3,4,5,6,7,8,9,10,11,12,13,20,21,22,23].map(g => (
+                                <option key={g} value={g}>G{g}</option>
+                              ))}
+                            </select>
+                          ) : (p.grupo_soat ? <span className="text-halu-700 font-semibold">G{p.grupo_soat}</span> : '—')
+                        ) : (
+                          editable ? (
+                            <input
+                              key={`${p.id}-${p.valor_base}`}
+                              type="number"
+                              min="0"
+                              defaultValue={Number(p.valor_base)}
+                              onBlur={e => {
+                                const v = Number(e.target.value || 0)
+                                if (v !== Number(p.valor_base)) handleEditarProc(p.id, { valor_base: v })
+                              }}
+                              className={clsx(
+                                'w-20 text-xs border rounded px-1 py-0.5 text-right font-mono focus:outline-none focus:ring-1 focus:ring-halu-500',
+                                Number(p.valor_base) === 0 && 'border-amber-400 bg-amber-50'
+                              )}
+                              title="Puntos UVR — editar y salir del campo para recalcular"
+                            />
+                          ) : `${Number(p.valor_base).toLocaleString('es-CO')} uvr`
+                        )}
                       </td>
                       <td className="px-2 py-1.5 text-right text-blue-600">{p.pct_cirujano}%</td>
                       <td className="px-2 py-1.5 text-right font-mono text-blue-700">{fmt(p.valor_cirujano)}</td>
