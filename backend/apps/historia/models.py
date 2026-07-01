@@ -366,6 +366,10 @@ class ProgramacionCx(models.Model):
     # Procedimiento
     cups_principal        = models.CharField(max_length=10, help_text='CUPS del procedimiento principal')
     descripcion_cups      = models.CharField(max_length=300, blank=True)
+    # Hasta 2 procedimientos adicionales en el mismo acto quirúrgico:
+    # [{"cups": "...", "descripcion": "..."}]
+    cups_secundarios      = models.JSONField(default=list, blank=True,
+                              help_text='Procedimientos adicionales (máx. 2) del mismo acto quirúrgico')
     diagnostico_preop     = models.CharField(max_length=10, blank=True, help_text='CIE-10 preoperatorio')
     desc_diagnostico_preop = models.CharField(max_length=300, blank=True)
     tipo_cirugia          = models.CharField(max_length=15, choices=TIPO_CIRUGIA_CHOICES,
@@ -438,6 +442,9 @@ class DescripcionQuirurgica(models.Model):
     # Procedimiento
     cups_principal          = models.CharField(max_length=10)
     descripcion_procedimiento = models.CharField(max_length=300, blank=True)
+    # Procedimientos adicionales del mismo acto: [{"cups": "...", "descripcion": "..."}]
+    cups_secundarios        = models.JSONField(default=list, blank=True,
+                                help_text='Procedimientos adicionales (máx. 2) realizados en el mismo acto')
     tipo_anestesia          = models.CharField(max_length=10, choices=ANESTESIA_CHOICES,
                                                 default='general')
 

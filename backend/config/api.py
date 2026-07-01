@@ -1937,7 +1937,7 @@ class ProgramacionCxSerializer(serializers.ModelSerializer):
         model = ProgramacionCx
         fields = [
             'id', 'numero_cx', 'ingreso', 'paciente', 'paciente_nombre',
-            'cups_principal', 'descripcion_cups', 'diagnostico_preop',
+            'cups_principal', 'descripcion_cups', 'cups_secundarios', 'diagnostico_preop',
             'desc_diagnostico_preop', 'tipo_cirugia',
             'cirujano', 'cirujano_info', 'anestesiologo', 'anestesiologo_info',
             'fecha_programada', 'duracion_estimada_min', 'quirofano',
@@ -1987,7 +1987,7 @@ class DescripcionQuirurgicaSerializer(serializers.ModelSerializer):
             'id', 'numero_dqx', 'numero_formateado', 'programacion', 'ingreso',
             'diagnostico_preoperatorio', 'desc_diag_preop',
             'diagnostico_postoperatorio', 'desc_diag_postop',
-            'cups_principal', 'descripcion_procedimiento', 'tipo_anestesia',
+            'cups_principal', 'descripcion_procedimiento', 'cups_secundarios', 'tipo_anestesia',
             'cirujano', 'cirujano_info', 'cirujano_nombre', 'cirujano_tp',
             'cirujano_especialidad',
             'anestesiologo', 'anestesiologo_info', 'anestesiologo_nombre',
@@ -2544,6 +2544,22 @@ class PrefacturaViewSet(viewsets.ModelViewSet):
                     origen_tipo='ProgramacionCx',
                     origen_id=str(cx.id),
                 )
+                # Procedimientos adicionales del mismo acto quirúrgico
+                for j, extra in enumerate((cx.cups_secundarios or [])[:2], start=2):
+                    cups_extra = (extra or {}).get('cups', '')
+                    if not cups_extra or ya_existe(f'{cx.id}_sec{j}'):
+                        continue
+                    crear_item(
+                        tipo='procedimiento',
+                        descripcion=f'Procedimiento adicional — {(extra or {}).get("descripcion", "") or cups_extra}',
+                        cups=cups_extra,
+                        cantidad=1,
+                        valor_unitario=_get_precio(cups_extra),
+                        destino='eps',
+                        es_manual=False,
+                        origen_tipo='ProgramacionCx',
+                        origen_id=f'{cx.id}_sec{j}',
+                    )
 
         pre.recalcular_totales()
         # Diagnóstico: CUPS sin precio en ningún tarifario
@@ -4231,19 +4247,21 @@ class LiquidacionCirugiaViewSet(viewsets.ModelViewSet):
         liq = serializer.save()
         dqx = liq.descripcion_qx
         if dqx and dqx.cups_principal and not liq.procedimientos.exists():
-            valor, desc = self._buscar_uvr(
-                dqx.cups_principal, liq,
-                dqx.descripcion_procedimiento or ''
-            )
-            proc = ProcedimientoLiquidacion(
-                liquidacion=liq, orden=1,
-                cups=dqx.cups_principal,
-                descripcion=desc,
-                valor_base=valor,
-            )
-            proc.aplicar_porcentajes()
-            proc.save()
-            liq.calcular_totales()
+            # Sembrar principal + secundarios (hasta 3 procedimientos del acto)
+            fuentes = [(dqx.cups_principal, dqx.descripcion_procedimiento or '')]
+            for extra in (dqx.cups_secundarios or [])[:2]:
+                cups_extra = (extra or {}).get('cups', '')
+                if cups_extra:
+                    fuentes.append((cups_extra, (extra or {}).get('descripcion', '')))
+            for i, (cups, desc_src) in enumerate(fuentes, start=1):
+                valor, desc = self._buscar_uvr(cups, liq, desc_src)
+                proc = ProcedimientoLiquidacion(
+                    liquidacion=liq, orden=i,
+                    cups=cups, descripcion=desc, valor_base=valor,
+                )
+                proc.aplicar_porcentajes()
+                proc.save()
+            liq.reordenar_por_uvr()
 
     @action(detail=True, methods=['post'], url_path='agregar-procedimiento')
     def agregar_procedimiento(self, request, pk=None):

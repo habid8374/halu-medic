@@ -281,6 +281,8 @@ function ModalNuevaCx({
     tipo_anestesia: 'general', numero_autorizacion: '',
     requiere_autorizacion: true, observaciones_preop: '',
   })
+  // Hasta 2 procedimientos adicionales en el mismo acto quirúrgico
+  const [cupsSecundarios, setCupsSecundarios] = useState<{ cups: string; descripcion: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [quirofanos, setQuirofanos] = useState<{ id: string; nombre: string; estado: string }[]>([])
 
@@ -300,6 +302,7 @@ function ModalNuevaCx({
         ingreso: ingresoId,
         paciente: pacienteId,
         fecha_programada: form.fecha_programada + ':00',
+        cups_secundarios: cupsSecundarios.filter(s => s.cups),
       })
       toast.success('Cirugía programada')
       onSaved()
@@ -347,6 +350,39 @@ function ModalNuevaCx({
             <input value={form.descripcion_cups} onChange={e => f('descripcion_cups', e.target.value)}
               className="input-base w-full" />
           </div>
+
+          {/* Procedimientos adicionales del mismo acto (hasta 3 en total) */}
+          {cupsSecundarios.map((sec, i) => (
+            <div key={i} className="flex items-end gap-2 bg-slate-50 rounded-xl p-3">
+              <div className="flex-1">
+                <CupsAutocomplete
+                  label={`CUPS procedimiento ${i + 2}`}
+                  value={sec.cups}
+                  descripcion={sec.descripcion}
+                  onChange={(cod, desc) => setCupsSecundarios(prev =>
+                    prev.map((s, j) => j === i ? { cups: cod, descripcion: desc } : s))}
+                  placeholder="Código o nombre del procedimiento adicional..."
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setCupsSecundarios(prev => prev.filter((_, j) => j !== i))}
+                className="p-2 text-red-400 hover:text-red-600 mb-0.5"
+                title="Quitar procedimiento"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          {cupsSecundarios.length < 2 && (
+            <button
+              type="button"
+              onClick={() => setCupsSecundarios(prev => [...prev, { cups: '', descripcion: '' }])}
+              className="flex items-center gap-1.5 text-sm text-halu-600 hover:text-halu-800 font-medium"
+            >
+              <PlusCircle className="w-4 h-4" /> Agregar otra cirugía al mismo acto ({cupsSecundarios.length + 1}/3)
+            </button>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Cie10Autocomplete

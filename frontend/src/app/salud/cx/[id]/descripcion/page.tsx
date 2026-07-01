@@ -17,6 +17,7 @@ export default function DescripcionQxPage() {
   const [medicos, setMedicos] = useState<MedicoProfesional[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
+  const [cupsSecundarios, setCupsSecundarios] = useState<{ cups: string; descripcion: string }[]>([])
   const [form, setForm]       = useState<Record<string, string | number | null>>({
     diagnostico_preoperatorio: '', desc_diag_preop: '',
     diagnostico_postoperatorio: '', desc_diag_postop: '',
@@ -56,6 +57,7 @@ export default function DescripcionQxPage() {
           fecha_hora_inicio: c.fecha_programada?.slice(0, 16) ?? '',
           ingreso: c.ingreso ?? '',
         }))
+        setCupsSecundarios((c.cups_secundarios ?? []) as { cups: string; descripcion: string }[])
       }
       if (dqxRes.status === 'fulfilled') {
         const list = Array.isArray(dqxRes.value.data) ? dqxRes.value.data : dqxRes.value.data.results ?? []
@@ -88,6 +90,7 @@ export default function DescripcionQxPage() {
             liquidos_administrados: d.liquidos_administrados,
             plan_postoperatorio: d.plan_postoperatorio,
           })
+          setCupsSecundarios(((d as unknown as { cups_secundarios?: { cups: string; descripcion: string }[] }).cups_secundarios) ?? [])
         }
       }
       if (medRes.status === 'fulfilled') setMedicos(Array.isArray(medRes.value.data) ? medRes.value.data : [])
@@ -105,6 +108,7 @@ export default function DescripcionQxPage() {
         ...form,
         programacion: id,
         ingreso: cx?.ingreso ?? null,
+        cups_secundarios: cupsSecundarios.filter(s => s.cups),
         fecha_hora_inicio: form.fecha_hora_inicio ? (form.fecha_hora_inicio as string) + ':00' : null,
         fecha_hora_fin:    form.fecha_hora_fin    ? (form.fecha_hora_fin    as string) + ':00' : null,
         sangrado_estimado_ml: form.sangrado_estimado_ml ? Number(form.sangrado_estimado_ml) : null,
@@ -198,6 +202,32 @@ export default function DescripcionQxPage() {
               </select>
             </div>
           </div>
+
+          {/* Procedimientos adicionales del mismo acto (hasta 3 en total) */}
+          {cupsSecundarios.map((sec, i) => (
+            <div key={i} className="flex items-end gap-2 bg-slate-50 rounded-xl p-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
+                <Field label={`CUPS procedimiento ${i + 2}`} value={sec.cups}
+                  onChange={v => setCupsSecundarios(prev =>
+                    prev.map((s, j) => j === i ? { ...s, cups: v } : s))} />
+                <Field label="Descripción" value={sec.descripcion}
+                  onChange={v => setCupsSecundarios(prev =>
+                    prev.map((s, j) => j === i ? { ...s, descripcion: v } : s))} />
+              </div>
+              <button type="button"
+                onClick={() => setCupsSecundarios(prev => prev.filter((_, j) => j !== i))}
+                className="p-2 text-sm font-bold text-red-400 hover:text-red-600 mb-0.5" title="Quitar">
+                ✕
+              </button>
+            </div>
+          ))}
+          {cupsSecundarios.length < 2 && (
+            <button type="button"
+              onClick={() => setCupsSecundarios(prev => [...prev, { cups: '', descripcion: '' }])}
+              className="text-sm text-halu-600 hover:text-halu-800 font-medium">
+              + Agregar procedimiento realizado en el mismo acto ({cupsSecundarios.length + 1}/3)
+            </button>
+          )}
         </Section>
 
         {/* ── Equipo quirúrgico ─────────────────────────────────────────────── */}
