@@ -87,12 +87,21 @@ export default function ConfiguracionPage() {
   const [showSecret, setShowSecret] = useState(false)
   const [showPass, setShowPass]     = useState(false)
 
-  useEffect(() => {
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
+
+  const cargarConfig = () => {
+    setLoading(true)
+    setErrorCarga(null)
     consultorioAPI.get()
       .then(({ data }) => setData(data))
-      .catch(() => toast.error('No se pudo cargar la configuración'))
+      .catch((e) => {
+        setErrorCarga(mensajeError(e))
+        toast.error('No se pudo cargar la configuración')
+      })
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { cargarConfig() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (campo: keyof ConfigData, valor: unknown) =>
     setData(prev => prev ? { ...prev, [campo]: valor } : prev)
@@ -142,7 +151,18 @@ export default function ConfiguracionPage() {
     </div>
   )
 
-  if (!data) return null
+  if (!data) return (
+    <div className="p-8 max-w-lg">
+      <div className="bg-red-50 border border-red-100 rounded-2xl p-6 text-center space-y-3">
+        <p className="font-semibold text-red-700">No se pudo cargar la configuración</p>
+        {errorCarga && <p className="text-sm text-red-600 break-words">{errorCarga}</p>}
+        <p className="text-xs text-slate-500">
+          Verifica que el backend esté en línea y con las migraciones aplicadas.
+        </p>
+        <Button onClick={cargarConfig} className="mx-auto">Reintentar</Button>
+      </div>
+    </div>
+  )
 
   const esAdmin = usuario?.permisos.es_admin || usuario?.permisos.es_superadmin
 
@@ -167,7 +187,7 @@ export default function ConfiguracionPage() {
 
       {/* Tabs — scroll horizontal en móvil, incluye links a sub-páginas */}
       <div className="px-4 lg:px-8 mb-4">
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto scrollbar-none">
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
           {TABS.map(t => t.link ? (
             <Link key={t.id} href={t.link}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs lg:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 text-slate-500 hover:text-slate-700 hover:bg-white/60"
